@@ -43,6 +43,7 @@ std::optional<Contact> parsePersonJson(const QByteArray& json);
 QByteArray personJson(const Contact& contact);
 QString googleErrorMessage(const QByteArray& body, int status);
 QString connectionsUrl(const QString& pageToken, const QString& syncToken);
+QString photoFetchUrl(const QString& url);
 
 QList<Contact> applyFullSync(const QList<PersonChange>& people);
 QList<Contact> applyIncrementalSync(QList<Contact> current, const QList<PersonChange>& changes);

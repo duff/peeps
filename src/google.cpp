@@ -5,11 +5,12 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QRegularExpression>
 
 namespace omacontacts {
 namespace {
 
-const char* kFields = "names,emailAddresses,phoneNumbers,organizations,biographies,metadata";
+const char* kFields = "names,emailAddresses,phoneNumbers,organizations,biographies,photos,metadata";
 
 QString jsonString(const QJsonObject& object, const char* key) { return object.value(QLatin1String(key)).toString(); }
 
@@ -51,6 +52,8 @@ QList<LabeledValue> readLabeled(const QJsonObject& person, const char* key) {
   return primary;
 }
 
+QString choosePhotoUrl(const QJsonArray& photos);
+
 Contact personFromObject(const QJsonObject& object) {
   Contact contact;
   contact.resourceName = jsonString(object, "resourceName");
@@ -65,7 +68,22 @@ Contact personFromObject(const QJsonObject& object) {
   contact.title = jsonString(org, "title");
   const QJsonObject bio = primaryObject(object.value(QLatin1String("biographies")).toArray());
   contact.notes = jsonString(bio, "value");
+  contact.photoUrl = choosePhotoUrl(object.value(QLatin1String("photos")).toArray());
   return contact;
+}
+
+QString choosePhotoUrl(const QJsonArray& photos) {
+  QString fallback;
+  for (const QJsonValue& value : photos) {
+    if (!value.isObject()) continue;
+    const QJsonObject photo = value.toObject();
+    if (photo.value(QLatin1String("default")).toBool()) continue;
+    const QString url = jsonString(photo, "url");
+    if (url.isEmpty()) continue;
+    if (isPrimary(photo)) return url;
+    if (fallback.isEmpty()) fallback = url;
+  }
+  return fallback;
 }
 
 bool personDeleted(const QJsonObject& object) {
@@ -175,6 +193,20 @@ QByteArray personJson(const Contact& contact) {
   }
   root.insert(QStringLiteral("biographies"), bios);
   return QJsonDocument(root).toJson(QJsonDocument::Compact);
+}
+
+QString photoFetchUrl(const QString& url) {
+  if (url.isEmpty()) return {};
+  QString result = url;
+  result.remove(QRegularExpression(QStringLiteral("([?&])sz=\\d+")));
+  if (result.endsWith(QLatin1Char('?')) || result.endsWith(QLatin1Char('&'))) result.chop(1);
+  // Google's image servers use "=s100" (or "=s100-c") at the end of the URL.
+  // "=s0" asks for the original file instead of that thumbnail.
+  const QRegularExpression googleSize(QStringLiteral("=s\\d+(-[A-Za-z0-9]+)?$"));
+  if (googleSize.match(result).hasMatch()) return result.replace(googleSize, QStringLiteral("=s0"));
+  const QRegularExpression googleBox(QStringLiteral("=[wh]\\d+-[wh]\\d+(-[A-Za-z0-9]+)?$"));
+  if (googleBox.match(result).hasMatch()) return result.replace(googleBox, QStringLiteral("=s0"));
+  return result + (result.contains(QLatin1Char('?')) ? QStringLiteral("&sz=2048") : QStringLiteral("?sz=2048"));
 }
 
 QString connectionsUrl(const QString& pageToken, const QString& syncToken) {

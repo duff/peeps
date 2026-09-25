@@ -27,16 +27,17 @@ The refresh token stays in the login keyring. Contacts are cached in `~/.local/s
 | --- | --- |
 | Type | Filter from the search field |
 | Up / Down | Move through matches, including while the search field is focused |
-| Enter | Email the contact, or edit when there is no address |
-| n / e / Delete | New, edit, delete |
-| m / y / p | Email, copy email, copy phone |
-| r | Sync |
+| `/` | Focus search |
+| Enter | Open the selected contact, replacing the list |
+| Esc | Back to the list, or clear the search |
+| Delete | Delete the selected contact |
 | F1 or `?` | Shortcut help |
+| Ctrl+N / Ctrl+E | New contact, edit the selected contact |
 | Ctrl+, | Google account |
 | Ctrl+S / Ctrl+Enter | Save the open contact |
 | Ctrl+Q | Quit |
 
-Single-letter shortcuts are suspended while a text field has focus. Up and Down still move the list.
+New, Sync, Keybindings, and Account are in the Menu. Letters typed in the search field only filter the list.
 
 ## Theme
 

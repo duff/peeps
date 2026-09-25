@@ -46,6 +46,7 @@ enum class Command {
   FocusSearch,
   ClearSearch,
   Back,
+  OpenContact,
   NewContact,
   EditContact,
   DeleteContact,
@@ -67,7 +68,7 @@ struct KeyEvent {
   bool alt = false;
   bool textInput = false;
   bool searchEmpty = true;
-  bool narrowDetail = false;
+  bool detailOpen = false;
   Surface surface = Surface::Browser;
 };
 

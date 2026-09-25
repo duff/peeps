@@ -20,6 +20,7 @@ struct Contact {
   QString organization;
   QString title;
   QString notes;
+  QString photoUrl;
   QList<LabeledValue> emails;
   QList<LabeledValue> phones;
 

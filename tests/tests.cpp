@@ -1,6 +1,7 @@
 #include "tests.h"
 
 #include "contact.h"
+#include "mainwindow.h"
 #include "google.h"
 #include "mail.h"
 #include "oauth.h"
@@ -10,7 +11,10 @@
 #include "theme.h"
 
 #include <QDir>
+#include <QApplication>
 #include <QElapsedTimer>
+#include <QListView>
+#include <QTest>
 #include <QFile>
 #include <QFileInfo>
 #include <QTemporaryDir>
@@ -406,7 +410,11 @@ void GoogleTests::parsesPrimaryFields() {
         ],
         "phoneNumbers": [{"value": "+1 555", "formattedType": "Mobile"}],
         "organizations": [{"name": "Engines", "title": "Mathematician", "metadata": {"primary": true}}],
-        "biographies": [{"value": "Notes", "metadata": {"primary": true}}]
+        "biographies": [{"value": "Notes", "metadata": {"primary": true}}],
+        "photos": [
+          {"url": "https://example.test/default", "default": true, "metadata": {"primary": true}},
+          {"url": "https://example.test/ada.jpg", "default": false}
+        ]
       },
       {"resourceName": "people/c2", "metadata": {"deleted": true}}
     ],
@@ -420,8 +428,42 @@ void GoogleTests::parsesPrimaryFields() {
   QCOMPARE(page.people.at(0).contact.emails.at(0).label, QStringLiteral("work"));
   QCOMPARE(page.people.at(0).contact.organization, QStringLiteral("Engines"));
   QCOMPARE(page.people.at(0).contact.notes, QStringLiteral("Notes"));
+  QCOMPARE(page.people.at(0).contact.photoUrl, QStringLiteral("https://example.test/ada.jpg"));
   QVERIFY(page.people.at(1).deleted);
   QCOMPARE(page.nextSyncToken, QStringLiteral("sync-9"));
+}
+
+void GoogleTests::prefersRealPhotoOverDefault() {
+  const char* onlyDefault = R"({"resourceName":"people/c1","names":[{"givenName":"Ada"}],
+    "photos":[{"url":"https://example.test/silhouette","default":true,"metadata":{"primary":true}}]})";
+  const auto plain = omacontacts::parsePersonJson(onlyDefault);
+  QVERIFY(plain.has_value());
+  QVERIFY(plain->photoUrl.isEmpty());
+  const char* primaryReal = R"({"resourceName":"people/c1","names":[{"givenName":"Ada"}],
+    "photos":[
+      {"url":"https://example.test/other.jpg","default":false},
+      {"url":"https://example.test/primary.jpg","default":false,"metadata":{"primary":true}}
+    ]})";
+  const auto chosen = omacontacts::parsePersonJson(primaryReal);
+  QVERIFY(chosen.has_value());
+  QCOMPARE(chosen->photoUrl, QStringLiteral("https://example.test/primary.jpg"));
+}
+
+void GoogleTests::sizesPhotoUrl() {
+  QCOMPARE(omacontacts::photoFetchUrl(QStringLiteral("https://example.test/a.jpg")),
+           QStringLiteral("https://example.test/a.jpg?sz=2048"));
+  QCOMPARE(omacontacts::photoFetchUrl(QStringLiteral("https://example.test/a.jpg?x=1&sz=50")),
+           QStringLiteral("https://example.test/a.jpg?x=1&sz=2048"));
+  QCOMPARE(omacontacts::photoFetchUrl(QStringLiteral("https://lh3.googleusercontent.com/a=s64")),
+           QStringLiteral("https://lh3.googleusercontent.com/a=s0"));
+  QCOMPARE(omacontacts::photoFetchUrl(QStringLiteral("https://lh3.googleusercontent.com/a=s100-c")),
+           QStringLiteral("https://lh3.googleusercontent.com/a=s0"));
+}
+
+void GoogleTests::oldCacheRequestsFullSync() {
+  const auto fresh = omacontacts::readCacheJson(R"({"version":1,"sync_token":"old","contacts":[]})");
+  QVERIFY(fresh.ok());
+  QVERIFY(fresh.syncToken.isEmpty());
 }
 
 void GoogleTests::roundTripsPerson() {
@@ -519,6 +561,7 @@ void GoogleTests::storeRoundTrip() {
   contact.resourceName = QStringLiteral("people/c1");
   contact.givenName = QStringLiteral("Ada");
   contact.notes = QStringLiteral("a \"quote\"");
+  contact.photoUrl = QStringLiteral("https://example.test/ada.jpg");
   contact.emails.append({QStringLiteral("ada@example.com"), QStringLiteral("work")});
   const auto cache = omacontacts::readCacheJson(omacontacts::writeCacheJson({contact}, QStringLiteral("sync")));
   QVERIFY(cache.ok());
@@ -550,6 +593,91 @@ void GoogleTests::storeRoundTrip() {
   const auto paths = omacontacts::AppPaths::forEnv(QStringLiteral("/home/duff"), QStringLiteral("/xdg/config"), QString());
   QCOMPARE(paths.configFile, QStringLiteral("/xdg/config/omacontacts/config.json"));
   QCOMPARE(paths.cacheFile, QStringLiteral("/home/duff/.local/share/omacontacts/contacts.json"));
+  QCOMPARE(paths.photoDir, QStringLiteral("/home/duff/.cache/omacontacts/photos"));
+}
+
+omacontacts::Contact sampleContact(QString id, QString given, QString family, QString email, QString phone,
+                                    QString notes) {
+  omacontacts::Contact contact;
+  contact.resourceName = std::move(id);
+  contact.givenName = std::move(given);
+  contact.familyName = std::move(family);
+  contact.notes = std::move(notes);
+  if (!email.isEmpty()) contact.emails.append({std::move(email), QStringLiteral("work")});
+  if (!phone.isEmpty()) contact.phones.append({std::move(phone), QStringLiteral("mobile")});
+  return contact;
+}
+
+void LayoutTests::enterReplacesTheListWithThatContact() {
+  QTemporaryDir dir;
+  QVERIFY(dir.isValid());
+  const QByteArray oldData = qgetenv("XDG_DATA_HOME");
+  const QByteArray oldCache = qgetenv("XDG_CACHE_HOME");
+  const QByteArray oldConfig = qgetenv("XDG_CONFIG_HOME");
+  qputenv("XDG_DATA_HOME", dir.filePath(QStringLiteral("data")).toUtf8());
+  qputenv("XDG_CACHE_HOME", dir.filePath(QStringLiteral("cache")).toUtf8());
+  qputenv("XDG_CONFIG_HOME", dir.filePath(QStringLiteral("config")).toUtf8());
+  qputenv("OMACONTACTS_NO_SYNC", "1");
+
+  const QString caraOneNotes =
+      QStringLiteral("Notes for Cara One that must stay on screen. The whole note is visible without scrolling the detail.");
+  const QString caraTwoNotes =
+      QStringLiteral("Notes for Cara Two that must stay on screen. The whole note is visible without scrolling the detail.");
+  omacontacts::MainWindow window;
+  window.resize(1000, 700);
+  window.show();
+  QVERIFY(QTest::qWaitForWindowExposed(&window));
+  QList<omacontacts::Contact> contacts = {
+      sampleContact(QStringLiteral("people/cara1"), QStringLiteral("Cara"), QStringLiteral("One"),
+                    QStringLiteral("cara.one@example.com"), QStringLiteral("+1 555 010 1001"), caraOneNotes),
+      sampleContact(QStringLiteral("people/cara2"), QStringLiteral("Cara"), QStringLiteral("Two"),
+                    QStringLiteral("cara.two@example.com"), QStringLiteral("+1 555 010 1002"), caraTwoNotes),
+  };
+  for (int i = 0; i < 400; ++i) {
+    contacts.append(sampleContact(QStringLiteral("people/other%1").arg(i), QStringLiteral("Other"),
+                                  QString::number(i), QStringLiteral("other%1@example.com").arg(i), {}, {}));
+  }
+  window.setContacts(std::move(contacts));
+  QApplication::processEvents();
+  const auto describe = [&] {
+    return QStringLiteral("detail height %1 window %2 on screen %3 text [%4]")
+        .arg(window.detailPaneHeight())
+        .arg(window.height())
+        .arg(window.detailIsOnScreen())
+        .arg(window.detailPlainText());
+  };
+  auto* list = window.findChild<QListView*>();
+  QVERIFY(list != nullptr);
+  QVERIFY2(list->isVisible() && list->height() >= 200 && !window.detailShows(QStringLiteral("cara.one@example.com")),
+           qPrintable(describe() + QStringLiteral(" list %1 visible %2").arg(list->height()).arg(list->isVisible())));
+  QTest::keyClick(&window, Qt::Key_Down);
+  QApplication::processEvents();
+  QVERIFY2(!window.detailShows(QStringLiteral("cara.two@example.com")) && list->isVisible(),
+           qPrintable(describe() + QStringLiteral(" list %1").arg(list->height())));
+  QTest::keyClick(&window, Qt::Key_Return);
+  QApplication::processEvents();
+  QVERIFY2(window.detailShows(QStringLiteral("cara.two@example.com")) && window.detailShows(caraTwoNotes) &&
+               !window.detailShows(QStringLiteral("cara.one@example.com")) && !list->isVisible(),
+           qPrintable(describe() + QStringLiteral(" list %1 visible %2").arg(list->height()).arg(list->isVisible())));
+  QTest::keyClick(&window, Qt::Key_Down);
+  QApplication::processEvents();
+  QVERIFY2(window.detailShows(QStringLiteral("cara.two@example.com")) && !window.detailShows(QStringLiteral("cara.one@example.com")),
+           qPrintable(describe()));
+  window.resize(529, 632);
+  QApplication::processEvents();
+  QVERIFY2(window.detailShows(QStringLiteral("cara.two@example.com")) && window.detailShows(caraTwoNotes) && !list->isVisible(),
+           qPrintable(describe() + QStringLiteral(" list visible %1").arg(list->isVisible())));
+  QTest::keyClick(&window, Qt::Key_Escape);
+  QApplication::processEvents();
+  QVERIFY2(list->isVisible() && list->height() >= 120 && !window.detailShows(QStringLiteral("cara.two@example.com")),
+           qPrintable(describe() + QStringLiteral(" list %1 visible %2").arg(list->height()).arg(list->isVisible())));
+
+  if (oldData.isNull()) qunsetenv("XDG_DATA_HOME");
+  else qputenv("XDG_DATA_HOME", oldData);
+  if (oldCache.isNull()) qunsetenv("XDG_CACHE_HOME");
+  else qputenv("XDG_CACHE_HOME", oldCache);
+  if (oldConfig.isNull()) qunsetenv("XDG_CONFIG_HOME");
+  else qputenv("XDG_CONFIG_HOME", oldConfig);
 }
 
 void ShortcutTests::typingSuspendsSingleKeys() {
@@ -565,19 +693,36 @@ void ShortcutTests::typingSuspendsSingleKeys() {
 void ShortcutTests::escapeClearsBeforeBack() {
   auto event = browser(omacontacts::Key::Escape, true);
   event.searchEmpty = false;
-  event.narrowDetail = true;
+  event.detailOpen = true;
+  QCOMPARE(omacontacts::routeKey(event), omacontacts::Command::Back);
+  event.detailOpen = false;
   QCOMPARE(omacontacts::routeKey(event), omacontacts::Command::ClearSearch);
   event.searchEmpty = true;
+  QCOMPARE(omacontacts::routeKey(event), omacontacts::Command::Ignore);
+  event.detailOpen = true;
   QCOMPARE(omacontacts::routeKey(event), omacontacts::Command::Back);
+  auto down = browser(omacontacts::Key::Down, true);
+  down.detailOpen = true;
+  QCOMPARE(omacontacts::routeKey(down), omacontacts::Command::Ignore);
 }
 
 void ShortcutTests::listKeys() {
-  QCOMPARE(omacontacts::routeKey(browser(omacontacts::Key::J)), omacontacts::Command::MoveDown);
-  QCOMPARE(omacontacts::routeKey(browser(omacontacts::Key::K)), omacontacts::Command::MoveUp);
+  QCOMPARE(omacontacts::routeKey(browser(omacontacts::Key::J)), omacontacts::Command::Ignore);
+  QCOMPARE(omacontacts::routeKey(browser(omacontacts::Key::E)), omacontacts::Command::Ignore);
+  QCOMPARE(omacontacts::routeKey(browser(omacontacts::Key::R)), omacontacts::Command::Ignore);
+  QCOMPARE(omacontacts::routeKey(browser(omacontacts::Key::PageDown)), omacontacts::Command::Ignore);
+  QCOMPARE(omacontacts::routeKey(browser(omacontacts::Key::Down)), omacontacts::Command::MoveDown);
   QCOMPARE(omacontacts::routeKey(browser(omacontacts::Key::Slash)), omacontacts::Command::FocusSearch);
-  QCOMPARE(omacontacts::routeKey(browser(omacontacts::Key::E)), omacontacts::Command::EditContact);
+  QCOMPARE(omacontacts::routeKey(browser(omacontacts::Key::Slash, true)), omacontacts::Command::Ignore);
   QCOMPARE(omacontacts::routeKey(browser(omacontacts::Key::Delete)), omacontacts::Command::DeleteContact);
-  QCOMPARE(omacontacts::routeKey(browser(omacontacts::Key::Return)), omacontacts::Command::PrimaryAction);
+  QCOMPARE(omacontacts::routeKey(browser(omacontacts::Key::Return)), omacontacts::Command::OpenContact);
+  QCOMPARE(omacontacts::routeKey(browser(omacontacts::Key::Return, true)), omacontacts::Command::OpenContact);
+  auto edit = browser(omacontacts::Key::Return);
+  edit.ctrl = true;
+  QCOMPARE(omacontacts::routeKey(edit), omacontacts::Command::EditContact);
+  auto ctrlE = browser(omacontacts::Key::E);
+  ctrlE.ctrl = true;
+  QCOMPARE(omacontacts::routeKey(ctrlE), omacontacts::Command::EditContact);
   QCOMPARE(omacontacts::routeKey(browser(omacontacts::Key::Question)), omacontacts::Command::Help);
   auto quit = browser(omacontacts::Key::Q);
   quit.ctrl = true;
@@ -618,12 +763,24 @@ void ShortcutTests::deleteConfirmIgnoresEnter() {
 
 void ShortcutTests::helpListsEmail() {
   const auto rows = omacontacts::bindingHelp();
-  QVERIFY(rows.size() > 10);
-  bool sawEmail = false;
+  QVERIFY(rows.size() >= 8);
+  bool sawOpen = false;
+  bool sawKeybindings = false;
+  bool sawSync = false;
+  bool sawBareLetter = false;
   for (const auto& row : rows) {
     QVERIFY(!row.keys.isEmpty());
     QVERIFY(!row.action.isEmpty());
-    if (row.keys == QLatin1String("Enter")) sawEmail = true;
+    if (row.keys == QLatin1String("Enter") && row.action.contains(QStringLiteral("Open"))) sawOpen = true;
+    if (row.action.contains(QStringLiteral("keybindings"))) sawKeybindings = true;
+    if (row.action.contains(QStringLiteral("Sync")) || row.keys.contains(QStringLiteral("PgUp"))) sawSync = true;
+    if (row.keys == QLatin1String("e") || row.keys == QLatin1String("n") || row.keys == QLatin1String("r") ||
+        row.keys == QLatin1String("m")) {
+      sawBareLetter = true;
+    }
   }
-  QVERIFY(sawEmail);
+  QVERIFY(sawOpen);
+  QVERIFY(sawKeybindings);
+  QVERIFY(!sawSync);
+  QVERIFY(!sawBareLetter);
 }

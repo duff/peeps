@@ -43,6 +43,7 @@ Contact contactFromObject(const QJsonObject& object) {
   contact.organization = object.value(QLatin1String("organization")).toString();
   contact.title = object.value(QLatin1String("title")).toString();
   contact.notes = object.value(QLatin1String("notes")).toString();
+  contact.photoUrl = object.value(QLatin1String("photo_url")).toString();
   contact.emails = labeledFrom(object.value(QLatin1String("emails")).toArray());
   contact.phones = labeledFrom(object.value(QLatin1String("phones")).toArray());
   return contact;
@@ -50,12 +51,15 @@ Contact contactFromObject(const QJsonObject& object) {
 
 }  // namespace
 
-AppPaths AppPaths::forEnv(const QString& home, const QString& xdgConfigHome, const QString& xdgDataHome) {
+AppPaths AppPaths::forEnv(const QString& home, const QString& xdgConfigHome, const QString& xdgDataHome,
+                           const QString& xdgCacheHome) {
   AppPaths paths;
   const QString configRoot = xdgConfigHome.isEmpty() ? home + QStringLiteral("/.config") : xdgConfigHome;
   const QString dataRoot = xdgDataHome.isEmpty() ? home + QStringLiteral("/.local/share") : xdgDataHome;
+  const QString cacheRoot = xdgCacheHome.isEmpty() ? home + QStringLiteral("/.cache") : xdgCacheHome;
   paths.configFile = configRoot + QStringLiteral("/omacontacts/config.json");
   paths.cacheFile = dataRoot + QStringLiteral("/omacontacts/contacts.json");
+  paths.photoDir = cacheRoot + QStringLiteral("/omacontacts/photos");
   return paths;
 }
 
@@ -86,12 +90,13 @@ QByteArray writeCacheJson(const QList<Contact>& contacts, const QString& syncTok
     object.insert(QStringLiteral("organization"), contact.organization);
     object.insert(QStringLiteral("title"), contact.title);
     object.insert(QStringLiteral("notes"), contact.notes);
+    object.insert(QStringLiteral("photo_url"), contact.photoUrl);
     object.insert(QStringLiteral("emails"), labeledJson(contact.emails));
     object.insert(QStringLiteral("phones"), labeledJson(contact.phones));
     array.append(object);
   }
   QJsonObject root;
-  root.insert(QStringLiteral("version"), 1);
+  root.insert(QStringLiteral("version"), 2);
   root.insert(QStringLiteral("sync_token"), syncToken);
   root.insert(QStringLiteral("contacts"), array);
   return QJsonDocument(root).toJson(QJsonDocument::Compact);
@@ -106,7 +111,8 @@ CacheSnapshot readCacheJson(const QByteArray& json) {
                                                                   : parseError.errorString();
     return snapshot;
   }
-  snapshot.syncToken = document.object().value(QLatin1String("sync_token")).toString();
+  const int version = document.object().value(QLatin1String("version")).toInt();
+  if (version >= 2) snapshot.syncToken = document.object().value(QLatin1String("sync_token")).toString();
   const QJsonArray array = document.object().value(QLatin1String("contacts")).toArray();
   snapshot.contacts.reserve(array.size());
   for (const QJsonValue& value : array) {

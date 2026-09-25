@@ -1,11 +1,11 @@
 #include "tests.h"
 
-#include <QGuiApplication>
+#include <QApplication>
 
 #include <QtTest>
 
 int main(int argc, char** argv) {
-  QGuiApplication app(argc, argv);
+  QApplication app(argc, argv);
   int status = 0;
   {
     ThemeTests tests;
@@ -17,6 +17,10 @@ int main(int argc, char** argv) {
   }
   {
     GoogleTests tests;
+    status |= QTest::qExec(&tests, argc, argv);
+  }
+  {
+    LayoutTests tests;
     status |= QTest::qExec(&tests, argc, argv);
   }
   {

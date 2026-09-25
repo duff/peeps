@@ -11,8 +11,10 @@ namespace omacontacts {
 struct AppPaths {
   QString configFile;
   QString cacheFile;
+  QString photoDir;
 
-  static AppPaths forEnv(const QString& home, const QString& xdgConfigHome, const QString& xdgDataHome);
+  static AppPaths forEnv(const QString& home, const QString& xdgConfigHome, const QString& xdgDataHome,
+                         const QString& xdgCacheHome = {});
 };
 
 struct AppConfig {

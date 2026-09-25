@@ -27,9 +27,13 @@ Command routeKey(const KeyEvent& event) {
   if (event.ctrl && event.key == Key::Q) return Command::Quit;
   if (event.ctrl && event.key == Key::N) return Command::NewContact;
   if (event.ctrl && event.key == Key::E) return Command::EditContact;
-  if (event.ctrl && event.key == Key::R) return Command::Sync;
   if (event.ctrl && event.key == Key::Comma) return Command::Account;
-  if (event.ctrl && event.key == Key::Return) return Command::PrimaryAction;
+  if (event.ctrl && event.key == Key::Return) return Command::EditContact;
+
+  if (event.detailOpen && event.key == Key::Escape) return Command::Back;
+  if (event.detailOpen && (event.key == Key::Up || event.key == Key::Down || event.key == Key::Home || event.key == Key::End)) {
+    return Command::Ignore;
+  }
 
   if (event.textInput) {
     switch (event.key) {
@@ -37,16 +41,11 @@ Command routeKey(const KeyEvent& event) {
         return Command::MoveUp;
       case Key::Down:
         return Command::MoveDown;
-      case Key::PageUp:
-        return Command::PageUp;
-      case Key::PageDown:
-        return Command::PageDown;
       case Key::Escape:
         if (!event.searchEmpty) return Command::ClearSearch;
-        if (event.narrowDetail) return Command::Back;
         return Command::Ignore;
       case Key::Return:
-        return Command::PrimaryAction;
+        return Command::OpenContact;
       default:
         return Command::Ignore;
     }
@@ -54,44 +53,24 @@ Command routeKey(const KeyEvent& event) {
 
   switch (event.key) {
     case Key::Up:
-    case Key::K:
       return Command::MoveUp;
     case Key::Down:
-    case Key::J:
       return Command::MoveDown;
     case Key::Home:
       return Command::MoveHome;
     case Key::End:
       return Command::MoveEnd;
-    case Key::PageUp:
-      return Command::PageUp;
-    case Key::PageDown:
-      return Command::PageDown;
     case Key::Slash:
       return Command::FocusSearch;
     case Key::Escape:
       if (!event.searchEmpty) return Command::ClearSearch;
-      if (event.narrowDetail) return Command::Back;
       return Command::Ignore;
-    case Key::N:
-      return Command::NewContact;
-    case Key::E:
-      return Command::EditContact;
     case Key::Delete:
       return Command::DeleteContact;
-    case Key::M:
     case Key::Return:
-      return Command::PrimaryAction;
-    case Key::Y:
-      return Command::CopyEmail;
-    case Key::P:
-      return Command::CopyPhone;
-    case Key::R:
-      return Command::Sync;
+      return Command::OpenContact;
     case Key::Question:
       return Command::Help;
-    case Key::Comma:
-      return Command::Account;
     default:
       return Command::Ignore;
   }
@@ -101,26 +80,16 @@ QList<BindingHelp> bindingHelp() {
   return {
       {QStringLiteral("Type"), QStringLiteral("Filter contacts from the search field")},
       {QStringLiteral("Up  Down"), QStringLiteral("Move through matches")},
-      {QStringLiteral("PgUp  PgDn"), QStringLiteral("Jump through matches")},
-      {QStringLiteral("Enter"), QStringLiteral("Email the contact, or edit when there is no address")},
-      {QStringLiteral("Esc"), QStringLiteral("Clear the search")},
       {QStringLiteral("/"), QStringLiteral("Focus search")},
-      {QStringLiteral("j  k"), QStringLiteral("Move through matches when search is not focused")},
-      {QStringLiteral("n"), QStringLiteral("New contact")},
-      {QStringLiteral("e"), QStringLiteral("Edit the selected contact")},
+      {QStringLiteral("Enter"), QStringLiteral("Open the selected contact")},
+      {QStringLiteral("Esc"), QStringLiteral("Back to the list, or clear the search")},
       {QStringLiteral("Delete"), QStringLiteral("Delete the selected contact")},
-      {QStringLiteral("m"), QStringLiteral("Email the selected contact")},
-      {QStringLiteral("y"), QStringLiteral("Copy the email address")},
-      {QStringLiteral("p"), QStringLiteral("Copy the phone number")},
-      {QStringLiteral("r"), QStringLiteral("Sync with Google")},
-      {QStringLiteral("?  or  F1"), QStringLiteral("Show this help")},
-      {QStringLiteral("Ctrl+Enter"), QStringLiteral("Email the selected contact")},
+      {QStringLiteral("?  or  F1"), QStringLiteral("Show keybindings")},
+      {QStringLiteral("Ctrl+Enter"), QStringLiteral("Edit the selected contact, or save while editing")},
       {QStringLiteral("Ctrl+N"), QStringLiteral("New contact")},
       {QStringLiteral("Ctrl+E"), QStringLiteral("Edit the selected contact")},
-      {QStringLiteral("Ctrl+R"), QStringLiteral("Sync with Google")},
       {QStringLiteral("Ctrl+,"), QStringLiteral("Google account")},
       {QStringLiteral("Ctrl+S"), QStringLiteral("Save the open contact")},
-      {QStringLiteral("Ctrl+Enter"), QStringLiteral("Save the open contact")},
       {QStringLiteral("Ctrl+Q"), QStringLiteral("Quit")},
   };
 }

@@ -4,7 +4,9 @@
 #include "dialogs.h"
 #include "google.h"
 #include "mail.h"
+#include "photos.h"
 
+#include <QAction>
 #include <QApplication>
 #include <QClipboard>
 #include <QCloseEvent>
@@ -20,10 +22,12 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListView>
+#include <QMenu>
 #include <QPainter>
 #include <QProcess>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QScrollBar>
 #include <QStandardPaths>
 #include <QPlainTextEdit>
 #include <QStyledItemDelegate>
@@ -44,6 +48,8 @@ class ContactListModel : public QAbstractListModel {
     QString id;
     QString name;
     QString subtitle;
+    QString photoUrl;
+    QString initials;
   };
 
   int rowCount(const QModelIndex& parent = {}) const override { return parent.isValid() ? 0 : rows_.size(); }
@@ -53,6 +59,9 @@ class ContactListModel : public QAbstractListModel {
     const Row& row = rows_.at(index.row());
     if (role == Qt::DisplayRole) return row.name;
     if (role == Qt::UserRole) return row.subtitle;
+    if (role == Qt::UserRole + 1) return row.photoUrl;
+    if (role == Qt::UserRole + 2) return row.initials;
+    if (role == Qt::UserRole + 3) return row.id;
     if (role == Qt::AccessibleTextRole) return row.subtitle.isEmpty() ? row.name : row.name + QStringLiteral(", ") + row.subtitle;
     return {};
   }
@@ -72,6 +81,7 @@ class ContactListModel : public QAbstractListModel {
 class ContactDelegate : public QStyledItemDelegate {
  public:
   Palette palette;
+  PhotoStore* photos = nullptr;
 
   void paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const override {
     painter->save();
@@ -84,10 +94,10 @@ class ContactDelegate : public QStyledItemDelegate {
     const QString subtitle = index.data(Qt::UserRole).toString();
     QFont nameFont = option.font;
     nameFont.setPixelSize(12);
+    nameFont.setBold(false);
     painter->setFont(nameFont);
     const QFontMetrics metrics(nameFont);
-    const int padding = 8;
-    const QRect rect = option.rect.adjusted(padding, 0, -padding, 0);
+    const QRect rect = option.rect.adjusted(8, 0, -8, 0);
     int subtitleWidth = 0;
     if (!subtitle.isEmpty()) subtitleWidth = std::min(rect.width() / 2, metrics.horizontalAdvance(subtitle) + 12);
     painter->setPen(palette.foreground);
@@ -111,8 +121,17 @@ QPushButton* kindButton(const QString& text, const QString& kind) {
   button->setProperty("kind", kind);
   button->setAccessibleName(text);
   button->setCursor(Qt::PointingHandCursor);
+  button->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Fixed);
   return button;
 }
+
+class QuietListView : public QListView {
+ public:
+  using QListView::QListView;
+
+ protected:
+  void keyboardSearch(const QString&) override {}
+};
 
 Key mapKey(int key) {
   switch (key) {
@@ -179,13 +198,38 @@ QString oauthPage(const QString& heading, const QString& detail) {
 
 void clearLayout(QLayout* layout) {
   while (QLayoutItem* item = layout->takeAt(0)) {
-    if (QWidget* widget = item->widget()) widget->deleteLater();
+    if (QWidget* widget = item->widget()) {
+      widget->hide();
+      widget->deleteLater();
+    }
     if (QLayout* child = item->layout()) clearLayout(child);
     delete item;
   }
 }
 
+void showLayout(QLayout* layout) {
+  if (layout == nullptr) return;
+  for (int i = 0; i < layout->count(); ++i) {
+    QLayoutItem* item = layout->itemAt(i);
+    if (item == nullptr) continue;
+    if (QWidget* widget = item->widget()) widget->show();
+    if (QLayout* child = item->layout()) showLayout(child);
+  }
+}
+
 qint64 nowUnix() { return QDateTime::currentSecsSinceEpoch(); }
+
+int photoEdgeFor(const QWidget* detail, int windowWidth) {
+  const int detailWidth = detail != nullptr && detail->width() > 1 ? detail->width() : std::max(1, windowWidth / 2);
+  return std::clamp(detailWidth / 5, 128, 200);
+}
+
+void reserveWrappedHeight(QLabel* label, int width) {
+  const int textWidth = std::max(1, width);
+  const QRect bounds = label->fontMetrics().boundingRect(QRect(0, 0, textWidth, 10000),
+                                                        Qt::AlignLeft | Qt::TextWordWrap, label->text());
+  label->setMinimumHeight(std::max(label->fontMetrics().height(), bounds.height()));
+}
 
 }  // namespace
 
@@ -193,14 +237,23 @@ MainWindow::MainWindow() : secrets_(makeSecretStore()) {
   setWindowTitle(QStringLiteral("Omacontacts"));
   setWindowFlags(Qt::Window | Qt::FramelessWindowHint);
   resize(980, 680);
+  setMinimumSize(480, 560);
   themePaths_ = ThemePaths::forHome(QDir::homePath());
-  paths_ = AppPaths::forEnv(QDir::homePath(), qEnvironmentVariable("XDG_CONFIG_HOME"), qEnvironmentVariable("XDG_DATA_HOME"));
+  paths_ = AppPaths::forEnv(QDir::homePath(), qEnvironmentVariable("XDG_CONFIG_HOME"), qEnvironmentVariable("XDG_DATA_HOME"),
+                            qEnvironmentVariable("XDG_CACHE_HOME"));
+  photos_ = new PhotoStore(paths_.photoDir, this);
+  connect(photos_, &PhotoStore::updated, this, [this](const QString& id) {
+    if (list_) list_->viewport()->update();
+    if (detailOpen_ && selected() && selected()->resourceName == id) renderDetail();
+  });
   buildUi();
   loadLocal();
   reloadTheme();
   refilter();
   qApp->installEventFilter(this);
-  if (!tokens_.refreshToken.isEmpty()) QTimer::singleShot(0, this, [this] { runSync(false); });
+  if (!qEnvironmentVariableIsSet("OMACONTACTS_NO_SYNC") && !tokens_.refreshToken.isEmpty()) {
+    QTimer::singleShot(0, this, [this] { runSync(false); });
+  }
 }
 
 MainWindow::~MainWindow() {
@@ -217,19 +270,16 @@ void MainWindow::buildUi() {
   header->setSpacing(8);
   auto* title = new QLabel(QStringLiteral("Omacontacts"));
   title->setObjectName(QStringLiteral("title"));
-  themeLabel_ = new QLabel;
-  themeLabel_->setObjectName(QStringLiteral("themeName"));
   header->addWidget(title);
-  header->addWidget(themeLabel_);
   header->addStretch(1);
-  accountButton_ = kindButton(QStringLiteral("Account"), QStringLiteral("outline"));
-  syncButton_ = kindButton(QStringLiteral("Sync"), QStringLiteral("outline"));
-  newButton_ = kindButton(QStringLiteral("New"), QStringLiteral("primary"));
-  auto* help = kindButton(QStringLiteral("Help"), QStringLiteral("outline"));
-  header->addWidget(accountButton_);
-  header->addWidget(syncButton_);
-  header->addWidget(newButton_);
-  header->addWidget(help);
+  menuButton_ = kindButton(QStringLiteral("Menu"), QStringLiteral("outline"));
+  menu_ = new QMenu(menuButton_);
+  newAction_ = menu_->addAction(QStringLiteral("New contact"));
+  syncAction_ = menu_->addAction(QStringLiteral("Sync"));
+  menu_->addSeparator();
+  QAction* keybindingsAction = menu_->addAction(QStringLiteral("Keybindings"));
+  QAction* accountAction = menu_->addAction(QStringLiteral("Account"));
+  header->addWidget(menuButton_);
   root->addLayout(header);
 
   search_ = new QLineEdit;
@@ -238,15 +288,16 @@ void MainWindow::buildUi() {
   search_->setAccessibleName(QStringLiteral("Find a contact"));
   root->addWidget(search_);
 
-  auto* split = new QHBoxLayout;
-  split->setSpacing(14);
+  splitLayout_ = new QVBoxLayout;
+  splitLayout_->setSpacing(14);
   listPane_ = new QWidget;
   auto* listLayout = new QVBoxLayout(listPane_);
   listLayout->setContentsMargins(0, 0, 0, 0);
   listLayout->setSpacing(8);
   model_ = new ContactListModel;
   delegate_ = new ContactDelegate;
-  list_ = new QListView;
+  delegate_->photos = photos_;
+  list_ = new QuietListView;
   list_->setModel(model_);
   list_->setItemDelegate(delegate_);
   list_->setUniformItemSizes(true);
@@ -255,35 +306,40 @@ void MainWindow::buildUi() {
   list_->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
   list_->setMouseTracking(true);
   list_->viewport()->setMouseTracking(true);
-  list_->setMinimumWidth(300);
+  list_->setMinimumWidth(0);
+  list_->setMinimumHeight(0);
+  list_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
   listLayout->addWidget(list_, 1);
   emptyLabel_ = new QLabel;
   emptyLabel_->setObjectName(QStringLiteral("secondary"));
   emptyLabel_->setWordWrap(true);
   listLayout->addWidget(emptyLabel_);
 
-  auto* rule = new QFrame;
-  rule->setObjectName(QStringLiteral("vhairline"));
-  rule->setFixedWidth(1);
+  rule_ = new QFrame;
+  rule_->setObjectName(QStringLiteral("hairline"));
+  rule_->setFixedHeight(1);
+  rule_->hide();
 
   detailPane_ = new QWidget;
-  auto* detailOuter = new QVBoxLayout(detailPane_);
-  detailOuter->setContentsMargins(0, 0, 0, 0);
-  auto* scroll = new QScrollArea;
-  scroll->setWidgetResizable(true);
-  scroll->setFrameShape(QFrame::NoFrame);
-  auto* detailBody = new QWidget;
-  detailLayout_ = new QVBoxLayout(detailBody);
+  detailPane_->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Minimum);
+  detailLayout_ = new QVBoxLayout(detailPane_);
   detailLayout_->setContentsMargins(0, 0, 0, 0);
-  detailLayout_->setSpacing(14);
-  detailLayout_->addStretch(1);
-  scroll->setWidget(detailBody);
-  detailOuter->addWidget(scroll);
+  detailLayout_->setSpacing(8);
+  listPane_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+  listPane_->setMinimumHeight(0);
 
-  split->addWidget(listPane_);
-  split->addWidget(rule);
-  split->addWidget(detailPane_, 1);
-  root->addLayout(split, 1);
+  detailScroll_ = new QScrollArea;
+  detailScroll_->setWidgetResizable(true);
+  detailScroll_->setFrameShape(QFrame::NoFrame);
+  detailScroll_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+  detailScroll_->setWidget(detailPane_);
+  detailScroll_->setFocusPolicy(Qt::StrongFocus);
+  detailScroll_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+  detailScroll_->hide();
+
+  splitLayout_->addWidget(listPane_, 1);
+  splitLayout_->addWidget(detailScroll_, 1);
+  root->addLayout(splitLayout_, 1);
 
   auto* footer = new QHBoxLayout;
   countLabel_ = new QLabel;
@@ -307,13 +363,23 @@ void MainWindow::buildUi() {
 
   setCentralWidget(central);
 
-  connect(search_, &QLineEdit::textChanged, this, [this] { refilter(); });
-  connect(list_->selectionModel(), &QItemSelectionModel::currentChanged, this, [this] { renderDetail(); });
-  connect(list_, &QListView::activated, this, [this] { handleCommand(Command::PrimaryAction); });
-  connect(accountButton_, &QPushButton::clicked, this, [this] { openAccount(); });
-  connect(syncButton_, &QPushButton::clicked, this, [this] { runSync(false); });
-  connect(newButton_, &QPushButton::clicked, this, [this] { newContact(); });
-  connect(help, &QPushButton::clicked, this, [this] { showHelpDialog(this); });
+  connect(search_, &QLineEdit::textChanged, this, [this] {
+    if (detailOpen_) closeDetail();
+    refilter();
+  });
+  connect(list_->selectionModel(), &QItemSelectionModel::currentChanged, this, [this] {
+    if (detailOpen_) renderDetail();
+  });
+  connect(list_, &QListView::activated, this, [this] { openSelected(); });
+  connect(menuButton_, &QPushButton::clicked, this, [this] {
+    const QSize menuSize = menu_->sizeHint();
+    const QPoint pos = menuButton_->mapToGlobal(QPoint(menuButton_->width() - menuSize.width(), menuButton_->height()));
+    menu_->popup(pos);
+  });
+  connect(newAction_, &QAction::triggered, this, [this] { newContact(); });
+  connect(syncAction_, &QAction::triggered, this, [this] { runSync(false); });
+  connect(keybindingsAction, &QAction::triggered, this, [this] { showHelpDialog(this); });
+  connect(accountAction, &QAction::triggered, this, [this] { openAccount(); });
   toastFrame_->installEventFilter(this);
 
   watcher_ = new QFileSystemWatcher(this);
@@ -336,6 +402,7 @@ void MainWindow::loadLocal() {
   if (auto secret = secrets_->load(error)) {
     if (auto tokens = readTokensJson(secret->toUtf8())) tokens_ = *tokens;
   }
+  if (photos_) photos_->setAccessToken(tokens_.accessToken);
   if (auto bytes = readFile(paths_.cacheFile)) {
     const auto snapshot = readCacheJson(*bytes);
     if (snapshot.ok()) {
@@ -349,14 +416,19 @@ void MainWindow::showEvent(QShowEvent* event) {
   QMainWindow::showEvent(event);
   if (firstShow_) {
     firstShow_ = false;
+    applyView();
     search_->setFocus();
-    applyWidth(width());
   }
 }
 
 void MainWindow::resizeEvent(QResizeEvent* event) {
   QMainWindow::resizeEvent(event);
-  applyWidth(width());
+  if (renderingDetail_ || !detailOpen_) return;
+  const int edge = photoEdgeFor(detailPane_, width());
+  if (edge != photoEdge_) {
+    photoEdge_ = edge;
+    renderDetail();
+  }
 }
 
 void MainWindow::closeEvent(QCloseEvent* event) {
@@ -369,6 +441,10 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event) {
   if (watched == toastFrame_ && event->type() == QEvent::MouseButtonRelease) {
     toastFrame_->hide();
     return true;
+  }
+  if (watched == search_ && event->type() == QEvent::FocusIn && detailOpen_) {
+    closeDetail();
+    return false;
   }
   if (event->type() != QEvent::KeyPress) return QMainWindow::eventFilter(watched, event);
   if (QApplication::activeModalWidget()) return QMainWindow::eventFilter(watched, event);
@@ -387,7 +463,7 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event) {
   auto* focus = QApplication::focusWidget();
   mapped.textInput = qobject_cast<QLineEdit*>(focus) || qobject_cast<QTextEdit*>(focus) || qobject_cast<QPlainTextEdit*>(focus);
   mapped.searchEmpty = search_->text().isEmpty();
-  mapped.narrowDetail = narrow_ && narrowDetail_;
+  mapped.detailOpen = detailOpen_;
   mapped.surface = Surface::Browser;
   const Command command = routeKey(mapped);
   if (command == Command::Ignore) return QMainWindow::eventFilter(watched, event);
@@ -406,7 +482,6 @@ void MainWindow::applyPalette(const Palette& palette) {
     button->style()->polish(button);
   }
   if (list_) list_->viewport()->update();
-  if (themeLabel_) themeLabel_->setText(palette.name);
 }
 
 void MainWindow::scheduleThemeReload() {
@@ -445,15 +520,22 @@ void MainWindow::refilter() {
       select = rows.size();
       found = true;
     }
-    rows.append({hit.contact->resourceName, hit.contact->displayName(), hit.contact->subtitle()});
+    rows.append({hit.contact->resourceName, hit.contact->displayName(), hit.contact->subtitle(), hit.contact->photoUrl,
+                 hit.contact->initials()});
   }
   model_->setRows(std::move(rows));
   if (model_->rowCount() > 0) list_->setCurrentIndex(model_->index(found ? select : 0, 0));
-  else renderDetail();
+  else detailOpen_ = false;
+  if (detailOpen_ && selected() == nullptr) detailOpen_ = false;
+  applyView();
   updateChrome();
 }
 
 void MainWindow::renderDetail() {
+  if (renderingDetail_) return;
+  renderingDetail_ = true;
+  portrait_ = nullptr;
+  backButton_ = nullptr;
   clearLayout(detailLayout_);
   const Contact* contact = selected();
   if (contact == nullptr) {
@@ -467,45 +549,63 @@ void MainWindow::renderDetail() {
       body->setText(QStringLiteral("Connect Google Contacts from Account. Create a Desktop OAuth client, enable the People API, "
                                    "and paste the client id."));
     } else {
-      body->setText(QStringLiteral("Press n to add a contact."));
+      body->setText(QStringLiteral("Choose New contact from the menu."));
     }
     detailLayout_->addWidget(title);
     detailLayout_->addWidget(body);
     detailLayout_->addStretch(1);
+    showLayout(detailLayout_);
+    renderingDetail_ = false;
     return;
   }
   const Contact shown = *contact;
-  auto* identity = new QHBoxLayout;
+  const int photoEdge = photoEdgeFor(detailPane_, width());
+  photoEdge_ = photoEdge;
+  const qreal dpr = devicePixelRatioF();
+  const QPixmap portrait = photos_ ? photos_->imageFor(shown.resourceName, shown.photoUrl, photoEdge, dpr) : QPixmap();
+
   backButton_ = kindButton(QStringLiteral("Back"), QStringLiteral("outline"));
-  backButton_->setVisible(narrow_ && narrowDetail_);
-  connect(backButton_, &QPushButton::clicked, this, [this] { handleCommand(Command::Back); });
-  auto* avatar = new QLabel(shown.initials());
-  avatar->setObjectName(QStringLiteral("avatar"));
-  avatar->setAlignment(Qt::AlignCenter);
+  auto* edit = kindButton(QStringLiteral("Edit"), QStringLiteral("primary"));
+  connect(backButton_, &QPushButton::clicked, this, [this] { closeDetail(); });
+  connect(edit, &QPushButton::clicked, this, [this] { editSelected(); });
+  auto* toolbar = new QHBoxLayout;
+  toolbar->setSpacing(6);
+  toolbar->addWidget(backButton_);
+  toolbar->addStretch(1);
+  toolbar->addWidget(edit);
+  detailLayout_->addLayout(toolbar);
+
+  auto* identity = new QHBoxLayout;
+  identity->setSpacing(16);
+  if (!portrait.isNull()) {
+    auto* photo = new QLabel;
+    photo->setObjectName(QStringLiteral("portrait"));
+    photo->setPixmap(portrait);
+    photo->setFixedSize(portrait.deviceIndependentSize().toSize());
+    photo->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+    photo->setAccessibleName(shown.displayName() + QStringLiteral(" photo"));
+    portrait_ = photo;
+    identity->addWidget(photo, 0, Qt::AlignTop);
+  }
   auto* names = new QVBoxLayout;
+  names->setSpacing(4);
   auto* name = new QLabel(shown.displayName());
   name->setObjectName(QStringLiteral("title"));
   name->setTextInteractionFlags(Qt::TextSelectableByMouse);
+  name->setWordWrap(true);
+  name->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Maximum);
+  reserveWrappedHeight(name, std::max(1, width() - photoEdge - 80));
   auto* sub = new QLabel(shown.subtitle());
   sub->setObjectName(QStringLiteral("secondary"));
   sub->setTextInteractionFlags(Qt::TextSelectableByMouse);
+  sub->setWordWrap(true);
+  sub->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Maximum);
+  reserveWrappedHeight(sub, std::max(1, width() - photoEdge - 80));
   names->addWidget(name);
-  names->addWidget(sub);
-  identity->addWidget(backButton_);
-  identity->addWidget(avatar);
+  if (!shown.subtitle().isEmpty()) names->addWidget(sub);
+  else sub->deleteLater();
   identity->addLayout(names, 1);
   detailLayout_->addLayout(identity);
-
-  auto* actions = new QHBoxLayout;
-  actions->setSpacing(6);
-  auto* edit = kindButton(QStringLiteral("Edit"), QStringLiteral("primary"));
-  auto* remove = kindButton(QStringLiteral("Delete"), QStringLiteral("danger"));
-  connect(edit, &QPushButton::clicked, this, [this] { editSelected(); });
-  connect(remove, &QPushButton::clicked, this, [this] { deleteSelected(); });
-  actions->addWidget(edit);
-  actions->addWidget(remove);
-  actions->addStretch(1);
-  detailLayout_->addLayout(actions);
 
   if (shown.emails.isEmpty()) {
     auto* none = new QLabel(QStringLiteral("No email address"));
@@ -517,10 +617,14 @@ void MainWindow::renderDetail() {
     detailLayout_->addWidget(heading);
     for (const auto& email : shown.emails) {
       auto* row = new QHBoxLayout;
+      row->setSpacing(8);
+      auto* label = new QLabel(email.label.isEmpty() ? QStringLiteral("Email") : email.label);
+      label->setObjectName(QStringLiteral("secondary"));
+      label->setFixedWidth(96);
+      label->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
       auto* value = new QLabel(email.value);
       value->setTextInteractionFlags(Qt::TextSelectableByMouse);
-      auto* label = new QLabel(email.label);
-      label->setObjectName(QStringLiteral("secondary"));
+      value->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Maximum);
       auto* send = kindButton(QStringLiteral("Email"), QStringLiteral("outline"));
       const QString address = email.value;
       connect(send, &QPushButton::clicked, this, [this, address] {
@@ -535,8 +639,8 @@ void MainWindow::renderDetail() {
         QProcess::startDetached(command.argv.first(), command.argv.mid(1));
         toast(QStringLiteral("Opening email…"), false);
       });
-      row->addWidget(value, 1);
       row->addWidget(label);
+      row->addWidget(value, 1);
       row->addWidget(send);
       detailLayout_->addLayout(row);
     }
@@ -548,18 +652,22 @@ void MainWindow::renderDetail() {
     detailLayout_->addWidget(heading);
     for (const auto& phone : shown.phones) {
       auto* row = new QHBoxLayout;
+      row->setSpacing(8);
+      auto* label = new QLabel(phone.label.isEmpty() ? QStringLiteral("Phone") : phone.label);
+      label->setObjectName(QStringLiteral("secondary"));
+      label->setFixedWidth(96);
+      label->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
       auto* value = new QLabel(phone.value);
       value->setTextInteractionFlags(Qt::TextSelectableByMouse);
-      auto* label = new QLabel(phone.label);
-      label->setObjectName(QStringLiteral("secondary"));
+      value->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Maximum);
       auto* copy = kindButton(QStringLiteral("Copy"), QStringLiteral("outline"));
       const QString number = phone.value;
       connect(copy, &QPushButton::clicked, this, [this, number] {
         QGuiApplication::clipboard()->setText(number);
         toast(QStringLiteral("Phone copied"), false);
       });
-      row->addWidget(value, 1);
       row->addWidget(label);
+      row->addWidget(value, 1);
       row->addWidget(copy);
       detailLayout_->addLayout(row);
     }
@@ -571,10 +679,21 @@ void MainWindow::renderDetail() {
     auto* notes = new QLabel(shown.notes);
     notes->setWordWrap(true);
     notes->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    notes->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Maximum);
+    reserveWrappedHeight(notes, std::max(1, width() - 36));
     detailLayout_->addWidget(heading);
     detailLayout_->addWidget(notes);
   }
+  detailLayout_->addSpacing(16);
+  auto* remove = kindButton(QStringLiteral("Delete"), QStringLiteral("danger"));
+  connect(remove, &QPushButton::clicked, this, [this] { deleteSelected(); });
+  auto* removeRow = new QHBoxLayout;
+  removeRow->addWidget(remove);
+  removeRow->addStretch(1);
+  detailLayout_->addLayout(removeRow);
   detailLayout_->addStretch(1);
+  showLayout(detailLayout_);
+  renderingDetail_ = false;
 }
 
 void MainWindow::updateChrome() {
@@ -583,10 +702,10 @@ void MainWindow::updateChrome() {
   if (search_ && !search_->text().isEmpty()) countLabel_->setText(QStringLiteral("%1 of %2").arg(shown).arg(total));
   else countLabel_->setText(QStringLiteral("%1 contacts").arg(total));
   if (busy_) statusLabel_->setText(QStringLiteral("Syncing…"));
-  else if (!tokens_.refreshToken.isEmpty()) statusLabel_->setText(QStringLiteral("Google"));
-  else statusLabel_->setText(QStringLiteral("Not signed in"));
-  if (syncButton_) syncButton_->setEnabled(!busy_);
-  if (newButton_) newButton_->setEnabled(!busy_);
+  else if (tokens_.refreshToken.isEmpty()) statusLabel_->setText(QStringLiteral("Not signed in"));
+  else statusLabel_->clear();
+  if (syncAction_) syncAction_->setEnabled(!busy_);
+  if (newAction_) newAction_->setEnabled(!busy_);
   if (emptyLabel_) {
     emptyLabel_->setVisible(shown == 0);
     if (shown == 0) {
@@ -636,9 +755,10 @@ void MainWindow::handleCommand(Command command) {
       search_->setFocus();
       break;
     case Command::Back:
-      narrowDetail_ = false;
-      applyWidth(width());
-      search_->setFocus();
+      closeDetail();
+      break;
+    case Command::OpenContact:
+      openSelected();
       break;
     case Command::NewContact:
       newContact();
@@ -650,12 +770,6 @@ void MainWindow::handleCommand(Command command) {
       deleteSelected();
       break;
     case Command::PrimaryAction:
-      if (narrow_ && !narrowDetail_) {
-        narrowDetail_ = true;
-        applyWidth(width());
-        renderDetail();
-        break;
-      }
       if (selected() && !selected()->primaryEmail().isEmpty()) sendMail();
       else editSelected();
       break;
@@ -811,16 +925,75 @@ void MainWindow::saveConfig() {
 
 void MainWindow::saveTokens(const OAuthTokens& tokens) {
   tokens_ = tokens;
+  if (photos_) photos_->setAccessToken(tokens_.accessToken);
   QString error;
   if (!secrets_->save(QString::fromUtf8(writeTokensJson(tokens_)), error)) toast(error, true);
 }
 
-void MainWindow::applyWidth(int width) {
-  narrow_ = width < 760;
-  if (!narrow_) narrowDetail_ = false;
-  if (listPane_) listPane_->setVisible(!narrow_ || !narrowDetail_);
-  if (detailPane_) detailPane_->setVisible(!narrow_ || narrowDetail_);
-  if (backButton_) backButton_->setVisible(narrow_ && narrowDetail_);
+void MainWindow::setContacts(QList<Contact> contacts) {
+  index_.replaceAll(std::move(contacts));
+  refilter();
+}
+
+int MainWindow::detailPaneHeight() const { return detailPane_ == nullptr ? 0 : detailPane_->height(); }
+
+bool MainWindow::detailShows(const QString& text) const {
+  if (detailPane_ == nullptr || !detailPane_->isVisible() || detailPane_->height() < 80) return false;
+  const auto labels = detailPane_->findChildren<QLabel*>();
+  for (const QLabel* label : labels) {
+    if (!label->isVisible() || label->height() < 1 || !label->text().contains(text)) continue;
+    if (label->wordWrap() && label->width() > 1) {
+      const int wanted = label->heightForWidth(label->width());
+      if (wanted > label->height() + 1) continue;
+    }
+    const QRect inPane(label->mapTo(detailPane_, QPoint(0, 0)), label->size());
+    if (!detailPane_->rect().contains(inPane)) continue;
+    const QRect inWindow(label->mapTo(this, QPoint(0, 0)), label->size());
+    if (rect().contains(inWindow)) return true;
+  }
+  return false;
+}
+
+bool MainWindow::detailIsOnScreen() const {
+  if (detailPane_ == nullptr || !detailPane_->isVisible() || detailPane_->height() < 120) return false;
+  const QPoint topLeft = detailPane_->mapTo(this, QPoint(0, 0));
+  return topLeft.y() >= 0 && topLeft.y() + detailPane_->height() <= height();
+}
+
+QString MainWindow::detailPlainText() const {
+  if (detailPane_ == nullptr) return {};
+  QStringList parts;
+  const auto labels = detailPane_->findChildren<QLabel*>();
+  for (const QLabel* label : labels) parts.append(label->text());
+  return parts.join(QStringLiteral(" | "));
+}
+
+void MainWindow::openSelected() {
+  if (selected() == nullptr) return;
+  detailOpen_ = true;
+  applyView();
+  renderDetail();
+  if (detailScroll_ == nullptr) return;
+  if (detailScroll_->verticalScrollBar() != nullptr) detailScroll_->verticalScrollBar()->setValue(0);
+  detailScroll_->setFocus();
+}
+
+void MainWindow::closeDetail() {
+  detailOpen_ = false;
+  applyView();
+  if (search_ != nullptr) search_->setFocus();
+}
+
+void MainWindow::applyView() {
+  if (listPane_ == nullptr || detailScroll_ == nullptr) return;
+  if (detailOpen_ && selected() == nullptr) detailOpen_ = false;
+  listPane_->setMinimumWidth(0);
+  listPane_->setMaximumWidth(QWIDGETSIZE_MAX);
+  listPane_->setMinimumHeight(0);
+  listPane_->setMaximumHeight(QWIDGETSIZE_MAX);
+  listPane_->setVisible(!detailOpen_);
+  detailScroll_->setVisible(detailOpen_);
+  if (rule_ != nullptr) rule_->setVisible(false);
 }
 
 void MainWindow::runSync(bool forceFull) {
@@ -966,6 +1139,7 @@ void MainWindow::runDelete(const QString& id) {
           }
           index_.remove(id);
           saveCache();
+          detailOpen_ = false;
           refilter();
           toast(QStringLiteral("Contact deleted"), false);
         },

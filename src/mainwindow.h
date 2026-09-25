@@ -12,12 +12,16 @@
 
 #include <memory>
 
+class QBoxLayout;
 class QFileSystemWatcher;
 class QFrame;
+class QAction;
 class QLabel;
 class QLineEdit;
 class QListView;
+class QMenu;
 class QPushButton;
+class QScrollArea;
 class QTcpServer;
 class QTimer;
 class QVBoxLayout;
@@ -26,12 +30,19 @@ namespace omacontacts {
 
 class ContactDelegate;
 class ContactListModel;
+class PhotoStore;
 
 class MainWindow : public QMainWindow {
   Q_OBJECT
  public:
   explicit MainWindow();
   ~MainWindow() override;
+
+  void setContacts(QList<Contact> contacts);
+  int detailPaneHeight() const;
+  bool detailShows(const QString& text) const;
+  bool detailIsOnScreen() const;
+  QString detailPlainText() const;
 
  protected:
   void showEvent(QShowEvent* event) override;
@@ -60,6 +71,8 @@ class MainWindow : public QMainWindow {
   void copyPhone();
   void sendMail();
   void openAccount();
+  void openSelected();
+  void closeDetail();
   void runSync(bool forceFull);
   void runSave(const Contact& contact, bool isNew);
   void runDelete(const QString& id);
@@ -67,7 +80,7 @@ class MainWindow : public QMainWindow {
   void saveCache();
   void saveConfig();
   void saveTokens(const OAuthTokens& tokens);
-  void applyWidth(int width);
+  void applyView();
   void setBusy(bool busy);
 
   Palette palette_;
@@ -81,28 +94,34 @@ class MainWindow : public QMainWindow {
   std::unique_ptr<SecretStore> secrets_;
   bool busy_ = false;
   bool closing_ = false;
-  bool narrow_ = false;
-  bool narrowDetail_ = false;
+  bool detailOpen_ = false;
   bool firstShow_ = true;
   bool resyncing_ = false;
+  bool renderingDetail_ = false;
+  int photoEdge_ = 0;
 
   QLineEdit* search_ = nullptr;
   QListView* list_ = nullptr;
   ContactListModel* model_ = nullptr;
   ContactDelegate* delegate_ = nullptr;
+  PhotoStore* photos_ = nullptr;
+  QLabel* portrait_ = nullptr;
   QWidget* listPane_ = nullptr;
+  QScrollArea* detailScroll_ = nullptr;
   QWidget* detailPane_ = nullptr;
+  QBoxLayout* splitLayout_ = nullptr;
+  QFrame* rule_ = nullptr;
   QVBoxLayout* detailLayout_ = nullptr;
   QLabel* emptyLabel_ = nullptr;
   QLabel* countLabel_ = nullptr;
   QLabel* statusLabel_ = nullptr;
-  QLabel* themeLabel_ = nullptr;
   QLabel* toastLabel_ = nullptr;
   QFrame* toastFrame_ = nullptr;
   QPushButton* backButton_ = nullptr;
-  QPushButton* syncButton_ = nullptr;
-  QPushButton* newButton_ = nullptr;
-  QPushButton* accountButton_ = nullptr;
+  QPushButton* menuButton_ = nullptr;
+  QMenu* menu_ = nullptr;
+  QAction* newAction_ = nullptr;
+  QAction* syncAction_ = nullptr;
   QFileSystemWatcher* watcher_ = nullptr;
   QTimer* themeTimer_ = nullptr;
   QTimer* toastTimer_ = nullptr;

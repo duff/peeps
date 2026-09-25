@@ -20,7 +20,8 @@ SOURCES += \
     src/google.cpp \
     src/store.cpp \
     src/shortcuts.cpp \
-    src/mail.cpp
+    src/mail.cpp \
+    src/photos.cpp
 
 HEADERS += \
     src/mainwindow.h \
@@ -35,6 +36,7 @@ HEADERS += \
     src/store.h \
     src/shortcuts.h \
     src/mail.h \
+    src/photos.h \
     src/http.h
 
 PREFIX = $$(HOME)/.local

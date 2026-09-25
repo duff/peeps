@@ -260,7 +260,8 @@ QLabel#panelTitle { color: @@BRIGHT@@; font-size: 14px; font-weight: 700; }
 QLabel#secondary, QLabel#themeName, QLabel#status { color: @@SECONDARY@@; }
 QLabel#danger { color: @@DANGER@@; }
 QLabel#accent { color: @@ACCENT@@; }
-QLabel#avatar { background: @@SURFACE@@; color: @@FG@@; border: 1px solid @@EDGE@@; min-width: 32px; max-width: 32px; min-height: 32px; max-height: 32px; font-weight: 700; qproperty-alignment: AlignCenter; }
+QLabel#avatar { background: @@SURFACE@@; color: @@FG@@; border: 1px solid @@EDGE@@; min-width: 48px; max-width: 48px; min-height: 48px; max-height: 48px; font-weight: 700; qproperty-alignment: AlignCenter; }
+QLabel#portrait { background: transparent; border: none; padding: 0; }
 QPushButton { background: transparent; color: @@FG@@; border: 1px solid transparent; border-radius: 0; padding: 6px 10px; font-size: 12px; font-weight: 400; }
 QPushButton[kind="outline"] { border-color: @@EDGE@@; }
 QPushButton[kind="primary"] { color: @@ACCENT@@; border-color: @@ACCENT@@; }
@@ -268,8 +269,14 @@ QPushButton[kind="danger"] { color: @@DANGER@@; border-color: @@DANGER@@; }
 QPushButton:hover { background: @@HOVER@@; }
 QPushButton:pressed { background: @@PRESSED@@; }
 QPushButton:disabled { color: @@DISABLED@@; }
-QLineEdit, QTextEdit, QPlainTextEdit { background: transparent; color: @@FG@@; border: 1px solid @@EDGE@@; border-radius: 0; padding: 7px 10px; selection-background-color: @@SELECTION@@; selection-color: @@FG@@; font-size: 12px; }
-QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus { border: 1px solid @@ACCENT@@; }
+QLineEdit, QTextEdit, QPlainTextEdit, QComboBox { background: transparent; color: @@FG@@; border: 1px solid @@EDGE@@; border-radius: 0; padding: 7px 10px; selection-background-color: @@SELECTION@@; selection-color: @@FG@@; font-size: 12px; }
+QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QComboBox:focus { border: 1px solid @@ACCENT@@; }
+QComboBox::drop-down { border: none; width: 16px; }
+QComboBox QAbstractItemView { background: @@BG@@; color: @@FG@@; border: 1px solid @@EDGE@@; selection-background-color: @@SELECTION@@; selection-color: @@FG@@; outline: none; }
+QMenu { background: @@BG@@; color: @@FG@@; border: 1px solid @@EDGE@@; padding: 4px 0; }
+QMenu::item { padding: 8px 18px; background: transparent; }
+QMenu::item:selected { background: @@HOVER@@; }
+QMenu::separator { height: 1px; background: @@DIVIDER@@; margin: 4px 8px; }
 QTextEdit#notes, QPlainTextEdit#notes { background: @@INSET@@; }
 QListView { background: transparent; border: none; outline: none; }
 QScrollBar:vertical { background: @@SCROLLTRACK@@; width: 8px; margin: 0; border: none; }

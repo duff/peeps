@@ -42,6 +42,9 @@ class GoogleTests : public QObject {
   void keepsRefreshToken();
   void refreshPostsToken();
   void parsesPrimaryFields();
+  void prefersRealPhotoOverDefault();
+  void sizesPhotoUrl();
+  void oldCacheRequestsFullSync();
   void roundTripsPerson();
   void fullAndIncrementalSync();
   void retriesOnceAfterUnauthorized();
@@ -49,6 +52,12 @@ class GoogleTests : public QObject {
   void mailUsesDesktopHandler();
   void browserPrefersOmarchy();
   void storeRoundTrip();
+};
+
+class LayoutTests : public QObject {
+  Q_OBJECT
+ private slots:
+  void enterReplacesTheListWithThatContact();
 };
 
 class ShortcutTests : public QObject {

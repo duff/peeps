@@ -2,14 +2,20 @@
 
 #include "shortcuts.h"
 
+#include <QComboBox>
 #include <QDialog>
+#include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPlainTextEdit>
 #include <QPushButton>
+#include <QScreen>
+#include <QScrollArea>
 #include <QVBoxLayout>
+
+#include <algorithm>
 
 namespace omacontacts {
 namespace {
@@ -19,7 +25,40 @@ QPushButton* kindButton(const QString& text, const QString& kind) {
   button->setProperty("kind", kind);
   button->setAccessibleName(text);
   button->setCursor(Qt::PointingHandCursor);
+  button->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Fixed);
   return button;
+}
+
+enum class LabelKind { Email, Phone };
+
+struct ValueRow {
+  QComboBox* preset = nullptr;
+  QLineEdit* custom = nullptr;
+  QLineEdit* value = nullptr;
+};
+
+QStringList presetsFor(LabelKind kind) {
+  if (kind == LabelKind::Email) {
+    return {QStringLiteral("Personal"), QStringLiteral("Work"), QStringLiteral("Custom")};
+  }
+  return {QStringLiteral("Mobile"), QStringLiteral("Office"), QStringLiteral("Custom")};
+}
+
+int presetIndex(LabelKind kind, const QString& label) {
+  const QString normalized = label.trimmed().toLower();
+  if (kind == LabelKind::Email) {
+    if (normalized.isEmpty() || normalized == QLatin1String("personal") || normalized == QLatin1String("home")) return 0;
+    if (normalized == QLatin1String("work")) return 1;
+    return 2;
+  }
+  if (normalized.isEmpty() || normalized == QLatin1String("mobile") || normalized == QLatin1String("cell")) return 0;
+  if (normalized == QLatin1String("office") || normalized == QLatin1String("work")) return 1;
+  return 2;
+}
+
+QString labelFrom(const ValueRow& row) {
+  if (row.preset->currentIndex() == row.preset->count() - 1) return row.custom->text();
+  return row.preset->currentText();
 }
 
 QLabel* caption(const QString& text) {
@@ -75,43 +114,55 @@ class EditDialog : public QDialog {
     title->setObjectName(QStringLiteral("title"));
     root->addWidget(title);
 
+    auto* form = new QWidget;
+    auto* formLayout = new QVBoxLayout(form);
+    formLayout->setContentsMargins(0, 0, 0, 0);
+    formLayout->setSpacing(14);
+
     given_ = new QLineEdit(base.givenName);
     family_ = new QLineEdit(base.familyName);
     organization_ = new QLineEdit(base.organization);
     titleEdit_ = new QLineEdit(base.title);
-    root->addWidget(caption(QStringLiteral("Given name")));
-    root->addWidget(given_);
-    root->addWidget(caption(QStringLiteral("Family name")));
-    root->addWidget(family_);
-    root->addWidget(caption(QStringLiteral("Organization")));
-    root->addWidget(organization_);
-    root->addWidget(caption(QStringLiteral("Title")));
-    root->addWidget(titleEdit_);
+    formLayout->addWidget(caption(QStringLiteral("Given name")));
+    formLayout->addWidget(given_);
+    formLayout->addWidget(caption(QStringLiteral("Family name")));
+    formLayout->addWidget(family_);
+    formLayout->addWidget(caption(QStringLiteral("Organization")));
+    formLayout->addWidget(organization_);
+    formLayout->addWidget(caption(QStringLiteral("Title")));
+    formLayout->addWidget(titleEdit_);
 
-    root->addWidget(caption(QStringLiteral("Email")));
+    formLayout->addWidget(caption(QStringLiteral("Email")));
     emailLayout_ = new QVBoxLayout;
     emailLayout_->setSpacing(6);
-    root->addLayout(emailLayout_);
+    formLayout->addLayout(emailLayout_);
     for (const auto& email : base.emails) addEmail(email);
     if (base.emails.isEmpty()) addEmail({});
     auto* addEmailButton = kindButton(QStringLiteral("Add email"), QStringLiteral("outline"));
-    root->addWidget(addEmailButton, 0, Qt::AlignLeft);
+    formLayout->addWidget(addEmailButton, 0, Qt::AlignLeft);
     connect(addEmailButton, &QPushButton::clicked, this, [this] { addEmail({}); });
 
-    root->addWidget(caption(QStringLiteral("Phone")));
+    formLayout->addWidget(caption(QStringLiteral("Phone")));
     phoneLayout_ = new QVBoxLayout;
     phoneLayout_->setSpacing(6);
-    root->addLayout(phoneLayout_);
+    formLayout->addLayout(phoneLayout_);
     for (const auto& phone : base.phones) addPhone(phone);
     auto* addPhoneButton = kindButton(QStringLiteral("Add phone"), QStringLiteral("outline"));
-    root->addWidget(addPhoneButton, 0, Qt::AlignLeft);
+    formLayout->addWidget(addPhoneButton, 0, Qt::AlignLeft);
     connect(addPhoneButton, &QPushButton::clicked, this, [this] { addPhone({}); });
 
-    root->addWidget(caption(QStringLiteral("Notes")));
+    formLayout->addWidget(caption(QStringLiteral("Notes")));
     notes_ = new QPlainTextEdit(base.notes);
     notes_->setObjectName(QStringLiteral("notes"));
     notes_->setMinimumHeight(96);
-    root->addWidget(notes_);
+    formLayout->addWidget(notes_);
+
+    auto* scroll = new QScrollArea;
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    scroll->setWidget(form);
+    root->addWidget(scroll, 1);
 
     error_ = new QLabel;
     error_->setObjectName(QStringLiteral("danger"));
@@ -130,6 +181,13 @@ class EditDialog : public QDialog {
     root->addLayout(footer);
     connect(cancel, &QPushButton::clicked, this, &QDialog::reject);
     connect(save, &QPushButton::clicked, this, [this] { trySave(); });
+    const QScreen* screen = parent != nullptr && parent->screen() != nullptr ? parent->screen()
+                                                                              : QGuiApplication::primaryScreen();
+    if (screen != nullptr) {
+      const int available = std::max(320, screen->availableGeometry().height() - 48);
+      setMaximumHeight(available);
+      resize(std::max(420, sizeHint().width()), std::min(sizeHint().height(), available));
+    }
     given_->setFocus();
   }
 
@@ -150,29 +208,49 @@ class EditDialog : public QDialog {
   }
 
  private:
-  void addEmail(const LabeledValue& value) { addRow(emailLayout_, emails_, value, QStringLiteral("name@example.com")); }
-  void addPhone(const LabeledValue& value) { addRow(phoneLayout_, phones_, value, QStringLiteral("+1 555 010 1000")); }
+  void addEmail(const LabeledValue& value) {
+    addRow(emailLayout_, emails_, LabelKind::Email, value, QStringLiteral("name@example.com"));
+  }
+  void addPhone(const LabeledValue& value) {
+    addRow(phoneLayout_, phones_, LabelKind::Phone, value, QStringLiteral("+1 555 010 1000"));
+  }
 
-  void addRow(QVBoxLayout* layout, QList<QPair<QLineEdit*, QLineEdit*>>& rows, const LabeledValue& value,
+  void addRow(QVBoxLayout* layout, QList<ValueRow>& rows, LabelKind kind, const LabeledValue& value,
               const QString& placeholder) {
     auto* row = new QWidget;
     auto* box = new QHBoxLayout(row);
     box->setContentsMargins(0, 0, 0, 0);
     box->setSpacing(6);
+    auto* preset = new QComboBox;
+    preset->addItems(presetsFor(kind));
+    preset->setFixedWidth(128);
+    preset->setAccessibleName(kind == LabelKind::Email ? QStringLiteral("Email label") : QStringLiteral("Phone label"));
+    auto* custom = new QLineEdit;
+    custom->setPlaceholderText(QStringLiteral("Label"));
+    custom->setFixedWidth(120);
+    custom->setAccessibleName(kind == LabelKind::Email ? QStringLiteral("Custom email label")
+                                                       : QStringLiteral("Custom phone label"));
+    const int index = presetIndex(kind, value.label);
+    preset->setCurrentIndex(index);
+    if (index == preset->count() - 1) custom->setText(value.label);
+    custom->setVisible(index == preset->count() - 1);
     auto* edit = new QLineEdit(value.value);
     edit->setPlaceholderText(placeholder);
-    auto* label = new QLineEdit(value.label);
-    label->setPlaceholderText(QStringLiteral("home"));
-    label->setFixedWidth(90);
     auto* remove = kindButton(QStringLiteral("Remove"), QStringLiteral("outline"));
+    box->addWidget(preset);
+    box->addWidget(custom);
     box->addWidget(edit, 1);
-    box->addWidget(label);
     box->addWidget(remove);
     layout->addWidget(row);
-    rows.append(QPair<QLineEdit*, QLineEdit*>(edit, label));
+    rows.append(ValueRow{preset, custom, edit});
+    connect(preset, &QComboBox::currentIndexChanged, row, [preset, custom](int index) {
+      const bool customOn = index == preset->count() - 1;
+      custom->setVisible(customOn);
+      if (customOn) custom->setFocus();
+    });
     connect(remove, &QPushButton::clicked, this, [this, edit, &rows, row] {
       for (int i = 0; i < rows.size(); ++i) {
-        if (rows.at(i).first == edit) {
+        if (rows.at(i).value == edit) {
           rows.removeAt(i);
           break;
         }
@@ -188,8 +266,8 @@ class EditDialog : public QDialog {
     draft.organization = organization_->text();
     draft.title = titleEdit_->text();
     draft.notes = notes_->toPlainText();
-    for (const auto& row : emails_) draft.emails.append({row.first->text(), row.second->text()});
-    for (const auto& row : phones_) draft.phones.append({row.first->text(), row.second->text()});
+    for (const auto& row : emails_) draft.emails.append({row.value->text(), labelFrom(row)});
+    for (const auto& row : phones_) draft.phones.append({row.value->text(), labelFrom(row)});
     const QString error = draft.validate();
     if (!error.isEmpty()) {
       error_->setText(error);
@@ -208,8 +286,8 @@ class EditDialog : public QDialog {
   QPlainTextEdit* notes_ = nullptr;
   QVBoxLayout* emailLayout_ = nullptr;
   QVBoxLayout* phoneLayout_ = nullptr;
-  QList<QPair<QLineEdit*, QLineEdit*>> emails_;
-  QList<QPair<QLineEdit*, QLineEdit*>> phones_;
+  QList<ValueRow> emails_;
+  QList<ValueRow> phones_;
   QLabel* error_ = nullptr;
 };
 
@@ -263,7 +341,7 @@ class HelpBox : public QDialog {
     auto* root = new QVBoxLayout(this);
     root->setContentsMargins(18, 18, 18, 18);
     root->setSpacing(8);
-    auto* title = new QLabel(QStringLiteral("Shortcuts"));
+    auto* title = new QLabel(QStringLiteral("Keybindings"));
     title->setObjectName(QStringLiteral("title"));
     root->addWidget(title);
     for (const auto& row : bindingHelp()) {
