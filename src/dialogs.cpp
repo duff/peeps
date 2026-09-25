@@ -941,6 +941,13 @@ class ContactEditor::Form {
       addAddress(address);
     });
 
+    formLayout->addWidget(caption(QStringLiteral("Notes")));
+    notes = new QPlainTextEdit(base.notes);
+    notes->setObjectName(QStringLiteral("notes"));
+    notes->setMinimumHeight(96);
+    notes->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    formLayout->addWidget(notes, 1);
+
     moreOpen = base.hasLessCommonFields() || fieldIsMore(focus.field);
     moreButton = kindButton(moreOpen ? QStringLiteral("Less") : QStringLiteral("More"), QStringLiteral("outline"));
     formLayout->addWidget(moreButton, 0, Qt::AlignLeft);
@@ -1027,13 +1034,6 @@ class ContactEditor::Form {
     morePane->setVisible(moreOpen);
     formLayout->addWidget(morePane);
     QObject::connect(moreButton, &QPushButton::clicked, host, [this] { setMoreOpen(!moreOpen); });
-
-    formLayout->addWidget(caption(QStringLiteral("Notes")));
-    notes = new QPlainTextEdit(base.notes);
-    notes->setObjectName(QStringLiteral("notes"));
-    notes->setMinimumHeight(96);
-    notes->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-    formLayout->addWidget(notes, 1);
 
     scroll = new QScrollArea;
     scroll->setWidgetResizable(true);

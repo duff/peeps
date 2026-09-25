@@ -1081,8 +1081,11 @@ void LayoutTests::companyWithoutAPersonalName() {
   QVERIFY(addPhone != nullptr && addPhone->isVisible());
   QVERIFY(addAddress != nullptr && addAddress->isVisible());
   QVERIFY(more != nullptr && more->isVisible());
+  auto* notes = editor->findChild<QPlainTextEdit*>(QStringLiteral("notes"));
+  QVERIFY(notes != nullptr && notes->isVisible());
   QVERIFY(addPhone->mapTo(editor, QPoint(0, 0)).y() < addAddress->mapTo(editor, QPoint(0, 0)).y());
-  QVERIFY(addAddress->mapTo(editor, QPoint(0, 0)).y() < more->mapTo(editor, QPoint(0, 0)).y());
+  QVERIFY(addAddress->mapTo(editor, QPoint(0, 0)).y() < notes->mapTo(editor, QPoint(0, 0)).y());
+  QVERIFY(notes->mapTo(editor, QPoint(0, 0)).y() < more->mapTo(editor, QPoint(0, 0)).y());
   QVERIFY(button(QStringLiteral("Add instant message")) == nullptr);
   QVERIFY(button(QStringLiteral("Add SIP address")) == nullptr);
   QTest::mouseClick(more, Qt::LeftButton);
