@@ -857,14 +857,14 @@ void MainWindow::updateChrome() {
   }
 }
 
-void MainWindow::toast(const QString& text, bool error, int milliseconds) {
+void MainWindow::toast(const QString& text, bool error) {
   toastLabel_->setText(text);
   toastFrame_->setProperty("error", error);
   toastFrame_->style()->unpolish(toastFrame_);
   toastFrame_->style()->polish(toastFrame_);
   toastFrame_->show();
   if (error) toastTimer_->stop();
-  else toastTimer_->start(milliseconds);
+  else toastTimer_->start(3000);
 }
 
 void MainWindow::handleCommand(Command command) {
@@ -1002,13 +1002,13 @@ void MainWindow::copyCurrentField() {
       return;
     }
     QGuiApplication::clipboard()->setImage(image);
-    toast(QStringLiteral("Copied photo"), false, 2000);
+    toast(QStringLiteral("Copied photo"), false);
     return;
   }
   const QString value = index.data(Qt::DisplayRole).toString().trimmed();
   if (value.isEmpty()) return;
   QGuiApplication::clipboard()->setText(value);
-  toast(QStringLiteral("Copied"), false, 2000);
+  toast(QStringLiteral("Copied"), false);
 }
 
 void MainWindow::sendMailTo(const QString& address) {
@@ -1138,7 +1138,7 @@ void MainWindow::copyWholeContact() {
   const QString text = contactPlainText(*contact);
   if (text.isEmpty()) return;
   QGuiApplication::clipboard()->setText(text);
-  toast(QStringLiteral("Copied name, addresses and phones."), false, 2000);
+  toast(QStringLiteral("Copied name, addresses and phones."), false);
 }
 
 void MainWindow::changeSelectedPhoto(bool remove) {
@@ -1176,7 +1176,7 @@ void MainWindow::copyEmail() {
     return;
   }
   QGuiApplication::clipboard()->setText(contact->primaryEmail());
-  toast(QStringLiteral("Email copied"), false, 2000);
+  toast(QStringLiteral("Email copied"), false);
 }
 
 void MainWindow::copyPhone() {
@@ -1186,7 +1186,7 @@ void MainWindow::copyPhone() {
     return;
   }
   QGuiApplication::clipboard()->setText(contact->primaryPhone());
-  toast(QStringLiteral("Phone copied"), false, 2000);
+  toast(QStringLiteral("Phone copied"), false);
 }
 
 void MainWindow::sendMail() {
