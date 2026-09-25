@@ -1081,6 +1081,11 @@ void LayoutTests::companyWithoutAPersonalName() {
   QVERIFY(addPhone != nullptr && addPhone->isVisible());
   QVERIFY(addAddress != nullptr && addAddress->isVisible());
   QVERIFY(more != nullptr && more->isVisible());
+  auto* photo = editor->findChild<QLabel*>(QStringLiteral("photo"));
+  auto* given = editor->findChild<QLineEdit*>(QStringLiteral("given"));
+  QVERIFY(photo != nullptr && given != nullptr);
+  QVERIFY(photo->alignment() & Qt::AlignLeft);
+  QCOMPARE(photo->mapTo(editor, QPoint(0, 0)).x(), given->mapTo(editor, QPoint(0, 0)).x());
   auto* notes = editor->findChild<QPlainTextEdit*>(QStringLiteral("notes"));
   QVERIFY(notes != nullptr && notes->isVisible());
   QVERIFY(addPhone->mapTo(editor, QPoint(0, 0)).y() < addAddress->mapTo(editor, QPoint(0, 0)).y());

@@ -869,12 +869,12 @@ class ContactEditor::Form {
 
     photoLabel = new QLabel(QStringLiteral("No photo"));
     photoLabel->setObjectName(QStringLiteral("photo"));
-    photoLabel->setAlignment(Qt::AlignCenter);
+    photoLabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     photoLabel->setMinimumHeight(160);
     photoLabel->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
-    formLayout->addWidget(photoLabel, 0, Qt::AlignHCenter);
+    formLayout->addWidget(photoLabel, 0, Qt::AlignLeft);
     auto* photoButtons = new QHBoxLayout;
-    photoButtons->setAlignment(Qt::AlignHCenter);
+    photoButtons->setAlignment(Qt::AlignLeft);
     photoButton = kindButton(QStringLiteral("Add photo"), QStringLiteral("outline"));
     removePhotoButton = kindButton(QStringLiteral("Remove photo"), QStringLiteral("outline"));
     photoButtons->addWidget(photoButton);

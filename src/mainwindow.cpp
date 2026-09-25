@@ -165,8 +165,7 @@ class FieldDelegate : public QStyledItemDelegate {
         const int maxEdge = std::min(160, rect.width());
         QSize logical = photo.deviceIndependentSize().toSize();
         logical.scale(maxEdge, maxEdge, Qt::KeepAspectRatio);
-        const QRect target(rect.center().x() - logical.width() / 2, rect.center().y() - logical.height() / 2, logical.width(),
-                           logical.height());
+        const QRect target(rect.left(), rect.center().y() - logical.height() / 2, logical.width(), logical.height());
         painter->drawPixmap(target, photo);
         if (selected || hover) {
           QPen pen(palette.foreground);
@@ -858,14 +857,14 @@ void MainWindow::updateChrome() {
   }
 }
 
-void MainWindow::toast(const QString& text, bool error) {
+void MainWindow::toast(const QString& text, bool error, int milliseconds) {
   toastLabel_->setText(text);
   toastFrame_->setProperty("error", error);
   toastFrame_->style()->unpolish(toastFrame_);
   toastFrame_->style()->polish(toastFrame_);
   toastFrame_->show();
   if (error) toastTimer_->stop();
-  else toastTimer_->start(6000);
+  else toastTimer_->start(milliseconds);
 }
 
 void MainWindow::handleCommand(Command command) {
@@ -1003,13 +1002,13 @@ void MainWindow::copyCurrentField() {
       return;
     }
     QGuiApplication::clipboard()->setImage(image);
-    toast(QStringLiteral("Copied photo"), false);
+    toast(QStringLiteral("Copied photo"), false, 2000);
     return;
   }
   const QString value = index.data(Qt::DisplayRole).toString().trimmed();
   if (value.isEmpty()) return;
   QGuiApplication::clipboard()->setText(value);
-  toast(QStringLiteral("Copied"), false);
+  toast(QStringLiteral("Copied"), false, 2000);
 }
 
 void MainWindow::sendMailTo(const QString& address) {
@@ -1139,7 +1138,7 @@ void MainWindow::copyWholeContact() {
   const QString text = contactPlainText(*contact);
   if (text.isEmpty()) return;
   QGuiApplication::clipboard()->setText(text);
-  toast(QStringLiteral("Copied name, addresses and phones."), false);
+  toast(QStringLiteral("Copied name, addresses and phones."), false, 2000);
 }
 
 void MainWindow::changeSelectedPhoto(bool remove) {
@@ -1177,7 +1176,7 @@ void MainWindow::copyEmail() {
     return;
   }
   QGuiApplication::clipboard()->setText(contact->primaryEmail());
-  toast(QStringLiteral("Email copied"), false);
+  toast(QStringLiteral("Email copied"), false, 2000);
 }
 
 void MainWindow::copyPhone() {
@@ -1187,7 +1186,7 @@ void MainWindow::copyPhone() {
     return;
   }
   QGuiApplication::clipboard()->setText(contact->primaryPhone());
-  toast(QStringLiteral("Phone copied"), false);
+  toast(QStringLiteral("Phone copied"), false, 2000);
 }
 
 void MainWindow::sendMail() {

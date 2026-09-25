@@ -63,7 +63,7 @@ class MainWindow : public QMainWindow {
   void refilter();
   void renderDetail();
   void updateChrome();
-  void toast(const QString& text, bool error);
+  void toast(const QString& text, bool error = false, int milliseconds = 6000);
   void handleCommand(Command command);
   void moveSelection(int delta, bool wrap);
   void moveField(int delta, bool wrap);
