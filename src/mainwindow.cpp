@@ -121,6 +121,7 @@ enum class FieldAction { Copy, CopyPhoto, Edit, DeleteContact, CopyContact, Chan
 class FieldDelegate : public QStyledItemDelegate {
  public:
   Palette palette;
+  bool controlHeld = false;
 
   static bool wraps(const QModelIndex& index) {
     return index.data(Qt::UserRole + 4).toInt() == static_cast<int>(EditorField::Notes);
@@ -189,7 +190,14 @@ class FieldDelegate : public QStyledItemDelegate {
     const bool several = wrap || lines.size() > 1;
     const int textTop = several ? rect.top() + pad : rect.top();
     const int textHeight = several ? lineHeight : rect.height();
-    const int actionWidth = action.isEmpty() ? 0 : metrics.horizontalAdvance(action) + 16;
+    const bool rowCue = actionKind == FieldAction::Copy || actionKind == FieldAction::CopyContact ||
+                        actionKind == FieldAction::Edit || actionKind == FieldAction::DeleteContact;
+    const bool showAction = !action.isEmpty() && (!rowCue || selected || hover);
+    const bool emailCopy = showAction && actionKind == FieldAction::Copy && index.data(Qt::UserRole + 3).toBool();
+    const QString shownCue = emailCopy && controlHeld ? QStringLiteral("Send email") : action;
+    const int actionWidth = showAction || (actionKind == FieldAction::Copy && wrap)
+                                ? (shownCue.isEmpty() ? 0 : metrics.horizontalAdvance(shownCue) + 16)
+                                : 0;
     const bool keepLabel = index.data(Qt::UserRole + 6).toBool();
     const int labelWidth = label.isEmpty() && !keepLabel
                                ? 0
@@ -211,10 +219,10 @@ class FieldDelegate : public QStyledItemDelegate {
                           Qt::AlignVCenter | Qt::AlignLeft, metrics.elidedText(lines.at(i), Qt::ElideRight, valueWidth));
       }
     }
-    if (!action.isEmpty()) {
+    if (showAction) {
       painter->setPen(danger ? palette.danger : palette.secondary);
       painter->drawText(QRect(rect.right() - actionWidth + 16, textTop, actionWidth - 16, textHeight),
-                        Qt::AlignVCenter | Qt::AlignRight, action);
+                        Qt::AlignVCenter | Qt::AlignRight, shownCue);
     }
     painter->restore();
   }
@@ -576,6 +584,23 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event) {
   if (watched == search_ && event->type() == QEvent::FocusIn && detailOpen_ && !editing_) {
     closeDetail();
     return false;
+  }
+  if (event->type() == QEvent::WindowDeactivate && fieldDelegate_ != nullptr && fieldDelegate_->controlHeld) {
+    fieldDelegate_->controlHeld = false;
+    if (fieldList_ != nullptr) fieldList_->viewport()->update();
+  }
+  if ((event->type() == QEvent::KeyPress || event->type() == QEvent::KeyRelease) && fieldDelegate_ != nullptr &&
+      fieldList_ != nullptr && fieldList_->isVisible()) {
+    auto* key = static_cast<QKeyEvent*>(event);
+    if (key->key() == Qt::Key_Control && !key->isAutoRepeat()) {
+      QTimer::singleShot(0, this, [this] {
+        if (fieldDelegate_ == nullptr || fieldList_ == nullptr) return;
+        const bool held = QGuiApplication::queryKeyboardModifiers().testFlag(Qt::ControlModifier);
+        if (fieldDelegate_->controlHeld == held) return;
+        fieldDelegate_->controlHeld = held;
+        fieldList_->viewport()->update();
+      });
+    }
   }
   if (event->type() != QEvent::KeyPress) return QMainWindow::eventFilter(watched, event);
   if (QApplication::activeModalWidget()) return QMainWindow::eventFilter(watched, event);

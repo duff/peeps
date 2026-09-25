@@ -17,7 +17,7 @@ make install
 1. In Google Cloud, create a project and enable the People API.
 2. Configure the OAuth consent screen. While it is in testing, add the Google account you will use.
 3. Create an OAuth client of type **Desktop**.
-4. Launch Omacontacts, press `Ctrl+,`, paste the client id, and choose Connect.
+4. Launch Omacontacts, open Menu → Account, paste the client id, and choose Connect.
 
 The refresh token stays in the login keyring. Contacts are cached in `~/.local/share/omacontacts/contacts.json` so search stays local.
 
@@ -29,16 +29,12 @@ The refresh token stays in the login keyring. Contacts are cached in `~/.local/s
 | Up / Down | Move through matches, including while the search field is focused |
 | `/` | Focus search |
 | Enter | Open the selected contact, or copy the selected field |
-| Ctrl+C | Copy the selected field |
-| Ctrl+Shift+C | Copy the whole contact, without the photo |
-| Ctrl+M | Email the selected address |
+| Super+C | Copy the selected field. Omarchy sends this to the app as Ctrl+C |
+| Ctrl+Enter | Email the selected address |
 | Esc or Backspace | Back to the list, or clear the search |
-| F1 or `?` | Shortcut help |
+| `?` | Shortcut help |
 | Ctrl+N / Ctrl+E | New contact, edit the selected contact |
-| Ctrl+, | Google account |
-| Enter | Save the open contact from a single-line field |
-| Ctrl+S / Ctrl+Enter | Save the open contact, including from the notes field |
-| Ctrl+Q | Quit |
+| Ctrl+S | Save the open contact |
 
 New, Sync, Keybindings, and Account are in the Menu. Letters typed in the search field only filter the list.
 

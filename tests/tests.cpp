@@ -1280,7 +1280,7 @@ void ShortcutTests::typingSuspendsSingleKeys() {
   auto created = browser(omacontacts::Key::N, true);
   created.ctrl = true;
   QCOMPARE(omacontacts::routeKey(created), omacontacts::Command::NewContact);
-  QCOMPARE(omacontacts::routeKey(browser(omacontacts::Key::F1, true)), omacontacts::Command::Help);
+  QCOMPARE(omacontacts::routeKey(browser(omacontacts::Key::F1, true)), omacontacts::Command::Ignore);
 }
 
 void ShortcutTests::escapeClearsBeforeBack() {
@@ -1317,7 +1317,7 @@ void ShortcutTests::listKeys() {
   QCOMPARE(omacontacts::routeKey(browser(omacontacts::Key::Slash)), omacontacts::Command::FocusSearch);
   QCOMPARE(omacontacts::routeKey(browser(omacontacts::Key::Slash, true)), omacontacts::Command::Ignore);
   QCOMPARE(omacontacts::routeKey(browser(omacontacts::Key::Delete)), omacontacts::Command::Ignore);
-  auto mail = browser(omacontacts::Key::M);
+  auto mail = browser(omacontacts::Key::Return);
   mail.ctrl = true;
   mail.detailOpen = true;
   QCOMPARE(omacontacts::routeKey(mail), omacontacts::Command::SendEmail);
@@ -1328,14 +1328,14 @@ void ShortcutTests::listKeys() {
   QCOMPARE(omacontacts::routeKey(browser(omacontacts::Key::Return, true)), omacontacts::Command::OpenContact);
   auto edit = browser(omacontacts::Key::Return);
   edit.ctrl = true;
-  QCOMPARE(omacontacts::routeKey(edit), omacontacts::Command::EditContact);
+  QCOMPARE(omacontacts::routeKey(edit), omacontacts::Command::Ignore);
   auto ctrlE = browser(omacontacts::Key::E);
   ctrlE.ctrl = true;
   QCOMPARE(omacontacts::routeKey(ctrlE), omacontacts::Command::EditContact);
   QCOMPARE(omacontacts::routeKey(browser(omacontacts::Key::Question)), omacontacts::Command::Help);
   auto quit = browser(omacontacts::Key::Q);
   quit.ctrl = true;
-  QCOMPARE(omacontacts::routeKey(quit), omacontacts::Command::Quit);
+  QCOMPARE(omacontacts::routeKey(quit), omacontacts::Command::Ignore);
 }
 
 void ShortcutTests::editorKeepsKeys() {
@@ -1383,7 +1383,16 @@ void ShortcutTests::helpListsEmail() {
   for (const auto& row : rows) {
     QVERIFY(!row.keys.isEmpty());
     QVERIFY(!row.action.isEmpty());
-    if (row.keys == QLatin1String("Enter") && row.action.contains(QStringLiteral("Open"))) sawOpen = true;
+    if (row.keys == QLatin1String("Enter")) {
+      QVERIFY(row.action.contains(QStringLiteral("Open")));
+      sawOpen = true;
+    }
+    QVERIFY(!row.keys.contains(QStringLiteral("F1")));
+    QVERIFY(row.keys != QLatin1String("Ctrl+Q"));
+    QVERIFY(row.keys != QLatin1String("Ctrl+,"));
+    QVERIFY(row.keys != QLatin1String("Ctrl+M"));
+    QVERIFY(row.keys != QLatin1String("Ctrl+C"));
+    QVERIFY(row.keys != QLatin1String("Ctrl+Shift+C"));
     if (row.action.contains(QStringLiteral("keybindings"))) sawKeybindings = true;
     if (row.action.contains(QStringLiteral("Sync")) || row.keys.contains(QStringLiteral("PgUp"))) sawSync = true;
     if (row.keys == QLatin1String("e") || row.keys == QLatin1String("n") || row.keys == QLatin1String("r") ||
