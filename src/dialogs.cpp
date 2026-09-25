@@ -44,8 +44,8 @@ struct ValueRow {
 };
 
 QStringList emphasizedLabels(LabelField field) {
-  if (field == LabelField::Email) return {QStringLiteral("Home"), QStringLiteral("Work")};
   if (field == LabelField::Phone) return {QStringLiteral("Mobile"), QStringLiteral("Work")};
+  if (field == LabelField::Email || field == LabelField::Address) return {QStringLiteral("Home"), QStringLiteral("Work")};
   return {QStringLiteral("Home"), QStringLiteral("Work"), QStringLiteral("Other")};
 }
 
@@ -127,6 +127,39 @@ class OpenListOnClick : public QObject {
  private:
   QComboBox* combo_ = nullptr;
 };
+
+QString labelBoxName(LabelField field) {
+  if (field == LabelField::Email) return QStringLiteral("Email label");
+  if (field == LabelField::Phone) return QStringLiteral("Phone label");
+  if (field == LabelField::Address) return QStringLiteral("Address label");
+  return QStringLiteral("Label");
+}
+
+void prepareLabelBox(QComboBox* preset, LabelField field) {
+  preset->addItems(emphasizedLabels(field));
+  preset->setEditable(true);
+  preset->setInsertPolicy(QComboBox::NoInsert);
+  preset->setFixedWidth(160);
+  preset->setAccessibleName(labelBoxName(field));
+  if (QCompleter* completer = preset->completer()) {
+    completer->setCaseSensitivity(Qt::CaseInsensitive);
+    completer->setFilterMode(Qt::MatchStartsWith);
+    completer->setCompletionMode(QCompleter::PopupCompletion);
+  }
+  if (preset->lineEdit() != nullptr) preset->lineEdit()->installEventFilter(new OpenListOnClick(preset));
+}
+
+void showLabelBox(QComboBox* preset, LabelField field, const QString& type, const QString& label) {
+  LabeledValue value;
+  value.type = type;
+  value.label = label;
+  if (type.trimmed().isEmpty() && label.trimmed().isEmpty()) {
+    preset->setEditText(QString());
+    return;
+  }
+  const QString shown = labelDisplay(field, value);
+  preset->setEditText(shown.isEmpty() ? type : shown);
+}
 
 QLabel* caption(const QString& text) {
   auto* label = new QLabel(text);
@@ -346,12 +379,13 @@ struct AddressRow {
   QComboBox* type = nullptr;
   QLineEdit* street = nullptr;
   QLineEdit* extended = nullptr;
-  QLineEdit* poBox = nullptr;
+  QString poBox;
   QLineEdit* city = nullptr;
   QLineEdit* region = nullptr;
   QLineEdit* postal = nullptr;
   QLineEdit* country = nullptr;
   QString originalType;
+  QString originalDisplay;
 };
 
 struct OrgRow {
@@ -402,6 +436,11 @@ class ContactEditor::Form {
   QVBoxLayout* eventLayout = nullptr;
   QVBoxLayout* customLayout = nullptr;
   QVBoxLayout* orgLayout = nullptr;
+  QLabel* orgCaption = nullptr;
+  QLabel* urlCaption = nullptr;
+  QLabel* relationCaption = nullptr;
+  QLabel* eventCaption = nullptr;
+  QLabel* customCaption = nullptr;
   QList<ValueRow> emails;
   QList<ValueRow> phones;
   QList<ValueRow> urls;
@@ -457,44 +496,33 @@ class ContactEditor::Form {
     refreshPhotoButtons();
   }
 
-  void addEmail(LabeledValue value) {
-    if (value.label.isEmpty() && value.type.isEmpty()) {
-      value.type = QStringLiteral("home");
-      value.label = QStringLiteral("Home");
-    }
-    addRow(emailLayout, emails, LabelField::Email, value, QStringLiteral("name@example.com"));
+  void addEmail(LabeledValue value) { addRow(emailLayout, emails, LabelField::Email, value, QStringLiteral("name@example.com")); }
+
+  void addPhone(LabeledValue value) { addRow(phoneLayout, phones, LabelField::Phone, value, QStringLiteral("+1 555 010 1000")); }
+
+  void addSuggestedEmail() {
+    LabeledValue value;
+    value.type = QStringLiteral("home");
+    value.label = QStringLiteral("Home");
+    addEmail(value);
   }
 
-  void addPhone(LabeledValue value) {
-    if (value.label.isEmpty() && value.type.isEmpty()) {
-      value.type = QStringLiteral("mobile");
-      value.label = QStringLiteral("Mobile");
-    }
-    addRow(phoneLayout, phones, LabelField::Phone, value, QStringLiteral("+1 555 010 1000"));
+  void addSuggestedPhone() {
+    LabeledValue value;
+    value.type = QStringLiteral("mobile");
+    value.label = QStringLiteral("Mobile");
+    addPhone(value);
   }
 
-  void addRow(QVBoxLayout* layout, QList<ValueRow>& rows, LabelField field, const LabeledValue& value, const QString& placeholder) {
+  void addRow(QVBoxLayout* layout, QList<ValueRow>& rows, LabelField field, const LabeledValue& value, const QString& placeholder,
+              const std::function<void()>& onChange = {}) {
     auto* row = new QWidget;
     auto* box = new QHBoxLayout(row);
     box->setContentsMargins(0, 0, 0, 0);
     box->setSpacing(6);
     auto* preset = new QComboBox;
-    preset->addItems(emphasizedLabels(field));
-    preset->setEditable(true);
-    preset->setInsertPolicy(QComboBox::NoInsert);
-    preset->setFixedWidth(160);
-    preset->setAccessibleName(field == LabelField::Email   ? QStringLiteral("Email label")
-                               : field == LabelField::Phone ? QStringLiteral("Phone label")
-                                                            : QStringLiteral("Label"));
-    if (QCompleter* completer = preset->completer()) {
-      completer->setCaseSensitivity(Qt::CaseInsensitive);
-      completer->setFilterMode(Qt::MatchStartsWith);
-      completer->setCompletionMode(QCompleter::PopupCompletion);
-    }
-    if (preset->lineEdit() != nullptr) preset->lineEdit()->installEventFilter(new OpenListOnClick(preset));
-    const QString shown = labelDisplay(field, value);
-    if (shown.isEmpty()) preset->setCurrentIndex(0);
-    else preset->setEditText(shown);
+    prepareLabelBox(preset, field);
+    showLabelBox(preset, field, value.type, value.label);
     auto* edit = new QLineEdit(value.value);
     edit->setPlaceholderText(placeholder);
     auto* remove = kindButton(QStringLiteral("Remove"), QStringLiteral("outline"));
@@ -507,15 +535,17 @@ class ContactEditor::Form {
     stored.preset = preset;
     stored.editor = edit;
     stored.originalDisplay = preset->currentText();
-    stored.originalType = value.type.isEmpty() ? resolveLabel(field, stored.originalDisplay).type : value.type;
+    stored.originalType = value.type.isEmpty() ? resolveLabel(field, value.label).type : value.type;
     rows.append(stored);
-    connect(remove, &QPushButton::clicked, row, [edit, &rows, row] {
+    if (onChange) onChange();
+    connect(remove, &QPushButton::clicked, row, [edit, &rows, row, onChange] {
       for (int i = 0; i < rows.size(); ++i) {
         if (rows.at(i).editor == edit) {
           rows.removeAt(i);
           break;
         }
       }
+      if (onChange) onChange();
       row->deleteLater();
     });
   }
@@ -623,18 +653,17 @@ class ContactEditor::Form {
   PostalAddress addressFromRow(const AddressRow& row) const {
     PostalAddress address;
     const QString text = row.type == nullptr ? QString() : row.type->currentText().trimmed();
-    const QString folded = text.toLower();
-    QString type = row.originalType;
-    if (text.isEmpty()) type = row.originalType.isEmpty() ? QStringLiteral("home") : row.originalType;
-    else if (folded == QLatin1String("home")) type = QStringLiteral("home");
-    else if (folded == QLatin1String("work")) type = QStringLiteral("work");
-    else if (folded == QLatin1String("other")) type = QStringLiteral("other");
-    else if (text != row.originalType) type = text;
-    address.type = type;
-    address.label = text.isEmpty() ? type : text;
+    if (!row.originalType.isEmpty() && text == row.originalDisplay) {
+      address.type = row.originalType;
+      address.label = row.originalDisplay;
+    } else {
+      const ResolvedLabel resolved = resolveLabel(LabelField::Address, text);
+      address.type = resolved.type;
+      address.label = resolved.display;
+    }
     address.street = row.street->text();
     address.extended = row.extended->text();
-    address.poBox = row.poBox->text();
+    address.poBox = row.poBox;
     address.city = row.city->text();
     address.region = row.region->text();
     address.postalCode = row.postal->text();
@@ -709,6 +738,10 @@ class ContactEditor::Form {
     row->deleteLater();
   }
 
+  void showRowsCaption(QLabel* label, int count) {
+    if (label != nullptr) label->setVisible(count > 0);
+  }
+
   void addOrganization(Organization org) {
     auto* row = new QWidget;
     auto* box = new QVBoxLayout(row);
@@ -724,14 +757,16 @@ class ContactEditor::Form {
     box->addWidget(remove, 0, Qt::AlignLeft);
     orgLayout->addWidget(row);
     orgs.append(OrgRow{name, title, departmentEdit});
+    showRowsCaption(orgCaption, orgs.size());
     QObject::connect(remove, &QPushButton::clicked, row, [this, name, row] {
       removeWidgetRow(row, [this, name] {
         for (int i = 0; i < orgs.size(); ++i) {
           if (orgs.at(i).name == name) {
             orgs.removeAt(i);
-            return;
+            break;
           }
         }
+        showRowsCaption(orgCaption, orgs.size());
       });
     });
   }
@@ -742,12 +777,10 @@ class ContactEditor::Form {
     box->setContentsMargins(0, 0, 0, 0);
     box->setSpacing(6);
     auto* type = new QComboBox;
-    type->setEditable(true);
-    type->addItems({QStringLiteral("Home"), QStringLiteral("Work"), QStringLiteral("Other")});
-    type->setEditText(address.label.isEmpty() ? (address.type.isEmpty() ? QStringLiteral("Home") : address.type) : address.label);
+    prepareLabelBox(type, LabelField::Address);
+    showLabelBox(type, LabelField::Address, address.type, address.label);
     auto* street = pairedLine(address.street, QStringLiteral("Street"));
     auto* extended = pairedLine(address.extended, QStringLiteral("Line 2"));
-    auto* poBox = pairedLine(address.poBox, QStringLiteral("PO box"));
     auto* city = pairedLine(address.city, QStringLiteral("City"));
     auto* region = pairedLine(address.region, QStringLiteral("State"));
     auto* postal = pairedLine(address.postalCode, QStringLiteral("Postal code"));
@@ -756,14 +789,14 @@ class ContactEditor::Form {
     box->addWidget(type);
     box->addWidget(street);
     box->addWidget(extended);
-    box->addWidget(poBox);
     box->addWidget(city);
     box->addWidget(region);
     box->addWidget(postal);
     box->addWidget(country);
     box->addWidget(remove, 0, Qt::AlignLeft);
     addressLayout->addWidget(row);
-    addresses.append(AddressRow{type, street, extended, poBox, city, region, postal, country, address.type});
+    const QString keptType = address.type.isEmpty() ? resolveLabel(LabelField::Address, address.label).type : address.type;
+    addresses.append(AddressRow{type, street, extended, address.poBox, city, region, postal, country, keptType, type->currentText()});
     QObject::connect(remove, &QPushButton::clicked, row, [this, street, row] {
       removeWidgetRow(row, [this, street] {
         for (int i = 0; i < addresses.size(); ++i) {
@@ -776,16 +809,21 @@ class ContactEditor::Form {
     });
   }
 
-  void addUrl(LabeledValue value) { addRow(urlLayout, urls, LabelField::Other, value, QStringLiteral("https://")); }
+  void addUrl(LabeledValue value) {
+    addRow(urlLayout, urls, LabelField::Other, value, QStringLiteral("https://"),
+           [this] { showRowsCaption(urlCaption, urls.size()); });
+  }
 
   void addRelation(LabeledValue value) {
     if (value.label.isEmpty() && !value.type.isEmpty()) value.label = value.type;
-    addRow(relationLayout, relations, LabelField::Other, value, QStringLiteral("Name"));
+    addRow(relationLayout, relations, LabelField::Other, value, QStringLiteral("Name"),
+           [this] { showRowsCaption(relationCaption, relations.size()); });
   }
 
   void addCustom(LabeledValue value) {
     if (value.type.isEmpty()) value.type = value.label;
-    addRow(customLayout, customs, LabelField::Other, value, QStringLiteral("Value"));
+    addRow(customLayout, customs, LabelField::Other, value, QStringLiteral("Value"),
+           [this] { showRowsCaption(customCaption, customs.size()); });
   }
 
   void addEvent(DatedEvent event) {
@@ -801,14 +839,16 @@ class ContactEditor::Form {
     box->addWidget(remove);
     eventLayout->addWidget(row);
     events.append(EventRow{type, date, event.date});
+    showRowsCaption(eventCaption, events.size());
     QObject::connect(remove, &QPushButton::clicked, row, [this, date, row] {
       removeWidgetRow(row, [this, date] {
         for (int i = 0; i < events.size(); ++i) {
           if (events.at(i).date == date) {
             events.removeAt(i);
-            return;
+            break;
           }
         }
+        showRowsCaption(eventCaption, events.size());
       });
     });
   }
@@ -873,10 +913,10 @@ class ContactEditor::Form {
     emailLayout->setSpacing(6);
     formLayout->addLayout(emailLayout);
     for (const auto& email : base.emails) addEmail(email);
-    if (base.emails.isEmpty()) addEmail({});
+    if (base.emails.isEmpty()) addSuggestedEmail();
     auto* addEmailButton = kindButton(QStringLiteral("Add email"), QStringLiteral("outline"));
     formLayout->addWidget(addEmailButton, 0, Qt::AlignLeft);
-    QObject::connect(addEmailButton, &QPushButton::clicked, host, [this] { addEmail({}); });
+    QObject::connect(addEmailButton, &QPushButton::clicked, host, [this] { addSuggestedEmail(); });
 
     formLayout->addWidget(caption(QStringLiteral("Phone")));
     phoneLayout = new QVBoxLayout;
@@ -885,7 +925,7 @@ class ContactEditor::Form {
     for (const auto& phone : base.phones) addPhone(phone);
     auto* addPhoneButton = kindButton(QStringLiteral("Add phone"), QStringLiteral("outline"));
     formLayout->addWidget(addPhoneButton, 0, Qt::AlignLeft);
-    QObject::connect(addPhoneButton, &QPushButton::clicked, host, [this] { addPhone({}); });
+    QObject::connect(addPhoneButton, &QPushButton::clicked, host, [this] { addSuggestedPhone(); });
 
     formLayout->addWidget(caption(QStringLiteral("Address")));
     addressLayout = new QVBoxLayout;
@@ -894,7 +934,12 @@ class ContactEditor::Form {
     for (const auto& address : base.addresses) addAddress(address);
     auto* addAddressButton = kindButton(QStringLiteral("Add address"), QStringLiteral("outline"));
     formLayout->addWidget(addAddressButton, 0, Qt::AlignLeft);
-    QObject::connect(addAddressButton, &QPushButton::clicked, host, [this] { addAddress({}); });
+    QObject::connect(addAddressButton, &QPushButton::clicked, host, [this] {
+      PostalAddress address;
+      address.type = QStringLiteral("home");
+      address.label = QStringLiteral("Home");
+      addAddress(address);
+    });
 
     moreOpen = base.hasLessCommonFields() || fieldIsMore(focus.field);
     moreButton = kindButton(moreOpen ? QStringLiteral("Less") : QStringLiteral("More"), QStringLiteral("outline"));
@@ -924,7 +969,9 @@ class ContactEditor::Form {
     birthday->setPlaceholderText(QStringLiteral("YYYY-MM-DD"));
     moreLayout->addWidget(birthday);
 
-    moreLayout->addWidget(caption(QStringLiteral("Another company")));
+    orgCaption = caption(QStringLiteral("Another company"));
+    orgCaption->setVisible(false);
+    moreLayout->addWidget(orgCaption);
     orgLayout = new QVBoxLayout;
     orgLayout->setSpacing(6);
     moreLayout->addLayout(orgLayout);
@@ -933,7 +980,9 @@ class ContactEditor::Form {
     moreLayout->addWidget(addOrgButton, 0, Qt::AlignLeft);
     QObject::connect(addOrgButton, &QPushButton::clicked, host, [this] { addOrganization({}); });
 
-    moreLayout->addWidget(caption(QStringLiteral("Website")));
+    urlCaption = caption(QStringLiteral("Website"));
+    urlCaption->setVisible(false);
+    moreLayout->addWidget(urlCaption);
     urlLayout = new QVBoxLayout;
     urlLayout->setSpacing(6);
     moreLayout->addLayout(urlLayout);
@@ -942,7 +991,9 @@ class ContactEditor::Form {
     moreLayout->addWidget(addUrlButton, 0, Qt::AlignLeft);
     QObject::connect(addUrlButton, &QPushButton::clicked, host, [this] { addUrl({}); });
 
-    moreLayout->addWidget(caption(QStringLiteral("Related person")));
+    relationCaption = caption(QStringLiteral("Related person"));
+    relationCaption->setVisible(false);
+    moreLayout->addWidget(relationCaption);
     relationLayout = new QVBoxLayout;
     relationLayout->setSpacing(6);
     moreLayout->addLayout(relationLayout);
@@ -951,7 +1002,9 @@ class ContactEditor::Form {
     moreLayout->addWidget(addRelationButton, 0, Qt::AlignLeft);
     QObject::connect(addRelationButton, &QPushButton::clicked, host, [this] { addRelation({}); });
 
-    moreLayout->addWidget(caption(QStringLiteral("Significant date")));
+    eventCaption = caption(QStringLiteral("Significant date"));
+    eventCaption->setVisible(false);
+    moreLayout->addWidget(eventCaption);
     eventLayout = new QVBoxLayout;
     eventLayout->setSpacing(6);
     moreLayout->addLayout(eventLayout);
@@ -960,7 +1013,9 @@ class ContactEditor::Form {
     moreLayout->addWidget(addEventButton, 0, Qt::AlignLeft);
     QObject::connect(addEventButton, &QPushButton::clicked, host, [this] { addEvent({}); });
 
-    moreLayout->addWidget(caption(QStringLiteral("Custom field")));
+    customCaption = caption(QStringLiteral("Custom field"));
+    customCaption->setVisible(false);
+    moreLayout->addWidget(customCaption);
     customLayout = new QVBoxLayout;
     customLayout->setSpacing(6);
     moreLayout->addLayout(customLayout);

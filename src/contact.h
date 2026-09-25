@@ -72,7 +72,7 @@ struct ImClient {
   QString display() const;
 };
 
-enum class LabelField { Email, Phone, Other };
+enum class LabelField { Email, Phone, Address, Other };
 
 struct ResolvedLabel {
   QString type;

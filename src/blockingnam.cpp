@@ -14,6 +14,10 @@ HttpResponse BlockingNam::request(const QString& method, const QString& url,
                                   const QList<QPair<QString, QString>>& headers, const QByteArray& body) {
   HttpResponse response;
   response.url = url;
+  if (backgroundStopped()) {
+    response.error = QStringLiteral("Omacontacts is closing.");
+    return response;
+  }
   QNetworkAccessManager network;
   network.setTransferTimeout(30000);
   QNetworkRequest request{QUrl(url)};

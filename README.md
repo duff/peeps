@@ -36,7 +36,8 @@ The refresh token stays in the login keyring. Contacts are cached in `~/.local/s
 | F1 or `?` | Shortcut help |
 | Ctrl+N / Ctrl+E | New contact, edit the selected contact |
 | Ctrl+, | Google account |
-| Ctrl+S / Ctrl+Enter | Save the open contact |
+| Enter | Save the open contact from a single-line field |
+| Ctrl+S / Ctrl+Enter | Save the open contact, including from the notes field |
 | Ctrl+Q | Quit |
 
 New, Sync, Keybindings, and Account are in the Menu. Letters typed in the search field only filter the list.

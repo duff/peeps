@@ -1,5 +1,6 @@
 #include "instance.h"
 #include "mainwindow.h"
+#include "worker.h"
 
 #include <QApplication>
 #include <QFont>
@@ -26,16 +27,31 @@ int main(int argc, char** argv) {
     return 0;
   }
 
-  omacontacts::MainWindow window;
   const bool selfTest = args.contains(QStringLiteral("--self-test"));
+  // The window schedules a sync on the next event-loop turn, and claim()
+  // runs an event loop while it asks an already-open copy to come forward.
+  // Building the window first starts that sync, then this process exits and
+  // tears down Qt's TLS plugin under the sync thread.
+  omacontacts::MainWindow* window = nullptr;
   omacontacts::InstanceLock instance(omacontacts::instanceSocketName());
-  if (!selfTest && !instance.claim([&window] { window.present(); })) return 0;
-  if (selfTest) {
-    window.resize(980, 680);
-    window.show();
-    QTimer::singleShot(0, &app, &QCoreApplication::quit);
-    return app.exec();
+  if (!selfTest && !instance.claim([&window] {
+        if (window != nullptr) window->present();
+      })) {
+    omacontacts::finishBackground(0);
+    return 0;
   }
-  window.show();
-  return app.exec();
+  omacontacts::MainWindow owned;
+  window = &owned;
+  if (selfTest) {
+    owned.resize(980, 680);
+    owned.show();
+    QTimer::singleShot(0, &app, &QCoreApplication::quit);
+    const int code = app.exec();
+    omacontacts::finishBackground(code);
+    return code;
+  }
+  owned.show();
+  const int code = app.exec();
+  omacontacts::finishBackground(code);
+  return code;
 }

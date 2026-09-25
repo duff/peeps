@@ -1,5 +1,7 @@
 #pragma once
 
+#include "worker.h"
+
 #include <QNetworkRequest>
 #include <QSslConfiguration>
 
@@ -10,6 +12,7 @@ namespace omacontacts {
 // core stays busy and closing the window waits forever to join the thread.
 // HTTP/1.1 does not use that code.
 inline void prepareNetworkRequest(QNetworkRequest& request) {
+  if (backgroundStopped()) return;
   request.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("Omacontacts/0.1"));
   request.setAttribute(QNetworkRequest::Http2AllowedAttribute, false);
   request.setAttribute(QNetworkRequest::Http2DirectAttribute, false);

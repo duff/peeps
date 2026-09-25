@@ -72,6 +72,7 @@ struct KeyEvent {
   bool shift = false;
   bool alt = false;
   bool textInput = false;
+  bool multiline = false;
   bool searchEmpty = true;
   bool detailOpen = false;
   Surface surface = Surface::Browser;

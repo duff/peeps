@@ -19,6 +19,7 @@
 #include <QNetworkRequest>
 #include <QUrl>
 #include <QSslConfiguration>
+#include <QComboBox>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListView>
@@ -567,6 +568,27 @@ void GoogleTests::roundTripsPerson() {
   QCOMPARE(parsed->customs.at(0).value, QStringLiteral("blue"));
 }
 
+void GoogleTests::updateRetriesWithFreshEtag() {
+  ScriptedHttp http;
+  http.script.append({400, QByteArray(R"({"error":{"message":"Request person.etag is different than the current person.etag."}})"),
+                      {}, {}});
+  http.script.append({200, QByteArray(R"({"resourceName":"people/c1","etag":"fresh"})"), {}, {}});
+  http.script.append(
+      {200, QByteArray(R"({"resourceName":"people/c1","etag":"saved","names":[{"givenName":"Ada"}]})"), {}, {}});
+  omacontacts::Contact contact;
+  contact.resourceName = QStringLiteral("people/c1");
+  contact.etag = QStringLiteral("stale");
+  contact.givenName = QStringLiteral("Ada");
+  QString token = QStringLiteral("token");
+  const auto result = omacontacts::updateContact(http, token, contact, [] { return QString(); });
+  QVERIFY(result.ok());
+  QCOMPARE(result.contact.etag, QStringLiteral("saved"));
+  QCOMPARE(http.bodies.size(), 3);
+  QVERIFY(http.bodies.at(0).contains("\"etag\":\"stale\""));
+  QVERIFY(http.bodies.at(2).contains("\"etag\":\"fresh\""));
+  QVERIFY(http.urls.at(1).contains(QStringLiteral("personFields=metadata")));
+}
+
 void GoogleTests::updatesContactPhoto() {
   ScriptedHttp http;
   http.script.append({200, QByteArray(R"({"person":{"resourceName":"people/c1","etag":"e2","photos":[{"url":"https://lh3.googleusercontent.com/a=s100","metadata":{"primary":true}}]}})"),
@@ -605,6 +627,20 @@ void GoogleTests::labelTypesRoundTrip() {
   QCOMPARE(typedHome.type, QStringLiteral("home"));
   const auto custom = omacontacts::resolveLabel(omacontacts::LabelField::Phone, QStringLiteral("Front desk"));
   QCOMPARE(custom.type, QStringLiteral("Front desk"));
+  const auto blankEmail = omacontacts::resolveLabel(omacontacts::LabelField::Email, QString());
+  QCOMPARE(blankEmail.type, QString());
+  QCOMPARE(blankEmail.display, QString());
+  const auto blankPhone = omacontacts::resolveLabel(omacontacts::LabelField::Phone, QString());
+  QCOMPARE(blankPhone.type, QString());
+  const auto addressHome = omacontacts::resolveLabel(omacontacts::LabelField::Address, QStringLiteral("Home"));
+  QCOMPARE(addressHome.type, QStringLiteral("home"));
+  QCOMPARE(addressHome.display, QStringLiteral("Home"));
+  const auto addressOther = omacontacts::resolveLabel(omacontacts::LabelField::Address, QStringLiteral("Other"));
+  QCOMPARE(addressOther.type, QStringLiteral("other"));
+  QCOMPARE(addressOther.display, QStringLiteral("Other"));
+  const auto parents = omacontacts::resolveLabel(omacontacts::LabelField::Address, QStringLiteral("Parents"));
+  QCOMPARE(parents.type, QStringLiteral("Parents"));
+  QCOMPARE(parents.display, QStringLiteral("Parents"));
 
   omacontacts::Contact contact;
   contact.givenName = QStringLiteral("Ada");
@@ -620,6 +656,30 @@ void GoogleTests::labelTypesRoundTrip() {
   QCOMPARE(parsed->emails.at(0).label, QStringLiteral("Other"));
   QCOMPARE(parsed->phones.at(0).type, QStringLiteral("googleVoice"));
   QCOMPARE(parsed->phones.at(0).label, QStringLiteral("Google Voice"));
+
+  omacontacts::Contact unlabeled;
+  unlabeled.emails.append({QStringLiteral("ada@example.com"), QString(), QString()});
+  unlabeled.phones.append({QStringLiteral("+1555"), QString(), QString()});
+  omacontacts::PostalAddress bare;
+  bare.street = QStringLiteral("1 Main");
+  unlabeled.addresses.append(bare);
+  omacontacts::PostalAddress otherAddress;
+  otherAddress.type = QStringLiteral("other");
+  otherAddress.street = QStringLiteral("2 Main");
+  unlabeled.addresses.append(otherAddress);
+  omacontacts::PostalAddress customAddress;
+  customAddress.type = QStringLiteral("Parents");
+  customAddress.street = QStringLiteral("3 Main");
+  unlabeled.addresses.append(customAddress);
+  const auto unlabeledParsed = omacontacts::parsePersonJson(omacontacts::personJson(unlabeled));
+  QVERIFY(unlabeledParsed.has_value());
+  QCOMPARE(unlabeledParsed->emails.at(0).type, QString());
+  QCOMPARE(unlabeledParsed->phones.at(0).type, QString());
+  QCOMPARE(unlabeledParsed->addresses.at(0).type, QString());
+  QCOMPARE(unlabeledParsed->addresses.at(1).type, QStringLiteral("other"));
+  QCOMPARE(unlabeledParsed->addresses.at(1).label, QStringLiteral("Other"));
+  QCOMPARE(unlabeledParsed->addresses.at(2).type, QStringLiteral("Parents"));
+  QCOMPARE(unlabeledParsed->addresses.at(2).label, QStringLiteral("Parents"));
 
   const auto legacy = omacontacts::readCacheJson(
       R"({"version":2,"sync_token":"s","contacts":[{"resource_name":"people/c1","given_name":"Ada","emails":[{"value":"ada@example.com","label":"work"}],"phones":[{"value":"+1","label":"School"}]}]})");
@@ -1025,6 +1085,24 @@ void LayoutTests::companyWithoutAPersonalName() {
   QVERIFY(addAddress->mapTo(editor, QPoint(0, 0)).y() < more->mapTo(editor, QPoint(0, 0)).y());
   QVERIFY(button(QStringLiteral("Add instant message")) == nullptr);
   QVERIFY(button(QStringLiteral("Add SIP address")) == nullptr);
+  QTest::mouseClick(more, Qt::LeftButton);
+  QApplication::processEvents();
+  const auto labelNamed = [&](const QString& text) -> QLabel* {
+    for (auto* label : editor->findChildren<QLabel*>()) {
+      if (label->text() == text) return label;
+    }
+    return nullptr;
+  };
+  for (const QString& heading : {QStringLiteral("Website"), QStringLiteral("Related person"), QStringLiteral("Another company"),
+                                 QStringLiteral("Significant date"), QStringLiteral("Custom field")}) {
+    QLabel* headingLabel = labelNamed(heading);
+    QVERIFY2(headingLabel != nullptr && !headingLabel->isVisible(), qPrintable(heading));
+  }
+  QVERIFY(button(QStringLiteral("Add website")) != nullptr && button(QStringLiteral("Add website"))->isVisible());
+  QVERIFY(button(QStringLiteral("Add related person")) != nullptr && button(QStringLiteral("Add related person"))->isVisible());
+  for (auto* field : editor->findChildren<QLineEdit*>()) {
+    QVERIFY(field->placeholderText() != QStringLiteral("PO box"));
+  }
   for (auto* label : editor->findChildren<QLabel*>()) {
     const QString text = label->text();
     QVERIFY(text != QStringLiteral("File as"));
@@ -1035,6 +1113,7 @@ void LayoutTests::companyWithoutAPersonalName() {
     QVERIFY(text != QStringLiteral("SIP address"));
   }
 
+  contact.addresses[0].poBox = QStringLiteral("12");
   omacontacts::ContactEditor direct(contact, {}, nullptr);
   const auto saved = direct.validatedContact();
   QVERIFY(saved.has_value());
@@ -1053,6 +1132,115 @@ void LayoutTests::companyWithoutAPersonalName() {
   QCOMPARE(saved->addresses.at(0).city, QStringLiteral("Austin"));
   QCOMPARE(saved->addresses.at(0).region, QStringLiteral("TX"));
   QCOMPARE(saved->addresses.at(0).postalCode, QStringLiteral("78701"));
+  QCOMPARE(saved->addresses.at(0).poBox, QStringLiteral("12"));
+
+  if (oldData.isNull()) qunsetenv("XDG_DATA_HOME");
+  else qputenv("XDG_DATA_HOME", oldData);
+  if (oldCache.isNull()) qunsetenv("XDG_CACHE_HOME");
+  else qputenv("XDG_CACHE_HOME", oldCache);
+  if (oldConfig.isNull()) qunsetenv("XDG_CONFIG_HOME");
+  else qputenv("XDG_CONFIG_HOME", oldConfig);
+}
+
+void LayoutTests::notesWrapInsteadOfEllipsis() {
+  QTemporaryDir dir;
+  QVERIFY(dir.isValid());
+  const QByteArray oldData = qgetenv("XDG_DATA_HOME");
+  const QByteArray oldCache = qgetenv("XDG_CACHE_HOME");
+  const QByteArray oldConfig = qgetenv("XDG_CONFIG_HOME");
+  qputenv("XDG_DATA_HOME", dir.filePath(QStringLiteral("data")).toUtf8());
+  qputenv("XDG_CACHE_HOME", dir.filePath(QStringLiteral("cache")).toUtf8());
+  qputenv("XDG_CONFIG_HOME", dir.filePath(QStringLiteral("config")).toUtf8());
+  qputenv("OMACONTACTS_NO_SYNC", "1");
+
+  omacontacts::Contact contact;
+  contact.resourceName = QStringLiteral("people/notes");
+  contact.givenName = QStringLiteral("Dan");
+  contact.familyName = QStringLiteral("Williams");
+  contact.notes = QStringLiteral("alpha ").repeated(80).trimmed();
+
+  omacontacts::MainWindow window;
+  window.resize(1000, 700);
+  window.show();
+  QVERIFY(QTest::qWaitForWindowExposed(&window));
+  window.setContacts({contact});
+  QApplication::processEvents();
+  QTest::keyClick(&window, Qt::Key_Return);
+  QApplication::processEvents();
+
+  QListView* fields = nullptr;
+  for (auto* view : window.findChildren<QListView*>()) {
+    if (view->isVisible()) fields = view;
+  }
+  QVERIFY(fields != nullptr);
+  bool wrapped = false;
+  for (int i = 0; i < fields->model()->rowCount(); ++i) {
+    const QModelIndex index = fields->model()->index(i, 0);
+    if (index.data(Qt::UserRole).toString() != QStringLiteral("Notes")) continue;
+    QCOMPARE(index.data(Qt::DisplayRole).toString(), contact.notes);
+    QVERIFY(!index.data(Qt::DisplayRole).toString().contains(QStringLiteral("…")));
+    fields->scrollTo(index);
+    QApplication::processEvents();
+    wrapped = fields->visualRect(index).height() > 28;
+  }
+  QVERIFY(wrapped);
+
+  if (oldData.isNull()) qunsetenv("XDG_DATA_HOME");
+  else qputenv("XDG_DATA_HOME", oldData);
+  if (oldCache.isNull()) qunsetenv("XDG_CACHE_HOME");
+  else qputenv("XDG_CACHE_HOME", oldCache);
+  if (oldConfig.isNull()) qunsetenv("XDG_CONFIG_HOME");
+  else qputenv("XDG_CONFIG_HOME", oldConfig);
+}
+
+void LayoutTests::blankPhoneTypeStaysBlank() {
+  QTemporaryDir dir;
+  QVERIFY(dir.isValid());
+  const QByteArray oldData = qgetenv("XDG_DATA_HOME");
+  const QByteArray oldCache = qgetenv("XDG_CACHE_HOME");
+  const QByteArray oldConfig = qgetenv("XDG_CONFIG_HOME");
+  qputenv("XDG_DATA_HOME", dir.filePath(QStringLiteral("data")).toUtf8());
+  qputenv("XDG_CACHE_HOME", dir.filePath(QStringLiteral("cache")).toUtf8());
+  qputenv("XDG_CONFIG_HOME", dir.filePath(QStringLiteral("config")).toUtf8());
+  qputenv("OMACONTACTS_NO_SYNC", "1");
+
+  omacontacts::Contact contact;
+  contact.resourceName = QStringLiteral("people/phone");
+  contact.givenName = QStringLiteral("Dan");
+  contact.familyName = QStringLiteral("Williams");
+  contact.phones.append({QStringLiteral("+15551212"), QString(), QString()});
+
+  omacontacts::MainWindow window;
+  window.resize(1000, 700);
+  window.show();
+  QVERIFY(QTest::qWaitForWindowExposed(&window));
+  window.setContacts({contact});
+  QApplication::processEvents();
+  QTest::keyClick(&window, Qt::Key_Return);
+  QApplication::processEvents();
+
+  QVERIFY(!window.detailShows(QStringLiteral("Phone")));
+  QVERIFY(!window.detailShows(QStringLiteral("Mobile")));
+  QVERIFY(window.detailShows(QStringLiteral("+15551212")));
+
+  QTest::keyClick(&window, Qt::Key_E, Qt::ControlModifier);
+  QApplication::processEvents();
+  auto* editor = window.findChild<QWidget*>(QStringLiteral("editor"));
+  QVERIFY(editor != nullptr);
+  QComboBox* label = nullptr;
+  for (auto* field : editor->findChildren<QLineEdit*>()) {
+    if (field->text() != QStringLiteral("+15551212")) continue;
+    label = field->parentWidget() == nullptr ? nullptr : field->parentWidget()->findChild<QComboBox*>();
+  }
+  QVERIFY(label != nullptr);
+  QCOMPARE(label->currentText(), QString());
+  const auto saved = [&] {
+    omacontacts::ContactEditor direct(contact, {}, nullptr);
+    return direct.validatedContact();
+  }();
+  QVERIFY(saved.has_value());
+  QCOMPARE(saved->phones.at(0).type, QString());
+  QCOMPARE(saved->phones.at(0).label, QString());
 
   if (oldData.isNull()) qunsetenv("XDG_DATA_HOME");
   else qputenv("XDG_DATA_HOME", oldData);
@@ -1159,6 +1347,9 @@ void ShortcutTests::editorKeepsKeys() {
   event.key = omacontacts::Key::Escape;
   QCOMPARE(omacontacts::routeKey(event), omacontacts::Command::Cancel);
   event.key = omacontacts::Key::Return;
+  QCOMPARE(omacontacts::routeKey(event), omacontacts::Command::Save);
+  event.multiline = true;
+  QCOMPARE(omacontacts::routeKey(event), omacontacts::Command::Ignore);
   event.ctrl = true;
   QCOMPARE(omacontacts::routeKey(event), omacontacts::Command::Save);
 }

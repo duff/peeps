@@ -49,6 +49,7 @@ class GoogleTests : public QObject {
   void oldCacheRequestsFullSync();
   void roundTripsPerson();
   void labelTypesRoundTrip();
+  void updateRetriesWithFreshEtag();
   void updatesContactPhoto();
   void fullAndIncrementalSync();
   void retriesOnceAfterUnauthorized();
@@ -64,6 +65,8 @@ class LayoutTests : public QObject {
   void enterReplacesTheListWithThatContact();
   void editOpensOnTheSelectedField();
   void companyWithoutAPersonalName();
+  void notesWrapInsteadOfEllipsis();
+  void blankPhoneTypeStaysBlank();
 };
 
 class GuardTests : public QObject {

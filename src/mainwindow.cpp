@@ -122,6 +122,26 @@ class FieldDelegate : public QStyledItemDelegate {
  public:
   Palette palette;
 
+  static bool wraps(const QModelIndex& index) {
+    return index.data(Qt::UserRole + 4).toInt() == static_cast<int>(EditorField::Notes);
+  }
+
+  static int rowWidth(const QStyleOptionViewItem& option) {
+    if (const auto* view = qobject_cast<const QAbstractItemView*>(option.widget)) {
+      const int width = view->viewport()->width();
+      if (width > 0) return width;
+    }
+    return std::max(option.rect.width(), 0);
+  }
+
+  static int valueColumnWidth(const QFontMetrics& metrics, int width, const QString& label, const QString& action) {
+    const int inner = std::max(0, width - 16);
+    const int actionWidth = action.isEmpty() ? 0 : metrics.horizontalAdvance(action) + 16;
+    const int labelWidth =
+        label.isEmpty() ? 0 : std::min(inner / 3, metrics.horizontalAdvance(QStringLiteral("Phonetic first name")) + 16);
+    return std::max(1, inner - labelWidth - actionWidth);
+  }
+
   void paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const override {
     painter->save();
     const auto actionKind = static_cast<FieldAction>(index.data(Qt::UserRole + 2).toInt());
@@ -162,15 +182,18 @@ class FieldDelegate : public QStyledItemDelegate {
     font.setPixelSize(12);
     painter->setFont(font);
     const QFontMetrics metrics(font);
+    const bool wrap = wraps(index);
     const QStringList lines = value.split(QLatin1Char('\n'));
     const int lineHeight = std::max(1, metrics.lineSpacing());
     const int pad = std::max(0, (28 - lineHeight) / 2);
-    const bool several = lines.size() > 1;
+    const bool several = wrap || lines.size() > 1;
     const int textTop = several ? rect.top() + pad : rect.top();
     const int textHeight = several ? lineHeight : rect.height();
     const int actionWidth = action.isEmpty() ? 0 : metrics.horizontalAdvance(action) + 16;
-    const int labelWidth =
-        label.isEmpty() ? 0 : std::min(rect.width() / 3, metrics.horizontalAdvance(QStringLiteral("Phonetic first name")) + 16);
+    const bool keepLabel = index.data(Qt::UserRole + 6).toBool();
+    const int labelWidth = label.isEmpty() && !keepLabel
+                               ? 0
+                               : std::min(rect.width() / 3, metrics.horizontalAdvance(QStringLiteral("Phonetic first name")) + 16);
     painter->setPen(palette.secondary);
     if (!label.isEmpty()) {
       painter->drawText(QRect(rect.left(), textTop, labelWidth, textHeight), Qt::AlignVCenter | Qt::AlignLeft,
@@ -179,9 +202,14 @@ class FieldDelegate : public QStyledItemDelegate {
     int valueLeft = rect.left() + labelWidth;
     int valueWidth = std::max(0, rect.width() - labelWidth - actionWidth);
     painter->setPen(danger ? palette.danger : palette.foreground);
-    for (int i = 0; i < lines.size(); ++i) {
-      painter->drawText(QRect(valueLeft, textTop + i * (several ? lineHeight : 0), valueWidth, textHeight),
-                        Qt::AlignVCenter | Qt::AlignLeft, metrics.elidedText(lines.at(i), Qt::ElideRight, valueWidth));
+    if (wrap) {
+      painter->drawText(QRect(valueLeft, textTop, valueWidth, std::max(lineHeight, rect.bottom() - textTop - pad + 1)),
+                        Qt::AlignLeft | Qt::AlignTop | Qt::TextWordWrap, value);
+    } else {
+      for (int i = 0; i < lines.size(); ++i) {
+        painter->drawText(QRect(valueLeft, textTop + i * (several ? lineHeight : 0), valueWidth, textHeight),
+                          Qt::AlignVCenter | Qt::AlignLeft, metrics.elidedText(lines.at(i), Qt::ElideRight, valueWidth));
+      }
     }
     if (!action.isEmpty()) {
       painter->setPen(danger ? palette.danger : palette.secondary);
@@ -193,12 +221,21 @@ class FieldDelegate : public QStyledItemDelegate {
 
   QSize sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const override {
     if (static_cast<FieldAction>(index.data(Qt::UserRole + 2).toInt()) == FieldAction::CopyPhoto) return QSize(0, 176);
-    const int lines = std::max(1, static_cast<int>(index.data(Qt::DisplayRole).toString().count(QLatin1Char('\n'))) + 1);
-    if (lines <= 1) return QSize(0, 28);
     QFont font = option.font;
     font.setPixelSize(12);
-    const int lineHeight = std::max(1, QFontMetrics(font).lineSpacing());
+    const QFontMetrics metrics(font);
+    const int lineHeight = std::max(1, metrics.lineSpacing());
     const int pad = std::max(0, (28 - lineHeight) / 2);
+    const QString value = index.data(Qt::DisplayRole).toString();
+    if (wraps(index)) {
+      const int width = valueColumnWidth(metrics, std::max(1, rowWidth(option)), index.data(Qt::UserRole).toString(),
+                                         index.data(Qt::UserRole + 1).toString());
+      const QRect bounds = metrics.boundingRect(QRect(0, 0, width, 100000), Qt::AlignLeft | Qt::TextWordWrap, value);
+      if (bounds.height() <= lineHeight) return QSize(0, 28);
+      return QSize(0, pad + bounds.height() + pad);
+    }
+    const int lines = std::max(1, static_cast<int>(value.count(QLatin1Char('\n'))) + 1);
+    if (lines <= 1) return QSize(0, 28);
     return QSize(0, pad + lines * lineHeight + pad);
   }
 };
@@ -432,8 +469,9 @@ void MainWindow::buildUi() {
   statusLabel_ = new QLabel;
   statusLabel_->setObjectName(QStringLiteral("status"));
   footer->addWidget(countLabel_);
-  footer->addStretch(1);
+  footer->addSpacing(16);
   footer->addWidget(statusLabel_);
+  footer->addStretch(1);
   root->addLayout(footer);
 
   toastFrame_ = new QFrame;
@@ -555,6 +593,7 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event) {
   mapped.alt = key->modifiers() & Qt::AltModifier;
   auto* focus = QApplication::focusWidget();
   mapped.textInput = qobject_cast<QLineEdit*>(focus) || qobject_cast<QTextEdit*>(focus) || qobject_cast<QPlainTextEdit*>(focus);
+  mapped.multiline = qobject_cast<QPlainTextEdit*>(focus) != nullptr || qobject_cast<QTextEdit*>(focus) != nullptr;
   mapped.searchEmpty = search_->text().isEmpty();
   mapped.detailOpen = detailOpen_;
   mapped.surface = editing_ ? Surface::Editor : Surface::Browser;
@@ -569,6 +608,7 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event) {
     return true;
   }
   if (editing_ && command == Command::Save) {
+    if (QApplication::activePopupWidget() != nullptr) return QMainWindow::eventFilter(watched, event);
     commitEditor();
     return true;
   }
@@ -651,12 +691,13 @@ void MainWindow::renderDetail() {
   const Contact shown = *contact;
 
   auto addField = [this](const QString& label, const QString& value, FieldAction action, bool email = false,
-                         std::optional<EditorFocus> focus = std::nullopt) {
+                         std::optional<EditorFocus> focus = std::nullopt, bool keepLabelColumn = false) {
     const bool textRow = action == FieldAction::Copy;
     if (textRow && value.trimmed().isEmpty()) return;
     auto* item = new QStandardItem(value);
     item->setEditable(false);
     item->setData(label, Qt::UserRole);
+    item->setData(keepLabelColumn, Qt::UserRole + 6);
     const QString actionText = action == FieldAction::Edit             ? QStringLiteral("Edit")
                                : action == FieldAction::DeleteContact   ? QStringLiteral("Delete")
                                : action == FieldAction::Copy             ? QStringLiteral("Copy")
@@ -711,19 +752,21 @@ void MainWindow::renderDetail() {
   for (int i = 0; i < shown.emails.size(); ++i) {
     const auto& email = shown.emails.at(i);
     const QString emailLabel = labelDisplay(LabelField::Email, email);
-    addField(emailLabel.isEmpty() ? QStringLiteral("Email") : emailLabel, email.value, FieldAction::Copy, true,
-             EditorFocus{EditorField::Email, i});
+    addField(emailLabel, email.value, FieldAction::Copy, true, EditorFocus{EditorField::Email, i}, emailLabel.isEmpty());
   }
   for (int i = 0; i < shown.phones.size(); ++i) {
     const auto& phone = shown.phones.at(i);
     const QString phoneLabel = labelDisplay(LabelField::Phone, phone);
-    addField(phoneLabel.isEmpty() ? QStringLiteral("Phone") : phoneLabel, phone.value, FieldAction::Copy, false,
-             EditorFocus{EditorField::Phone, i});
+    addField(phoneLabel, phone.value, FieldAction::Copy, false, EditorFocus{EditorField::Phone, i}, phoneLabel.isEmpty());
   }
   for (int i = 0; i < shown.addresses.size(); ++i) {
     const auto& address = shown.addresses.at(i);
-    const QString addressLabel = address.label.trimmed().isEmpty() ? QStringLiteral("Address") : address.label;
-    addField(addressLabel, address.display(), FieldAction::Copy, false, EditorFocus{EditorField::Address, i});
+    LabeledValue addressKind;
+    addressKind.type = address.type;
+    addressKind.label = address.label;
+    const QString addressLabel = labelDisplay(LabelField::Address, addressKind);
+    const QString addressHeading = addressLabel.isEmpty() ? QStringLiteral("Address") : addressLabel;
+    addField(addressHeading, address.display(), FieldAction::Copy, false, EditorFocus{EditorField::Address, i});
   }
   addField(QStringLiteral("Birthday"), shown.birthday.display(), FieldAction::Copy, false, EditorFocus{EditorField::Birthday, 0});
   for (int i = 0; i < shown.urls.size(); ++i) {

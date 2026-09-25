@@ -57,7 +57,7 @@ QList<LabeledValue> readLabeled(const QJsonObject& person, const char* key, Labe
     } else if (!labeled.type.isEmpty()) {
       labeled.type = resolveLabel(field, labeled.type).type;
     }
-    if (labeled.type.isEmpty()) labeled.type = QStringLiteral("other");
+    if (labeled.type.isEmpty() && field == LabelField::Other) labeled.type = QStringLiteral("other");
     if (labeled.label.isEmpty()) labeled.label = labelDisplay(field, labeled);
     if (labeled.value.isEmpty()) continue;
     if (isPrimary(object)) primary.append(labeled);
@@ -112,8 +112,15 @@ QList<PostalAddress> readAddresses(const QJsonObject& person) {
     address.type = jsonString(object, "type");
     address.label = jsonString(object, "formattedType");
     if (address.type == QLatin1String("custom") && !address.label.isEmpty()) address.type = address.label;
-    if (address.type.isEmpty()) address.type = QStringLiteral("other");
-    if (address.label.isEmpty()) address.label = address.type;
+    if (!address.type.isEmpty()) {
+      const ResolvedLabel resolved = resolveLabel(LabelField::Address, address.type);
+      address.type = resolved.type;
+      if (address.label.isEmpty()) address.label = resolved.display;
+    } else if (!address.label.isEmpty()) {
+      const ResolvedLabel resolved = resolveLabel(LabelField::Address, address.label);
+      address.type = resolved.type;
+      address.label = resolved.display;
+    }
     if (address.isEmpty()) continue;
     if (isPrimary(object)) primary.append(address);
     else rest.append(address);
@@ -268,7 +275,7 @@ QJsonArray labeledArray(const QList<LabeledValue>& values, LabelField field) {
     QJsonObject object;
     object.insert(QStringLiteral("value"), value.value);
     const QString type = value.type.isEmpty() ? resolveLabel(field, value.label).type : resolveLabel(field, value.type).type;
-    object.insert(QStringLiteral("type"), type);
+    if (!type.isEmpty()) object.insert(QStringLiteral("type"), type);
     array.append(object);
   }
   return array;
@@ -362,8 +369,10 @@ QJsonArray addressArray(const QList<PostalAddress>& addresses) {
     object.insert(QStringLiteral("region"), address.region);
     object.insert(QStringLiteral("postalCode"), address.postalCode);
     object.insert(QStringLiteral("country"), address.country);
-    const QString type = address.type.isEmpty() ? QStringLiteral("other") : address.type;
-    object.insert(QStringLiteral("type"), type);
+    if (!address.type.isEmpty()) {
+      const ResolvedLabel resolved = resolveLabel(LabelField::Address, address.type);
+      if (!resolved.type.isEmpty()) object.insert(QStringLiteral("type"), resolved.type);
+    }
     array.append(object);
   }
   return array;
@@ -584,29 +593,43 @@ WriteResult createContact(HttpClient& http, QString& accessToken, const Contact&
 }
 
 WriteResult updateContact(HttpClient& http, QString& accessToken, const Contact& contact, const RefreshFn& refresh) {
-  WriteResult result;
   if (contact.resourceName.isEmpty()) {
+    WriteResult result;
     result.error = QStringLiteral("This contact has no Google id.");
     return result;
   }
-  const QString url = QStringLiteral("https://people.googleapis.com/v1/%1:updateContact?updatePersonFields=%2")
-                          .arg(contact.resourceName, QLatin1String(kUpdateFields));
-  const HttpResponse response = authorizedRequest(http, accessToken, refresh, QStringLiteral("PATCH"), url, personJson(contact));
-  if (response.status == 0) {
-    result.error = response.error.isEmpty() ? QStringLiteral("Could not reach Google Contacts.") : response.error;
+  auto send = [&](const Contact& attempt) {
+    WriteResult result;
+    const QString url = QStringLiteral("https://people.googleapis.com/v1/%1:updateContact?updatePersonFields=%2")
+                            .arg(attempt.resourceName, QLatin1String(kUpdateFields));
+    const HttpResponse response = authorizedRequest(http, accessToken, refresh, QStringLiteral("PATCH"), url, personJson(attempt));
+    if (response.status == 0) {
+      result.error = response.error.isEmpty() ? QStringLiteral("Could not reach Google Contacts.") : response.error;
+      return result;
+    }
+    if (response.status >= 400) {
+      result.error = googleErrorMessage(response.body, response.status);
+      return result;
+    }
+    auto parsed = parsePersonJson(response.body);
+    if (!parsed) {
+      result.error = QStringLiteral("Google did not return the updated contact.");
+      return result;
+    }
+    result.contact = *parsed;
     return result;
-  }
-  if (response.status >= 400) {
-    result.error = googleErrorMessage(response.body, response.status);
-    return result;
-  }
-  auto parsed = parsePersonJson(response.body);
-  if (!parsed) {
-    result.error = QStringLiteral("Google did not return the updated contact.");
-    return result;
-  }
-  result.contact = *parsed;
-  return result;
+  };
+  WriteResult result = send(contact);
+  if (result.ok() || !result.error.contains(QStringLiteral("etag"), Qt::CaseInsensitive)) return result;
+  const QString lookup = QStringLiteral("https://people.googleapis.com/v1/%1?personFields=metadata").arg(contact.resourceName);
+  const HttpResponse latest = authorizedRequest(http, accessToken, refresh, QStringLiteral("GET"), lookup, {});
+  if (latest.status < 200 || latest.status >= 300) return result;
+  const QJsonDocument document = QJsonDocument::fromJson(latest.body);
+  const QString etag = document.isObject() ? jsonString(document.object(), "etag") : QString();
+  if (etag.isEmpty() || etag == contact.etag) return result;
+  Contact retry = contact;
+  retry.etag = etag;
+  return send(retry);
 }
 
 WriteResult photoResult(const HttpResponse& response) {

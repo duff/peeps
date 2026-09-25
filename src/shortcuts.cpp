@@ -7,7 +7,8 @@ Command routeKey(const KeyEvent& event) {
 
   if (event.surface == Surface::Editor) {
     if (event.key == Key::Escape) return Command::Cancel;
-    if (event.ctrl && (event.key == Key::Return || event.key == Key::S)) return Command::Save;
+    if (event.ctrl && (event.key == Key::S || event.key == Key::Return)) return Command::Save;
+    if (event.key == Key::Return && !event.multiline) return Command::Save;
     return Command::Ignore;
   }
   if (event.surface == Surface::ConfirmDelete) {
@@ -103,10 +104,11 @@ QList<BindingHelp> bindingHelp() {
       {QStringLiteral("Ctrl+M"), QStringLiteral("Email the selected address")},
       {QStringLiteral("Esc  or  Backspace"), QStringLiteral("Back to the list, or clear the search")},
       {QStringLiteral("?  or  F1"), QStringLiteral("Show keybindings")},
-      {QStringLiteral("Ctrl+Enter"), QStringLiteral("Edit the selected contact, or save while editing")},
+      {QStringLiteral("Ctrl+Enter"), QStringLiteral("Edit the selected contact, or save from the notes field")},
       {QStringLiteral("Ctrl+N"), QStringLiteral("New contact")},
       {QStringLiteral("Ctrl+E"), QStringLiteral("Edit the selected contact")},
       {QStringLiteral("Ctrl+,"), QStringLiteral("Google account")},
+      {QStringLiteral("Enter"), QStringLiteral("Save the open contact from a single-line field")},
       {QStringLiteral("Ctrl+S"), QStringLiteral("Save the open contact")},
       {QStringLiteral("Ctrl+Q"), QStringLiteral("Quit")},
   };

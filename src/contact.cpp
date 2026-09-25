@@ -21,21 +21,22 @@ struct FixedLabel {
   const char* display;
   bool email;
   bool phone;
+  bool address;
 };
 
 const FixedLabel kFixedLabels[] = {
-    {"home", "Home", true, true},
-    {"work", "Work", true, true},
-    {"other", "Other", true, true},
-    {"mobile", "Mobile", false, true},
-    {"main", "Main", false, true},
-    {"googleVoice", "Google Voice", false, true},
-    {"homeFax", "Home Fax", false, true},
-    {"workFax", "Work Fax", false, true},
-    {"otherFax", "Other Fax", false, true},
-    {"pager", "Pager", false, true},
-    {"workMobile", "Work Mobile", false, true},
-    {"workPager", "Work Pager", false, true},
+    {"home", "Home", true, true, true},
+    {"work", "Work", true, true, true},
+    {"other", "Other", true, true, true},
+    {"mobile", "Mobile", false, true, false},
+    {"main", "Main", false, true, false},
+    {"googleVoice", "Google Voice", false, true, false},
+    {"homeFax", "Home Fax", false, true, false},
+    {"workFax", "Work Fax", false, true, false},
+    {"otherFax", "Other Fax", false, true, false},
+    {"pager", "Pager", false, true, false},
+    {"workMobile", "Work Mobile", false, true, false},
+    {"workPager", "Work Pager", false, true, false},
 };
 
 struct LabelAlias {
@@ -61,9 +62,23 @@ QString foldLabel(QString text) {
   return folded;
 }
 
+bool labelApplies(LabelField field, bool email, bool phone, bool address) {
+  switch (field) {
+    case LabelField::Email:
+      return email;
+    case LabelField::Phone:
+      return phone;
+    case LabelField::Address:
+      return address;
+    case LabelField::Other:
+      return false;
+  }
+  return false;
+}
+
 const FixedLabel* fixedLabel(LabelField field, const QString& id) {
   for (const FixedLabel& label : kFixedLabels) {
-    if ((field == LabelField::Email ? label.email : label.phone) && id == QLatin1String(label.id)) return &label;
+    if (labelApplies(field, label.email, label.phone, label.address) && id == QLatin1String(label.id)) return &label;
   }
   return nullptr;
 }
@@ -141,22 +156,24 @@ ResolvedLabel resolveLabel(LabelField field, const QString& text) {
     if (trimmedText.isEmpty()) return {QStringLiteral("other"), QStringLiteral("Other")};
     return {trimmedText, trimmedText};
   }
-  const QString trimmed = trimmedText;
-  if (trimmed.isEmpty()) return {QStringLiteral("other"), QStringLiteral("Other")};
-  const QString folded = foldLabel(trimmed);
-  for (const LabelAlias& alias : kLabelAliases) {
-    if ((field == LabelField::Email ? alias.email : alias.phone) && folded == QLatin1String(alias.folded)) {
-      const FixedLabel* fixed = fixedLabel(field, QString::fromLatin1(alias.id));
-      if (fixed != nullptr) return {QString::fromLatin1(fixed->id), QString::fromLatin1(fixed->display)};
+  // Google leaves email, phone, and address type unset when the label is blank.
+  if (trimmedText.isEmpty()) return {};
+  const QString folded = foldLabel(trimmedText);
+  if (field != LabelField::Address) {
+    for (const LabelAlias& alias : kLabelAliases) {
+      if ((field == LabelField::Email ? alias.email : alias.phone) && folded == QLatin1String(alias.folded)) {
+        const FixedLabel* fixed = fixedLabel(field, QString::fromLatin1(alias.id));
+        if (fixed != nullptr) return {QString::fromLatin1(fixed->id), QString::fromLatin1(fixed->display)};
+      }
     }
   }
   for (const FixedLabel& label : kFixedLabels) {
-    if (!(field == LabelField::Email ? label.email : label.phone)) continue;
+    if (!labelApplies(field, label.email, label.phone, label.address)) continue;
     if (folded == foldLabel(QString::fromLatin1(label.id)) || folded == foldLabel(QString::fromLatin1(label.display))) {
       return {QString::fromLatin1(label.id), QString::fromLatin1(label.display)};
     }
   }
-  return {trimmed, trimmed};
+  return {trimmedText, trimmedText};
 }
 
 QString labelDisplay(LabelField field, const LabeledValue& value) {
@@ -165,7 +182,9 @@ QString labelDisplay(LabelField field, const LabeledValue& value) {
     return value.type.trimmed();
   }
   const QString token = value.type.isEmpty() ? value.label : value.type;
+  if (token.trimmed().isEmpty()) return {};
   const ResolvedLabel resolved = resolveLabel(field, token);
+  if (resolved.type.isEmpty()) return {};
   const FixedLabel* fixed = fixedLabel(field, resolved.type);
   if (fixed == nullptr) return !value.label.isEmpty() ? value.label : value.type;
   if (!value.label.isEmpty() && foldLabel(value.label) != foldLabel(QString::fromLatin1(fixed->id)) &&
