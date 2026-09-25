@@ -17,6 +17,9 @@ struct AppPaths {
                          const QString& xdgCacheHome = {});
 };
 
+// Move a leftover omacontacts directory to the Contacts path when the new one is absent.
+void migrateLegacyPaths(const AppPaths& paths);
+
 struct AppConfig {
   QString clientId;
   QString clientSecret;

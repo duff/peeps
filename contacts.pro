@@ -1,6 +1,6 @@
 QT += widgets network
 CONFIG += c++20 warn_on
-TARGET = omacontacts
+TARGET = contacts
 TEMPLATE = app
 INCLUDEPATH += src
 CONFIG += link_pkgconfig
@@ -45,8 +45,8 @@ HEADERS += \
 
 PREFIX = $$(HOME)/.local
 target.path = $$PREFIX/bin
-desktop.files = dist/omacontacts.desktop
+desktop.files = dist/contacts.desktop
 desktop.path = $$PREFIX/share/applications
-icon.files = dist/omacontacts.svg
+icon.files = dist/contacts.svg
 icon.path = $$PREFIX/share/icons/hicolor/scalable/apps
 INSTALLS += target desktop icon

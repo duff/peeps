@@ -12,10 +12,10 @@
 
 int main(int argc, char** argv) {
   QApplication app(argc, argv);
-  QApplication::setApplicationName(QStringLiteral("Omacontacts"));
+  QApplication::setApplicationName(QStringLiteral("Contacts"));
   QApplication::setOrganizationName(QStringLiteral("omelia"));
   QApplication::setApplicationVersion(QStringLiteral("0.1.0"));
-  QApplication::setDesktopFileName(QStringLiteral("omacontacts"));
+  QApplication::setDesktopFileName(QStringLiteral("contacts"));
   if (QStyle* fusion = QStyleFactory::create(QStringLiteral("Fusion"))) app.setStyle(fusion);
   QFont font(QStringLiteral("JetBrainsMono Nerd Font"));
   font.setPixelSize(12);
@@ -23,7 +23,7 @@ int main(int argc, char** argv) {
 
   const QStringList args = QCoreApplication::arguments();
   if (args.contains(QStringLiteral("--version"))) {
-    QTextStream(stdout) << "omacontacts 0.1.0\n";
+    QTextStream(stdout) << "contacts 0.1.0\n";
     return 0;
   }
 

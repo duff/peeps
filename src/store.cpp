@@ -219,10 +219,22 @@ AppPaths AppPaths::forEnv(const QString& home, const QString& xdgConfigHome, con
   const QString configRoot = xdgConfigHome.isEmpty() ? home + QStringLiteral("/.config") : xdgConfigHome;
   const QString dataRoot = xdgDataHome.isEmpty() ? home + QStringLiteral("/.local/share") : xdgDataHome;
   const QString cacheRoot = xdgCacheHome.isEmpty() ? home + QStringLiteral("/.cache") : xdgCacheHome;
-  paths.configFile = configRoot + QStringLiteral("/omacontacts/config.json");
-  paths.cacheFile = dataRoot + QStringLiteral("/omacontacts/contacts.json");
-  paths.photoDir = cacheRoot + QStringLiteral("/omacontacts/photos");
+  paths.configFile = configRoot + QStringLiteral("/contacts/config.json");
+  paths.cacheFile = dataRoot + QStringLiteral("/contacts/contacts.json");
+  paths.photoDir = cacheRoot + QStringLiteral("/contacts/photos");
   return paths;
+}
+
+void migrateLegacyPaths(const AppPaths& paths) {
+  const auto adopt = [](const QString& currentDir) {
+    const QString legacy = QDir(currentDir + QStringLiteral("/..")).absoluteFilePath(QStringLiteral("omacontacts"));
+    if (QFileInfo::exists(currentDir) || !QFileInfo::exists(legacy)) return;
+    QDir().mkpath(QFileInfo(currentDir).absolutePath());
+    QDir().rename(legacy, currentDir);
+  };
+  adopt(QFileInfo(paths.configFile).absolutePath());
+  adopt(QFileInfo(paths.cacheFile).absolutePath());
+  adopt(QFileInfo(paths.photoDir).absolutePath());
 }
 
 QByteArray writeConfigJson(const AppConfig& config) {

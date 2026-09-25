@@ -1,4 +1,4 @@
-# Omacontacts
+# Contacts
 
 A Qt 6 contacts app for Omarchy. It reads the desktop theme, finds people as you type, and creates, edits, and deletes Google Contacts. Email opens in the desktop's default mail handler.
 
@@ -17,9 +17,9 @@ make install
 1. In Google Cloud, create a project and enable the People API.
 2. Configure the OAuth consent screen. While it is in testing, add the Google account you will use.
 3. Create an OAuth client of type **Desktop**.
-4. Launch Omacontacts, open Menu → Account, paste the client id, and choose Connect.
+4. Launch Contacts, open Menu → Account, paste the client id, and choose Connect.
 
-The refresh token stays in the login keyring. Contacts are cached in `~/.local/share/omacontacts/contacts.json` so search stays local.
+The refresh token stays in the login keyring. People are cached in `~/.local/share/contacts/contacts.json` so search stays local.
 
 ## Shortcuts
 
@@ -40,4 +40,4 @@ New, Sync, Keybindings, and Account are in the Menu. Letters typed in the search
 
 ## Theme
 
-On startup, and whenever the theme files change, Omacontacts reads `~/.local/state/omarchy/current/theme/colors.toml`. If that directory is missing, it tries the legacy `~/.config/omarchy/current` path. A broken or missing palette falls back to Tokyo Night as a whole. The window uses square controls, 12px text, and quiet borders from that palette.
+On startup, and whenever the theme files change, Contacts reads `~/.local/state/omarchy/current/theme/colors.toml`. If that directory is missing, it tries the legacy `~/.config/omarchy/current` path. A broken or missing palette falls back to Tokyo Night as a whole. The window uses square controls, 12px text, and quiet borders from that palette.

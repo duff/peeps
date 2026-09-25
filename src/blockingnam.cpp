@@ -15,7 +15,7 @@ HttpResponse BlockingNam::request(const QString& method, const QString& url,
   HttpResponse response;
   response.url = url;
   if (backgroundStopped()) {
-    response.error = QStringLiteral("Omacontacts is closing.");
+    response.error = QStringLiteral("Contacts is closing.");
     return response;
   }
   QNetworkAccessManager network;

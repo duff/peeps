@@ -12,7 +12,7 @@ QString instanceSocketName() {
   QString dir = QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation);
   if (dir.isEmpty()) dir = QDir::tempPath();
   QDir().mkpath(dir);
-  return dir + QStringLiteral("/omacontacts.sock");
+  return dir + QStringLiteral("/contacts.sock");
 }
 
 InstanceLock::InstanceLock(QString name) : name_(std::move(name)) {

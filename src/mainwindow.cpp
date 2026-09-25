@@ -326,7 +326,7 @@ Key mapKey(int key) {
 }
 
 QString oauthPage(const QString& heading, const QString& detail) {
-  return QStringLiteral("<!doctype html><meta charset=\"utf-8\"><title>Omacontacts</title>"
+  return QStringLiteral("<!doctype html><meta charset=\"utf-8\"><title>Contacts</title>"
                         "<body style=\"margin:48px;font-family:monospace;background:#1a1b26;color:#c0caf5\">"
                         "<p>%1</p><p style=\"color:#a9b1d6\">%2</p>")
       .arg(heading.toHtmlEscaped(), detail.toHtmlEscaped());
@@ -348,13 +348,14 @@ qint64 nowUnix() { return QDateTime::currentSecsSinceEpoch(); }
 }  // namespace
 
 MainWindow::MainWindow() : secrets_(makeSecretStore()) {
-  setWindowTitle(QStringLiteral("Omacontacts"));
+  setWindowTitle(QStringLiteral("Contacts"));
   setWindowFlags(Qt::Window | Qt::FramelessWindowHint);
   resize(980, 680);
   setMinimumSize(480, 560);
   themePaths_ = ThemePaths::forHome(QDir::homePath());
   paths_ = AppPaths::forEnv(QDir::homePath(), qEnvironmentVariable("XDG_CONFIG_HOME"), qEnvironmentVariable("XDG_DATA_HOME"),
                             qEnvironmentVariable("XDG_CACHE_HOME"));
+  migrateLegacyPaths(paths_);
   photos_ = new PhotoStore(paths_.photoDir, this);
   connect(photos_, &PhotoStore::updated, this, [this](const QString& id) {
     if (list_) list_->viewport()->update();
@@ -385,7 +386,7 @@ void MainWindow::buildUi() {
 
   auto* header = new QHBoxLayout;
   header->setSpacing(8);
-  auto* title = new QLabel(QStringLiteral("Omacontacts"));
+  auto* title = new QLabel(QStringLiteral("Contacts"));
   title->setObjectName(QStringLiteral("title"));
   header->addWidget(title);
   header->addStretch(1);
@@ -1209,7 +1210,7 @@ void MainWindow::openAccount() {
   if (result->action == AccountAction::Connect) startOAuth();
   else if (result->action == AccountAction::Disconnect) {
     if (!confirmDialog(this, QStringLiteral("Disconnect Google?"),
-                       QStringLiteral("Omacontacts forgets the local copy. Contacts stay in the Google account."),
+                       QStringLiteral("Contacts forgets the local copy. People stay in the Google account."),
                        QStringLiteral("Disconnect"))) {
       return;
     }
@@ -1645,13 +1646,13 @@ void MainWindow::startOAuth() {
       oauthBuffer_.append(socket->readAll());
       if (!oauthBuffer_.contains("\r\n\r\n") && oauthBuffer_.size() < 8192) return;
       const RedirectQuery query = parseOauthRedirect(oauthBuffer_);
-      QString heading = QStringLiteral("Omacontacts is signed in.");
+      QString heading = QStringLiteral("Contacts is signed in.");
       QString detail = QStringLiteral("You can close this tab.");
       QString failure;
       if (!query.ok()) failure = query.error;
       else if (query.state != oauthState_) failure = QStringLiteral("The sign-in response did not match this window.");
       if (!failure.isEmpty()) {
-        heading = QStringLiteral("Omacontacts could not sign in.");
+        heading = QStringLiteral("Contacts could not sign in.");
         detail = failure;
       }
       const QByteArray html = oauthPage(heading, detail).toUtf8();

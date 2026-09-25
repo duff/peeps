@@ -34,7 +34,7 @@ class LibsecretStore final : public SecretStore {
     GError* gerror = nullptr;
     const QByteArray copy = secret.toUtf8();
     const gboolean stored =
-        secret_password_store_sync(tokenSchema(), SECRET_COLLECTION_DEFAULT, "Omacontacts Google", copy.constData(),
+        secret_password_store_sync(tokenSchema(), SECRET_COLLECTION_DEFAULT, "Contacts Google", copy.constData(),
                                    nullptr, &gerror, "account", "default", nullptr);
     if (gerror != nullptr) {
       error = QString::fromUtf8(gerror->message);

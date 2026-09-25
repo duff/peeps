@@ -794,9 +794,9 @@ void GoogleTests::storeRoundTrip() {
                                  QFileDevice::WriteGroup | QFileDevice::ReadOther | QFileDevice::WriteOther),
            QFileDevice::ReadOwner | QFileDevice::WriteOwner);
   const auto paths = omacontacts::AppPaths::forEnv(QStringLiteral("/home/duff"), QStringLiteral("/xdg/config"), QString());
-  QCOMPARE(paths.configFile, QStringLiteral("/xdg/config/omacontacts/config.json"));
-  QCOMPARE(paths.cacheFile, QStringLiteral("/home/duff/.local/share/omacontacts/contacts.json"));
-  QCOMPARE(paths.photoDir, QStringLiteral("/home/duff/.cache/omacontacts/photos"));
+  QCOMPARE(paths.configFile, QStringLiteral("/xdg/config/contacts/config.json"));
+  QCOMPARE(paths.cacheFile, QStringLiteral("/home/duff/.local/share/contacts/contacts.json"));
+  QCOMPARE(paths.photoDir, QStringLiteral("/home/duff/.cache/contacts/photos"));
 }
 
 omacontacts::Contact sampleContact(QString id, QString given, QString family, QString email, QString phone,
@@ -1263,7 +1263,7 @@ void GuardTests::requestsStayOnHttp1() {
 }
 
 void GuardTests::secondLaunchRaisesTheFirst() {
-  const QString name = QDir::tempPath() + QStringLiteral("/omacontacts-test-%1.sock").arg(QCoreApplication::applicationPid());
+  const QString name = QDir::tempPath() + QStringLiteral("/contacts-test-%1.sock").arg(QCoreApplication::applicationPid());
   omacontacts::InstanceLock first(name);
   int raises = 0;
   QVERIFY(first.claim([&raises] { ++raises; }));
