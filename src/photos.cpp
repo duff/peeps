@@ -16,7 +16,7 @@
 
 #include <algorithm>
 
-namespace omacontacts {
+namespace contacts {
 
 QByteArray photoUploadBytes(const QImage& image) {
   if (image.isNull()) return {};
@@ -194,4 +194,4 @@ void PhotoStore::finished(QNetworkReply* reply, const QString& resourceName, con
   pump();
 }
 
-}  // namespace omacontacts
+}  // namespace contacts

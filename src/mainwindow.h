@@ -27,7 +27,7 @@ class QTcpServer;
 class QTimer;
 class QVBoxLayout;
 
-namespace omacontacts {
+namespace contacts {
 
 class ContactDelegate;
 class ContactListModel;
@@ -160,4 +160,4 @@ class MainWindow : public QMainWindow {
   QString oauthRedirect_;
 };
 
-}  // namespace omacontacts
+}  // namespace contacts

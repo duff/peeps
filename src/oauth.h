@@ -4,7 +4,7 @@
 
 #include <QString>
 
-namespace omacontacts {
+namespace contacts {
 
 struct OAuthTokens {
   QString accessToken;
@@ -54,4 +54,4 @@ struct BrowserCommand {
 
 BrowserCommand browserCommand(const QString& url, bool haveOmarchy);
 
-}  // namespace omacontacts
+}  // namespace contacts

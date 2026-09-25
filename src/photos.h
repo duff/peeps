@@ -15,7 +15,7 @@ class QNetworkAccessManager;
 class QNetworkReply;
 class QWidget;
 
-namespace omacontacts {
+namespace contacts {
 
 QByteArray photoUploadBytes(const QImage& image);
 std::optional<QByteArray> choosePhotoBytes(QWidget* parent);
@@ -55,4 +55,4 @@ class PhotoStore : public QObject {
   int active_ = 0;
 };
 
-}  // namespace omacontacts
+}  // namespace contacts

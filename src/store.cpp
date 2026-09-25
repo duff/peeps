@@ -8,7 +8,7 @@
 #include <QJsonObject>
 #include <QSaveFile>
 
-namespace omacontacts {
+namespace contacts {
 namespace {
 
 QJsonArray labeledJson(const QList<LabeledValue>& values) {
@@ -357,4 +357,4 @@ std::optional<QByteArray> readFile(const QString& path) {
   return file.readAll();
 }
 
-}  // namespace omacontacts
+}  // namespace contacts

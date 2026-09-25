@@ -1,6 +1,6 @@
 #include "shortcuts.h"
 
-namespace omacontacts {
+namespace contacts {
 
 Command routeKey(const KeyEvent& event) {
   if (event.alt) return Command::Ignore;
@@ -105,4 +105,4 @@ QList<BindingHelp> bindingHelp() {
   };
 }
 
-}  // namespace omacontacts
+}  // namespace contacts

@@ -5,7 +5,7 @@
 #include <QPair>
 #include <QString>
 
-namespace omacontacts {
+namespace contacts {
 
 struct HttpResponse {
   int status = 0;
@@ -21,4 +21,4 @@ class HttpClient {
                                const QList<QPair<QString, QString>>& headers, const QByteArray& body) = 0;
 };
 
-}  // namespace omacontacts
+}  // namespace contacts

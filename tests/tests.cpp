@@ -35,12 +35,12 @@
 
 namespace {
 
-class ScriptedHttp : public omacontacts::HttpClient {
+class ScriptedHttp : public contacts::HttpClient {
  public:
-  QList<omacontacts::HttpResponse> script;
+  QList<contacts::HttpResponse> script;
   QStringList urls;
   QList<QByteArray> bodies;
-  omacontacts::HttpResponse request(const QString&, const QString& url, const QList<QPair<QString, QString>>&,
+  contacts::HttpResponse request(const QString&, const QString& url, const QList<QPair<QString, QString>>&,
                                     const QByteArray& body) override {
     urls.append(url);
     bodies.append(body);
@@ -51,9 +51,9 @@ class ScriptedHttp : public omacontacts::HttpClient {
   }
 };
 
-omacontacts::Contact person(QString id, QString given, QString family, QString email = {}, QString phone = {},
+contacts::Contact person(QString id, QString given, QString family, QString email = {}, QString phone = {},
                             QString org = {}) {
-  omacontacts::Contact contact;
+  contacts::Contact contact;
   contact.resourceName = std::move(id);
   contact.givenName = std::move(given);
   contact.familyName = std::move(family);
@@ -85,8 +85,8 @@ yellow = "#FFC107"
 green = "#9ece6a"
 )";
 
-omacontacts::KeyEvent browser(omacontacts::Key key, bool text = false) {
-  omacontacts::KeyEvent event;
+contacts::KeyEvent browser(contacts::Key key, bool text = false) {
+  contacts::KeyEvent event;
   event.key = key;
   event.textInput = text;
   return event;
@@ -95,18 +95,18 @@ omacontacts::KeyEvent browser(omacontacts::Key key, bool text = false) {
 }  // namespace
 
 void ThemeTests::parsesOnlyFullHex() {
-  const auto color = omacontacts::parseColorsToml(QStringLiteral("background = \"#1a1B26\"\nforeground = \"#ffffff\"\n"
+  const auto color = contacts::parseColorsToml(QStringLiteral("background = \"#1a1B26\"\nforeground = \"#ffffff\"\n"
                                                                  "accent = \"#7aa2f7\"\nred = \"#ff0000\"\n"
                                                                  "green = \"#00ff00\"\nyellow = \"#ffff00\"\n"),
                                                   QStringLiteral("X"));
   QVERIFY(color.has_value());
   QCOMPARE(color->background.name(QColor::HexRgb), QStringLiteral("#1a1b26"));
-  QVERIFY(!omacontacts::parseColorsToml(QStringLiteral("accent = \"#fff\"\n"), QStringLiteral("x")));
-  QVERIFY(!omacontacts::parseColorsToml(QStringLiteral("accent = \"#1a1b26ff\"\n"), QStringLiteral("x")));
+  QVERIFY(!contacts::parseColorsToml(QStringLiteral("accent = \"#fff\"\n"), QStringLiteral("x")));
+  QVERIFY(!contacts::parseColorsToml(QStringLiteral("accent = \"#1a1b26ff\"\n"), QStringLiteral("x")));
 }
 
 void ThemeTests::mixesToward() {
-  const auto palette = omacontacts::parseColorsToml(QStringLiteral("background = \"#000000\"\nforeground = \"#ffffff\"\n"
+  const auto palette = contacts::parseColorsToml(QStringLiteral("background = \"#000000\"\nforeground = \"#ffffff\"\n"
                                                                    "accent = \"#7aa2f7\"\nred = \"#ff0000\"\n"
                                                                    "green = \"#00ff00\"\nyellow = \"#ffff00\"\n"),
                                                     QString());
@@ -115,14 +115,14 @@ void ThemeTests::mixesToward() {
 }
 
 void ThemeTests::onAccentFollowsContrast() {
-  const auto pale = omacontacts::parseColorsToml(QStringLiteral("mode = \"dark\"\nbackground = \"#000000\"\n"
+  const auto pale = contacts::parseColorsToml(QStringLiteral("mode = \"dark\"\nbackground = \"#000000\"\n"
                                                                 "foreground = \"#ffffff\"\naccent = \"#F0E68C\"\n"
                                                                 "red = \"#ff0000\"\ngreen = \"#00ff00\"\n"
                                                                 "yellow = \"#ffff00\"\n"),
                                                  QStringLiteral("pale"));
   QVERIFY(pale.has_value());
   QCOMPARE(pale->onAccent.name(QColor::HexRgb), QStringLiteral("#000000"));
-  const auto dark = omacontacts::parseColorsToml(QStringLiteral("mode = \"dark\"\nbackground = \"#000000\"\n"
+  const auto dark = contacts::parseColorsToml(QStringLiteral("mode = \"dark\"\nbackground = \"#000000\"\n"
                                                                 "foreground = \"#ffffff\"\naccent = \"#102040\"\n"
                                                                 "red = \"#ff0000\"\ngreen = \"#00ff00\"\n"
                                                                 "yellow = \"#ffff00\"\n"),
@@ -132,10 +132,10 @@ void ThemeTests::onAccentFollowsContrast() {
 }
 
 void ThemeTests::semanticPaletteUsesDeclaredRoles() {
-  auto palette = omacontacts::parseColorsToml(QLatin1String(kSemantic), QStringLiteral("Matte Black"));
+  auto palette = contacts::parseColorsToml(QLatin1String(kSemantic), QStringLiteral("Matte Black"));
   QVERIFY(palette.has_value());
   QCOMPARE(palette->name, QStringLiteral("Matte Black"));
-  QCOMPARE(palette->appearance, omacontacts::Appearance::Dark);
+  QCOMPARE(palette->appearance, contacts::Appearance::Dark);
   QCOMPARE(palette->accent.name(QColor::HexRgb), QStringLiteral("#e68e0d"));
   QCOMPARE(palette->surface.name(QColor::HexRgb), QStringLiteral("#1e1e1e"));
   QCOMPARE(palette->inset.name(QColor::HexRgb), QStringLiteral("#0d0d0d"));
@@ -146,7 +146,7 @@ void ThemeTests::semanticPaletteUsesDeclaredRoles() {
 }
 
 void ThemeTests::derivesMissingRoles() {
-  auto palette = omacontacts::parseColorsToml(QStringLiteral("background = \"#000000\"\nforeground = \"#ffffff\"\n"
+  auto palette = contacts::parseColorsToml(QStringLiteral("background = \"#000000\"\nforeground = \"#ffffff\"\n"
                                                              "accent = \"#7aa2f7\"\nred = \"#ff0000\"\n"
                                                              "green = \"#00ff00\"\nyellow = \"#ffff00\"\n"),
                                               QString());
@@ -158,7 +158,7 @@ void ThemeTests::derivesMissingRoles() {
 }
 
 void ThemeTests::ansiAliases() {
-  auto palette = omacontacts::parseColorsToml(QStringLiteral("background = \"#111111\"\nforeground = \"#eeeeee\"\n"
+  auto palette = contacts::parseColorsToml(QStringLiteral("background = \"#111111\"\nforeground = \"#eeeeee\"\n"
                                                              "accent = \"#88c0d0\"\ncolor1 = \"#bf616a\"\n"
                                                              "color2 = \"#a3be8c\"\ncolor3 = \"#ebcb8b\"\n"
                                                              "color8 = \"#4c566a\"\n"),
@@ -171,47 +171,47 @@ void ThemeTests::ansiAliases() {
 }
 
 void ThemeTests::rejectsIncompleteDocuments() {
-  QVERIFY(!omacontacts::parseColorsToml(QStringLiteral("background = \"#000000\"\n"), QStringLiteral("x")));
-  QVERIFY(!omacontacts::parseColorsToml(QString(QLatin1String(kSemantic)) + QStringLiteral("accent = \"nope\"\n"),
+  QVERIFY(!contacts::parseColorsToml(QStringLiteral("background = \"#000000\"\n"), QStringLiteral("x")));
+  QVERIFY(!contacts::parseColorsToml(QString(QLatin1String(kSemantic)) + QStringLiteral("accent = \"nope\"\n"),
                                         QStringLiteral("x")));
-  QVERIFY(!omacontacts::parseColorsToml(QStringLiteral("background = \"#000000\"\nforeground = \"#ffffff\"\n"
+  QVERIFY(!contacts::parseColorsToml(QStringLiteral("background = \"#000000\"\nforeground = \"#ffffff\"\n"
                                                        "color1 = \"#ff0000\"\ncolor2 = \"#00ff00\"\n"
                                                        "color3 = \"#ffff00\"\n"),
                                         QStringLiteral("x")));
-  QVERIFY(!omacontacts::parseColorsToml(QStringLiteral("this is not toml"), QStringLiteral("x")));
+  QVERIFY(!contacts::parseColorsToml(QStringLiteral("this is not toml"), QStringLiteral("x")));
 }
 
 void ThemeTests::lightModeDarkensStatusInk() {
-  auto palette = omacontacts::parseColorsToml(QStringLiteral("mode = \"light\"\nbackground = \"#FFFCF0\"\n"
+  auto palette = contacts::parseColorsToml(QStringLiteral("mode = \"light\"\nbackground = \"#FFFCF0\"\n"
                                                              "foreground = \"#100F0F\"\naccent = \"#205EA6\"\n"
                                                              "red = \"#ffb4a8\"\nyellow = \"#ffe08a\"\n"
                                                              "green = \"#d5e8a0\"\n"),
                                               QStringLiteral("Light"));
   QVERIFY(palette.has_value());
-  QCOMPARE(palette->appearance, omacontacts::Appearance::Light);
+  QCOMPARE(palette->appearance, contacts::Appearance::Light);
   QCOMPARE_NE(palette->danger.name(QColor::HexRgb), QStringLiteral("#ffb4a8"));
   QVERIFY(palette->danger.lightness() < QColor(QStringLiteral("#ffb4a8")).lightness());
 }
 
 void ThemeTests::infersLightAppearance() {
-  auto palette = omacontacts::parseColorsToml(QStringLiteral("background = \"#ffffff\"\nforeground = \"#111111\"\n"
+  auto palette = contacts::parseColorsToml(QStringLiteral("background = \"#ffffff\"\nforeground = \"#111111\"\n"
                                                              "accent = \"#205EA6\"\nred = \"#800000\"\n"
                                                              "green = \"#006400\"\nyellow = \"#806000\"\n"),
                                               QStringLiteral("Inferred"));
   QVERIFY(palette.has_value());
-  QCOMPARE(palette->appearance, omacontacts::Appearance::Light);
+  QCOMPARE(palette->appearance, contacts::Appearance::Light);
 }
 
 void ThemeTests::brokenStateDoesNotReviveLegacy() {
   QTemporaryDir dir;
   QVERIFY(dir.isValid());
-  const auto paths = omacontacts::ThemePaths::forHome(dir.path());
+  const auto paths = contacts::ThemePaths::forHome(dir.path());
   writeFile(paths.legacyColors, QLatin1String(kSemantic));
   writeFile(paths.legacyName, QStringLiteral("Legacy\n"));
   QDir().mkpath(paths.stateDir);
   writeFile(paths.stateColors, QStringLiteral("accent = \"nope\"\n"));
-  const auto load = omacontacts::loadTheme(paths);
-  QCOMPARE(load.origin, omacontacts::ThemeOrigin::Builtin);
+  const auto load = contacts::loadTheme(paths);
+  QCOMPARE(load.origin, contacts::ThemeOrigin::Builtin);
   QCOMPARE(load.palette.name, QStringLiteral("Tokyo Night"));
   QCOMPARE(load.palette.accent.name(QColor::HexRgb), QStringLiteral("#7aa2f7"));
 }
@@ -219,26 +219,26 @@ void ThemeTests::brokenStateDoesNotReviveLegacy() {
 void ThemeTests::legacyOnlyWhenStateIsAbsent() {
   QTemporaryDir dir;
   QVERIFY(dir.isValid());
-  const auto paths = omacontacts::ThemePaths::forHome(dir.path());
+  const auto paths = contacts::ThemePaths::forHome(dir.path());
   writeFile(paths.legacyColors, QLatin1String(kSemantic));
   writeFile(paths.legacyName, QStringLiteral("\n"));
-  const auto load = omacontacts::loadTheme(paths);
-  QCOMPARE(load.origin, omacontacts::ThemeOrigin::Legacy);
+  const auto load = contacts::loadTheme(paths);
+  QCOMPARE(load.origin, contacts::ThemeOrigin::Legacy);
   QCOMPARE(load.palette.name, QStringLiteral("Omarchy"));
   QCOMPARE(load.palette.accent.name(QColor::HexRgb), QStringLiteral("#e68e0d"));
 }
 
 void ThemeTests::missingHomeFallsBackWhole() {
-  const auto load = omacontacts::loadTheme(omacontacts::ThemePaths::forHome(QStringLiteral("/no/such/home")));
-  QCOMPARE(load.origin, omacontacts::ThemeOrigin::Builtin);
+  const auto load = contacts::loadTheme(contacts::ThemePaths::forHome(QStringLiteral("/no/such/home")));
+  QCOMPARE(load.origin, contacts::ThemeOrigin::Builtin);
   QCOMPARE(load.palette.background.name(QColor::HexRgb), QStringLiteral("#1a1b26"));
   QCOMPARE(load.palette.foreground.name(QColor::HexRgb), QStringLiteral("#a9b1d6"));
 }
 
 void ThemeTests::stylesheetUsesTheGivenPalette() {
-  const auto palette = omacontacts::parseColorsToml(QLatin1String(kSemantic), QStringLiteral("Matte Black"));
+  const auto palette = contacts::parseColorsToml(QLatin1String(kSemantic), QStringLiteral("Matte Black"));
   QVERIFY(palette.has_value());
-  const QString css = omacontacts::stylesheetFor(*palette);
+  const QString css = contacts::stylesheetFor(*palette);
   QVERIFY(css.contains(QStringLiteral("#e68e0d")));
   QVERIFY(css.contains(QStringLiteral("border-radius: 0")));
   QVERIFY(css.contains(QStringLiteral("font-size: 12px")));
@@ -246,18 +246,18 @@ void ThemeTests::stylesheetUsesTheGivenPalette() {
 }
 
 void SearchTests::plainTextSkipsThePhoto() {
-  omacontacts::Contact contact = person(QStringLiteral("people/c1"), QStringLiteral("Ada"), QStringLiteral("Lovelace"),
+  contacts::Contact contact = person(QStringLiteral("people/c1"), QStringLiteral("Ada"), QStringLiteral("Lovelace"),
                                         QStringLiteral("ada@example.com"), QStringLiteral("+1 555"), QStringLiteral("Analytical"));
   contact.title = QStringLiteral("Engineer");
   contact.notes = QStringLiteral("First programmer");
   contact.photoUrl = QStringLiteral("https://example.test/ada.jpg");
-  omacontacts::PostalAddress home;
+  contacts::PostalAddress home;
   home.street = QStringLiteral("12 St James's Square");
   home.city = QStringLiteral("London");
   home.postalCode = QStringLiteral("SW1Y 4LB");
   home.country = QStringLiteral("UK");
   contact.addresses.append(home);
-  const QString text = omacontacts::contactPlainText(contact);
+  const QString text = contacts::contactPlainText(contact);
   QCOMPARE(text, QStringLiteral("Ada Lovelace\nada@example.com\n+1 555\n12 St James's Square\nLondon SW1Y 4LB\nUK"));
   QVERIFY(!text.contains(QStringLiteral("example.test")));
   QVERIFY(!text.contains(QStringLiteral("Photo")));
@@ -266,14 +266,14 @@ void SearchTests::plainTextSkipsThePhoto() {
 }
 
 void SearchTests::postalAddressBreaksAfterTheStreet() {
-  omacontacts::PostalAddress home;
+  contacts::PostalAddress home;
   home.street = QStringLiteral("1 Main St");
   home.city = QStringLiteral("Austin");
   home.region = QStringLiteral("TX");
   home.postalCode = QStringLiteral("78701");
   QCOMPARE(home.display(), QStringLiteral("1 Main St\nAustin, TX 78701"));
 
-  omacontacts::PostalAddress office;
+  contacts::PostalAddress office;
   office.poBox = QStringLiteral("12");
   office.street = QStringLiteral("12 St James's Square");
   office.extended = QStringLiteral("Floor 2");
@@ -284,7 +284,7 @@ void SearchTests::postalAddressBreaksAfterTheStreet() {
   QCOMPARE(office.display(),
            QStringLiteral("PO Box 12\n12 St James's Square\nFloor 2\nLondon, Greater London SW1Y 4LB\nUK"));
 
-  omacontacts::PostalAddress formatted;
+  contacts::PostalAddress formatted;
   formatted.formatted = QStringLiteral("Somewhere\nElse");
   QCOMPARE(formatted.display(), QStringLiteral("Somewhere\nElse"));
 }
@@ -294,21 +294,21 @@ void SearchTests::displayNameAndInitials() {
                           QStringLiteral("ada@example.com"));
   QCOMPARE(ada.displayName(), QStringLiteral("Ada Lovelace"));
   QCOMPARE(ada.initials(), QStringLiteral("AL"));
-  omacontacts::Contact org;
+  contacts::Contact org;
   org.organization = QStringLiteral("Analytical Engines");
   QCOMPARE(org.displayName(), QStringLiteral("Analytical Engines"));
   QCOMPARE(org.initials(), QStringLiteral("AE"));
 }
 
 void SearchTests::draftValidation() {
-  omacontacts::Draft draft;
+  contacts::Draft draft;
   QVERIFY(!draft.validate().isEmpty());
   draft.organization = QStringLiteral("Acme");
   draft.emails.append({QStringLiteral("not-an-email"), QStringLiteral("Work"), QStringLiteral("work")});
   QVERIFY(!draft.validate().isEmpty());
   draft.emails[0].value = QStringLiteral("a@acme.test");
   QVERIFY(draft.validate().isEmpty());
-  omacontacts::Contact base;
+  contacts::Contact base;
   base.resourceName = QStringLiteral("people/c1");
   base.etag = QStringLiteral("etag");
   const auto saved = draft.toContact(base);
@@ -318,7 +318,7 @@ void SearchTests::draftValidation() {
 }
 
 void SearchTests::emptyQueryIsAlphabetical() {
-  omacontacts::ContactIndex index;
+  contacts::ContactIndex index;
   index.replaceAll({person(QStringLiteral("people/b"), QStringLiteral("Bea"), QStringLiteral("Ng")),
                     person(QStringLiteral("people/a"), QStringLiteral("Ada"), QStringLiteral("Lovelace"))});
   const auto hits = index.query(QString());
@@ -328,7 +328,7 @@ void SearchTests::emptyQueryIsAlphabetical() {
 }
 
 void SearchTests::namePrefixOutranksEmail() {
-  omacontacts::ContactIndex index;
+  contacts::ContactIndex index;
   index.replaceAll({person(QStringLiteral("people/mail"), QStringLiteral("Sam"), QStringLiteral("River"),
                            QStringLiteral("ada@example.com")),
                     person(QStringLiteral("people/name"), QStringLiteral("Ada"), QStringLiteral("Lovelace"),
@@ -340,7 +340,7 @@ void SearchTests::namePrefixOutranksEmail() {
 }
 
 void SearchTests::tokensAreAnded() {
-  omacontacts::ContactIndex index;
+  contacts::ContactIndex index;
   auto ada = person(QStringLiteral("people/ada"), QStringLiteral("Ada"), QStringLiteral("Lovelace"),
                     QStringLiteral("ada@analytical.example"), QStringLiteral("+1 (555) 010-1000"),
                     QStringLiteral("Engines"));
@@ -361,7 +361,7 @@ void SearchTests::tokensAreAnded() {
 }
 
 void SearchTests::upsertAndRemove() {
-  omacontacts::ContactIndex index;
+  contacts::ContactIndex index;
   index.replaceAll({person(QStringLiteral("people/a"), QStringLiteral("Ada"), QStringLiteral("Lovelace"))});
   index.upsert(person(QStringLiteral("people/a"), QStringLiteral("Augusta"), QStringLiteral("King"),
                       QStringLiteral("ada@example.com")));
@@ -374,13 +374,13 @@ void SearchTests::upsertAndRemove() {
 }
 
 void SearchTests::tenThousandContactsStayFast() {
-  QList<omacontacts::Contact> contacts;
+  QList<contacts::Contact> contacts;
   contacts.reserve(10000);
   for (int i = 0; i < 10000; ++i) {
     contacts.append(person(QStringLiteral("people/c%1").arg(i), QStringLiteral("Person"), QString::number(i),
                            QStringLiteral("p%1@example.com").arg(i)));
   }
-  omacontacts::ContactIndex index;
+  contacts::ContactIndex index;
   index.replaceAll(std::move(contacts));
   QElapsedTimer timer;
   timer.start();
@@ -392,20 +392,20 @@ void SearchTests::tenThousandContactsStayFast() {
 }
 
 void SearchTests::moveWrapsAndClamps() {
-  QCOMPARE(omacontacts::moveIndex(0, 3, -1, true), 2);
-  QCOMPARE(omacontacts::moveIndex(2, 3, 1, true), 0);
-  QCOMPARE(omacontacts::moveIndex(0, 3, -1, false), 0);
-  QCOMPARE(omacontacts::moveIndex(2, 3, 5, false), 2);
-  QCOMPARE(omacontacts::moveIndex(0, 0, 1, true), 0);
+  QCOMPARE(contacts::moveIndex(0, 3, -1, true), 2);
+  QCOMPARE(contacts::moveIndex(2, 3, 1, true), 0);
+  QCOMPARE(contacts::moveIndex(0, 3, -1, false), 0);
+  QCOMPARE(contacts::moveIndex(2, 3, 5, false), 2);
+  QCOMPARE(contacts::moveIndex(0, 0, 1, true), 0);
 }
 
 void GoogleTests::pkceMatchesRfc7636() {
   const QString verifier = QStringLiteral("dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk");
-  QCOMPARE(omacontacts::pkceChallengeS256(verifier), QStringLiteral("E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"));
+  QCOMPARE(contacts::pkceChallengeS256(verifier), QStringLiteral("E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"));
 }
 
 void GoogleTests::authUrl() {
-  const auto url = omacontacts::buildAuthUrl({QStringLiteral("client"), QStringLiteral("secret")},
+  const auto url = contacts::buildAuthUrl({QStringLiteral("client"), QStringLiteral("secret")},
                                              QStringLiteral("http://127.0.0.1:9000"), QStringLiteral("state-1"),
                                              QStringLiteral("challenge"));
   QVERIFY(url.contains(QStringLiteral("code_challenge_method=S256")));
@@ -416,33 +416,33 @@ void GoogleTests::authUrl() {
 }
 
 void GoogleTests::parsesBrowserRedirect() {
-  const auto ok = omacontacts::parseOauthRedirect("GET /?code=abc&state=state-1 HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n");
+  const auto ok = contacts::parseOauthRedirect("GET /?code=abc&state=state-1 HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n");
   QVERIFY(ok.ok());
   QCOMPARE(ok.code, QStringLiteral("abc"));
   QCOMPARE(ok.state, QStringLiteral("state-1"));
-  const auto denied = omacontacts::parseOauthRedirect("GET /?error=access_denied HTTP/1.1\r\n\r\n");
+  const auto denied = contacts::parseOauthRedirect("GET /?error=access_denied HTTP/1.1\r\n\r\n");
   QVERIFY(!denied.ok());
   QCOMPARE(denied.error, QStringLiteral("access_denied"));
 }
 
 void GoogleTests::keepsRefreshToken() {
-  const auto parsed = omacontacts::parseTokenResponse(
+  const auto parsed = contacts::parseTokenResponse(
       R"({"access_token":"new","expires_in":100,"token_type":"Bearer"})", 1000, QStringLiteral("refresh-1"));
   QVERIFY(parsed.ok());
   QCOMPARE(parsed.tokens.accessToken, QStringLiteral("new"));
   QCOMPARE(parsed.tokens.refreshToken, QStringLiteral("refresh-1"));
   QCOMPARE(parsed.tokens.expiryUnix, 1100);
-  QVERIFY(!omacontacts::accessExpiring(parsed.tokens, 1000));
-  QVERIFY(omacontacts::accessExpiring(parsed.tokens, 1040));
+  QVERIFY(!contacts::accessExpiring(parsed.tokens, 1000));
+  QVERIFY(contacts::accessExpiring(parsed.tokens, 1040));
 }
 
 void GoogleTests::refreshPostsToken() {
   ScriptedHttp http;
   http.script.append({200, R"({"access_token":"fresh","expires_in":50})", {}, {}});
-  omacontacts::OAuthTokens current;
+  contacts::OAuthTokens current;
   current.refreshToken = QStringLiteral("refresh-1");
   current.expiryUnix = 10;
-  const auto result = omacontacts::refreshAccess(http, {QStringLiteral("id"), QStringLiteral("secret")}, current, 100);
+  const auto result = contacts::refreshAccess(http, {QStringLiteral("id"), QStringLiteral("secret")}, current, 100);
   QVERIFY(result.ok());
   QCOMPARE(result.tokens.accessToken, QStringLiteral("fresh"));
   QCOMPARE(result.tokens.refreshToken, QStringLiteral("refresh-1"));
@@ -476,7 +476,7 @@ void GoogleTests::parsesPrimaryFields() {
     ],
     "nextSyncToken": "sync-9"
   })";
-  const auto page = omacontacts::parseConnectionsPage(json);
+  const auto page = contacts::parseConnectionsPage(json);
   QVERIFY(page.ok());
   QCOMPARE(page.people.size(), 2);
   QCOMPARE(page.people.at(0).contact.givenName, QStringLiteral("Ada"));
@@ -495,7 +495,7 @@ void GoogleTests::parsesPrimaryFields() {
 void GoogleTests::prefersRealPhotoOverDefault() {
   const char* onlyDefault = R"({"resourceName":"people/c1","names":[{"givenName":"Ada"}],
     "photos":[{"url":"https://example.test/silhouette","default":true,"metadata":{"primary":true}}]})";
-  const auto plain = omacontacts::parsePersonJson(onlyDefault);
+  const auto plain = contacts::parsePersonJson(onlyDefault);
   QVERIFY(plain.has_value());
   QVERIFY(plain->photoUrl.isEmpty());
   const char* primaryReal = R"({"resourceName":"people/c1","names":[{"givenName":"Ada"}],
@@ -503,30 +503,30 @@ void GoogleTests::prefersRealPhotoOverDefault() {
       {"url":"https://example.test/other.jpg","default":false},
       {"url":"https://example.test/primary.jpg","default":false,"metadata":{"primary":true}}
     ]})";
-  const auto chosen = omacontacts::parsePersonJson(primaryReal);
+  const auto chosen = contacts::parsePersonJson(primaryReal);
   QVERIFY(chosen.has_value());
   QCOMPARE(chosen->photoUrl, QStringLiteral("https://example.test/primary.jpg"));
 }
 
 void GoogleTests::sizesPhotoUrl() {
-  QCOMPARE(omacontacts::photoFetchUrl(QStringLiteral("https://example.test/a.jpg")),
+  QCOMPARE(contacts::photoFetchUrl(QStringLiteral("https://example.test/a.jpg")),
            QStringLiteral("https://example.test/a.jpg?sz=2048"));
-  QCOMPARE(omacontacts::photoFetchUrl(QStringLiteral("https://example.test/a.jpg?x=1&sz=50")),
+  QCOMPARE(contacts::photoFetchUrl(QStringLiteral("https://example.test/a.jpg?x=1&sz=50")),
            QStringLiteral("https://example.test/a.jpg?x=1&sz=2048"));
-  QCOMPARE(omacontacts::photoFetchUrl(QStringLiteral("https://lh3.googleusercontent.com/a=s64")),
+  QCOMPARE(contacts::photoFetchUrl(QStringLiteral("https://lh3.googleusercontent.com/a=s64")),
            QStringLiteral("https://lh3.googleusercontent.com/a=s0"));
-  QCOMPARE(omacontacts::photoFetchUrl(QStringLiteral("https://lh3.googleusercontent.com/a=s100-c")),
+  QCOMPARE(contacts::photoFetchUrl(QStringLiteral("https://lh3.googleusercontent.com/a=s100-c")),
            QStringLiteral("https://lh3.googleusercontent.com/a=s0"));
 }
 
 void GoogleTests::oldCacheRequestsFullSync() {
-  const auto fresh = omacontacts::readCacheJson(R"({"version":1,"sync_token":"old","contacts":[]})");
+  const auto fresh = contacts::readCacheJson(R"({"version":1,"sync_token":"old","contacts":[]})");
   QVERIFY(fresh.ok());
   QVERIFY(fresh.syncToken.isEmpty());
 }
 
 void GoogleTests::roundTripsPerson() {
-  omacontacts::Contact contact;
+  contacts::Contact contact;
   contact.resourceName = QStringLiteral("people/c1");
   contact.etag = QStringLiteral("etag");
   contact.givenName = QStringLiteral("Ada");
@@ -536,7 +536,7 @@ void GoogleTests::roundTripsPerson() {
   contact.department = QStringLiteral("Calculus");
   contact.nickname = QStringLiteral("Ada");
   contact.birthday = {1815, 12, 10, {}};
-  omacontacts::PostalAddress address;
+  contacts::PostalAddress address;
   address.type = QStringLiteral("home");
   address.street = QStringLiteral("1 Engine Lane");
   address.city = QStringLiteral("London");
@@ -545,11 +545,11 @@ void GoogleTests::roundTripsPerson() {
   contact.emails.append({QStringLiteral("ada@example.com"), QStringLiteral("School"), QStringLiteral("School")});
   contact.phones.append({QStringLiteral("+1555"), QStringLiteral("Mobile"), QStringLiteral("mobile")});
   contact.notes = QStringLiteral("Line \"one\"");
-  const QByteArray json = omacontacts::personJson(contact);
+  const QByteArray json = contacts::personJson(contact);
   QVERIFY(json.contains("\"type\":\"School\""));
   QVERIFY(json.contains("\"type\":\"mobile\""));
   QVERIFY(!json.contains("formattedType"));
-  const auto parsed = omacontacts::parsePersonJson(json);
+  const auto parsed = contacts::parsePersonJson(json);
   QVERIFY(parsed.has_value());
   QCOMPARE(parsed->givenName, QStringLiteral("Ada"));
   QCOMPARE(parsed->emails.at(0).label, QStringLiteral("School"));
@@ -575,12 +575,12 @@ void GoogleTests::updateRetriesWithFreshEtag() {
   http.script.append({200, QByteArray(R"({"resourceName":"people/c1","etag":"fresh"})"), {}, {}});
   http.script.append(
       {200, QByteArray(R"({"resourceName":"people/c1","etag":"saved","names":[{"givenName":"Ada"}]})"), {}, {}});
-  omacontacts::Contact contact;
+  contacts::Contact contact;
   contact.resourceName = QStringLiteral("people/c1");
   contact.etag = QStringLiteral("stale");
   contact.givenName = QStringLiteral("Ada");
   QString token = QStringLiteral("token");
-  const auto result = omacontacts::updateContact(http, token, contact, [] { return QString(); });
+  const auto result = contacts::updateContact(http, token, contact, [] { return QString(); });
   QVERIFY(result.ok());
   QCOMPARE(result.contact.etag, QStringLiteral("saved"));
   QCOMPARE(http.bodies.size(), 3);
@@ -594,7 +594,7 @@ void GoogleTests::updatesContactPhoto() {
   http.script.append({200, QByteArray(R"({"person":{"resourceName":"people/c1","etag":"e2","photos":[{"url":"https://lh3.googleusercontent.com/a=s100","metadata":{"primary":true}}]}})"),
                       {}, {}});
   QString token = QStringLiteral("access");
-  const auto result = omacontacts::updateContactPhoto(http, token, QStringLiteral("people/c1"), QByteArray("jpeg-bytes"), {});
+  const auto result = contacts::updateContactPhoto(http, token, QStringLiteral("people/c1"), QByteArray("jpeg-bytes"), {});
   QVERIFY(result.ok());
   QCOMPARE(result.contact.resourceName, QStringLiteral("people/c1"));
   QCOMPARE(result.contact.photoUrl, QStringLiteral("https://lh3.googleusercontent.com/a=s100"));
@@ -605,73 +605,73 @@ void GoogleTests::updatesContactPhoto() {
 
   http.script.append({200, QByteArray(R"({"person":{"resourceName":"people/c1","etag":"e3","photos":[{"url":"https://lh3.googleusercontent.com/silhouette","default":true}]}})"),
                       {}, {}});
-  const auto removed = omacontacts::deleteContactPhoto(http, token, QStringLiteral("people/c1"), {});
+  const auto removed = contacts::deleteContactPhoto(http, token, QStringLiteral("people/c1"), {});
   QVERIFY(removed.ok());
   QVERIFY(removed.contact.photoUrl.isEmpty());
   QVERIFY(http.urls.last().contains(QStringLiteral(":deleteContactPhoto")));
 }
 
 void GoogleTests::labelTypesRoundTrip() {
-  const auto home = omacontacts::resolveLabel(omacontacts::LabelField::Email, QStringLiteral("Home"));
+  const auto home = contacts::resolveLabel(contacts::LabelField::Email, QStringLiteral("Home"));
   QCOMPARE(home.type, QStringLiteral("home"));
   QCOMPARE(home.display, QStringLiteral("Home"));
-  const auto other = omacontacts::resolveLabel(omacontacts::LabelField::Email, QStringLiteral("other"));
+  const auto other = contacts::resolveLabel(contacts::LabelField::Email, QStringLiteral("other"));
   QCOMPARE(other.type, QStringLiteral("other"));
-  const auto school = omacontacts::resolveLabel(omacontacts::LabelField::Email, QStringLiteral("School"));
+  const auto school = contacts::resolveLabel(contacts::LabelField::Email, QStringLiteral("School"));
   QCOMPARE(school.type, QStringLiteral("School"));
   QCOMPARE(school.display, QStringLiteral("School"));
-  const auto voice = omacontacts::resolveLabel(omacontacts::LabelField::Phone, QStringLiteral("Google Voice"));
+  const auto voice = contacts::resolveLabel(contacts::LabelField::Phone, QStringLiteral("Google Voice"));
   QCOMPARE(voice.type, QStringLiteral("googleVoice"));
   QCOMPARE(voice.display, QStringLiteral("Google Voice"));
-  const auto typedHome = omacontacts::resolveLabel(omacontacts::LabelField::Phone, QStringLiteral("home"));
+  const auto typedHome = contacts::resolveLabel(contacts::LabelField::Phone, QStringLiteral("home"));
   QCOMPARE(typedHome.type, QStringLiteral("home"));
-  const auto custom = omacontacts::resolveLabel(omacontacts::LabelField::Phone, QStringLiteral("Front desk"));
+  const auto custom = contacts::resolveLabel(contacts::LabelField::Phone, QStringLiteral("Front desk"));
   QCOMPARE(custom.type, QStringLiteral("Front desk"));
-  const auto blankEmail = omacontacts::resolveLabel(omacontacts::LabelField::Email, QString());
+  const auto blankEmail = contacts::resolveLabel(contacts::LabelField::Email, QString());
   QCOMPARE(blankEmail.type, QString());
   QCOMPARE(blankEmail.display, QString());
-  const auto blankPhone = omacontacts::resolveLabel(omacontacts::LabelField::Phone, QString());
+  const auto blankPhone = contacts::resolveLabel(contacts::LabelField::Phone, QString());
   QCOMPARE(blankPhone.type, QString());
-  const auto addressHome = omacontacts::resolveLabel(omacontacts::LabelField::Address, QStringLiteral("Home"));
+  const auto addressHome = contacts::resolveLabel(contacts::LabelField::Address, QStringLiteral("Home"));
   QCOMPARE(addressHome.type, QStringLiteral("home"));
   QCOMPARE(addressHome.display, QStringLiteral("Home"));
-  const auto addressOther = omacontacts::resolveLabel(omacontacts::LabelField::Address, QStringLiteral("Other"));
+  const auto addressOther = contacts::resolveLabel(contacts::LabelField::Address, QStringLiteral("Other"));
   QCOMPARE(addressOther.type, QStringLiteral("other"));
   QCOMPARE(addressOther.display, QStringLiteral("Other"));
-  const auto parents = omacontacts::resolveLabel(omacontacts::LabelField::Address, QStringLiteral("Parents"));
+  const auto parents = contacts::resolveLabel(contacts::LabelField::Address, QStringLiteral("Parents"));
   QCOMPARE(parents.type, QStringLiteral("Parents"));
   QCOMPARE(parents.display, QStringLiteral("Parents"));
 
-  omacontacts::Contact contact;
+  contacts::Contact contact;
   contact.givenName = QStringLiteral("Ada");
   contact.emails.append({QStringLiteral("ada@example.com"), QStringLiteral("Other"), QStringLiteral("other")});
   contact.phones.append({QStringLiteral("+1555"), QStringLiteral("Google Voice"), QStringLiteral("googleVoice")});
-  const QByteArray json = omacontacts::personJson(contact);
+  const QByteArray json = contacts::personJson(contact);
   QVERIFY(json.contains("\"type\":\"other\""));
   QVERIFY(json.contains("\"type\":\"googleVoice\""));
   QVERIFY(!json.contains("formattedType"));
-  const auto parsed = omacontacts::parsePersonJson(json);
+  const auto parsed = contacts::parsePersonJson(json);
   QVERIFY(parsed.has_value());
   QCOMPARE(parsed->emails.at(0).type, QStringLiteral("other"));
   QCOMPARE(parsed->emails.at(0).label, QStringLiteral("Other"));
   QCOMPARE(parsed->phones.at(0).type, QStringLiteral("googleVoice"));
   QCOMPARE(parsed->phones.at(0).label, QStringLiteral("Google Voice"));
 
-  omacontacts::Contact unlabeled;
+  contacts::Contact unlabeled;
   unlabeled.emails.append({QStringLiteral("ada@example.com"), QString(), QString()});
   unlabeled.phones.append({QStringLiteral("+1555"), QString(), QString()});
-  omacontacts::PostalAddress bare;
+  contacts::PostalAddress bare;
   bare.street = QStringLiteral("1 Main");
   unlabeled.addresses.append(bare);
-  omacontacts::PostalAddress otherAddress;
+  contacts::PostalAddress otherAddress;
   otherAddress.type = QStringLiteral("other");
   otherAddress.street = QStringLiteral("2 Main");
   unlabeled.addresses.append(otherAddress);
-  omacontacts::PostalAddress customAddress;
+  contacts::PostalAddress customAddress;
   customAddress.type = QStringLiteral("Parents");
   customAddress.street = QStringLiteral("3 Main");
   unlabeled.addresses.append(customAddress);
-  const auto unlabeledParsed = omacontacts::parsePersonJson(omacontacts::personJson(unlabeled));
+  const auto unlabeledParsed = contacts::parsePersonJson(contacts::personJson(unlabeled));
   QVERIFY(unlabeledParsed.has_value());
   QCOMPARE(unlabeledParsed->emails.at(0).type, QString());
   QCOMPARE(unlabeledParsed->phones.at(0).type, QString());
@@ -681,7 +681,7 @@ void GoogleTests::labelTypesRoundTrip() {
   QCOMPARE(unlabeledParsed->addresses.at(2).type, QStringLiteral("Parents"));
   QCOMPARE(unlabeledParsed->addresses.at(2).label, QStringLiteral("Parents"));
 
-  const auto legacy = omacontacts::readCacheJson(
+  const auto legacy = contacts::readCacheJson(
       R"({"version":2,"sync_token":"s","contacts":[{"resource_name":"people/c1","given_name":"Ada","emails":[{"value":"ada@example.com","label":"work"}],"phones":[{"value":"+1","label":"School"}]}]})");
   QVERIFY(legacy.ok());
   QCOMPARE(legacy.contacts.at(0).emails.at(0).type, QStringLiteral("work"));
@@ -690,17 +690,17 @@ void GoogleTests::labelTypesRoundTrip() {
 }
 
 void GoogleTests::fullAndIncrementalSync() {
-  omacontacts::Contact ada;
+  contacts::Contact ada;
   ada.resourceName = QStringLiteral("people/ada");
   ada.givenName = QStringLiteral("Ada");
-  omacontacts::Contact alan;
+  contacts::Contact alan;
   alan.resourceName = QStringLiteral("people/alan");
   alan.givenName = QStringLiteral("Alan");
-  const auto full = omacontacts::applyFullSync({{ada, false}});
+  const auto full = contacts::applyFullSync({{ada, false}});
   QCOMPARE(full.size(), 1);
-  omacontacts::Contact ada2 = ada;
+  contacts::Contact ada2 = ada;
   ada2.familyName = QStringLiteral("Lovelace");
-  const auto merged = omacontacts::applyIncrementalSync({ada, alan}, {{ada2, false}, {alan, true}});
+  const auto merged = contacts::applyIncrementalSync({ada, alan}, {{ada2, false}, {alan, true}});
   QCOMPARE(merged.size(), 1);
   QCOMPARE(merged.at(0).familyName, QStringLiteral("Lovelace"));
 }
@@ -711,7 +711,7 @@ void GoogleTests::retriesOnceAfterUnauthorized() {
   http.script.append({200, R"({"connections":[],"nextSyncToken":"s"})", {}, {}});
   QString token = QStringLiteral("old");
   int refreshes = 0;
-  const auto result = omacontacts::fetchConnections(http, token, QString(), [&] {
+  const auto result = contacts::fetchConnections(http, token, QString(), [&] {
     ++refreshes;
     token = QStringLiteral("new");
     return QString();
@@ -726,60 +726,60 @@ void GoogleTests::createReadsResource() {
   ScriptedHttp http;
   http.script.append(
       {200, R"({"resourceName":"people/c9","etag":"e","names":[{"givenName":"Ada","familyName":"Lovelace"}]})", {}, {}});
-  omacontacts::Contact draft;
+  contacts::Contact draft;
   draft.givenName = QStringLiteral("Ada");
   draft.familyName = QStringLiteral("Lovelace");
   QString token = QStringLiteral("token");
-  const auto result = omacontacts::createContact(http, token, draft, {});
+  const auto result = contacts::createContact(http, token, draft, {});
   QVERIFY2(result.ok(), qPrintable(result.error));
   QCOMPARE(result.contact.resourceName, QStringLiteral("people/c9"));
   QVERIFY(http.urls.first().contains(QStringLiteral("people:createContact")));
 }
 
 void GoogleTests::mailUsesDesktopHandler() {
-  omacontacts::Contact contact;
+  contacts::Contact contact;
   contact.givenName = QStringLiteral("Ada");
   contact.familyName = QStringLiteral("Lovelace");
   contact.emails.append({QStringLiteral("ada@example.com"), QStringLiteral("Work"), QStringLiteral("work")});
-  const auto command = omacontacts::mailCommand(contact);
+  const auto command = contacts::mailCommand(contact);
   QVERIFY(command.ok());
   QCOMPARE(command.argv.size(), 4);
   QCOMPARE(command.argv.at(0), QStringLiteral("xdg-email"));
   QCOMPARE(command.argv.at(3), QStringLiteral("ada@example.com"));
-  omacontacts::Contact nameless;
-  QVERIFY(!omacontacts::mailCommand(nameless).ok());
+  contacts::Contact nameless;
+  QVERIFY(!contacts::mailCommand(nameless).ok());
 }
 
 void GoogleTests::browserPrefersOmarchy() {
-  const auto command = omacontacts::browserCommand(QStringLiteral("https://example.com"), true);
+  const auto command = contacts::browserCommand(QStringLiteral("https://example.com"), true);
   QCOMPARE(command.argv.size(), 4);
   QCOMPARE(command.argv.at(0), QStringLiteral("omarchy"));
   QCOMPARE(command.argv.at(2), QStringLiteral("browser"));
-  const auto fallback = omacontacts::browserCommand(QStringLiteral("https://example.com"), false);
+  const auto fallback = contacts::browserCommand(QStringLiteral("https://example.com"), false);
   QCOMPARE(fallback.argv.at(0), QStringLiteral("xdg-open"));
 }
 
 void GoogleTests::storeRoundTrip() {
-  omacontacts::Contact contact;
+  contacts::Contact contact;
   contact.resourceName = QStringLiteral("people/c1");
   contact.givenName = QStringLiteral("Ada");
   contact.notes = QStringLiteral("a \"quote\"");
   contact.photoUrl = QStringLiteral("https://example.test/ada.jpg");
   contact.emails.append({QStringLiteral("ada@example.com"), QStringLiteral("Work"), QStringLiteral("work")});
-  const auto cache = omacontacts::readCacheJson(omacontacts::writeCacheJson({contact}, QStringLiteral("sync")));
+  const auto cache = contacts::readCacheJson(contacts::writeCacheJson({contact}, QStringLiteral("sync")));
   QVERIFY(cache.ok());
   QCOMPARE(cache.syncToken, QStringLiteral("sync"));
   QCOMPARE(cache.contacts.size(), 1);
   QCOMPARE(cache.contacts.at(0), contact);
-  QVERIFY(!omacontacts::readCacheJson("{").ok());
+  QVERIFY(!contacts::readCacheJson("{").ok());
 
   const auto config =
-      omacontacts::readConfigJson(omacontacts::writeConfigJson({QStringLiteral("id"), QStringLiteral("secret")}));
+      contacts::readConfigJson(contacts::writeConfigJson({QStringLiteral("id"), QStringLiteral("secret")}));
   QVERIFY(config.has_value());
   QCOMPARE(config->clientSecret, QStringLiteral("secret"));
 
   const auto stored =
-      omacontacts::readTokensJson(omacontacts::writeTokensJson({QStringLiteral("access"), QStringLiteral("refresh"), 50}));
+      contacts::readTokensJson(contacts::writeTokensJson({QStringLiteral("access"), QStringLiteral("refresh"), 50}));
   QVERIFY(stored.has_value());
   QCOMPARE(stored->refreshToken, QStringLiteral("refresh"));
   QCOMPARE(stored->expiryUnix, 50);
@@ -788,20 +788,20 @@ void GoogleTests::storeRoundTrip() {
   QVERIFY(dir.isValid());
   const QString file = dir.filePath(QStringLiteral("nested/config.json"));
   QString error;
-  QVERIFY2(omacontacts::writePrivateFile(file, "{\"client_id\":\"abc\"}", error), qPrintable(error));
+  QVERIFY2(contacts::writePrivateFile(file, "{\"client_id\":\"abc\"}", error), qPrintable(error));
   QFileInfo info(file);
   QCOMPARE(info.permissions() & (QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ReadGroup |
                                  QFileDevice::WriteGroup | QFileDevice::ReadOther | QFileDevice::WriteOther),
            QFileDevice::ReadOwner | QFileDevice::WriteOwner);
-  const auto paths = omacontacts::AppPaths::forEnv(QStringLiteral("/home/duff"), QStringLiteral("/xdg/config"), QString());
+  const auto paths = contacts::AppPaths::forEnv(QStringLiteral("/home/duff"), QStringLiteral("/xdg/config"), QString());
   QCOMPARE(paths.configFile, QStringLiteral("/xdg/config/contacts/config.json"));
   QCOMPARE(paths.cacheFile, QStringLiteral("/home/duff/.local/share/contacts/contacts.json"));
   QCOMPARE(paths.photoDir, QStringLiteral("/home/duff/.cache/contacts/photos"));
 }
 
-omacontacts::Contact sampleContact(QString id, QString given, QString family, QString email, QString phone,
+contacts::Contact sampleContact(QString id, QString given, QString family, QString email, QString phone,
                                     QString notes) {
-  omacontacts::Contact contact;
+  contacts::Contact contact;
   contact.resourceName = std::move(id);
   contact.givenName = std::move(given);
   contact.familyName = std::move(family);
@@ -820,17 +820,17 @@ void LayoutTests::enterReplacesTheListWithThatContact() {
   qputenv("XDG_DATA_HOME", dir.filePath(QStringLiteral("data")).toUtf8());
   qputenv("XDG_CACHE_HOME", dir.filePath(QStringLiteral("cache")).toUtf8());
   qputenv("XDG_CONFIG_HOME", dir.filePath(QStringLiteral("config")).toUtf8());
-  qputenv("OMACONTACTS_NO_SYNC", "1");
+  qputenv("CONTACTS_NO_SYNC", "1");
 
   const QString caraOneNotes =
       QStringLiteral("Notes for Cara One that must stay on screen. The whole note is visible without scrolling the detail.");
   const QString caraTwoNotes =
       QStringLiteral("Notes for Cara Two that must stay on screen. The whole note is visible without scrolling the detail.");
-  omacontacts::MainWindow window;
+  contacts::MainWindow window;
   window.resize(1000, 700);
   window.show();
   QVERIFY(QTest::qWaitForWindowExposed(&window));
-  QList<omacontacts::Contact> contacts = {
+  QList<contacts::Contact> contacts = {
       sampleContact(QStringLiteral("people/cara1"), QStringLiteral("Cara"), QStringLiteral("One"),
                     QStringLiteral("cara.one@example.com"), QStringLiteral("+1 555 010 1001"), caraOneNotes),
       sampleContact(QStringLiteral("people/cara2"), QStringLiteral("Cara"), QStringLiteral("Two"),
@@ -905,7 +905,7 @@ void LayoutTests::editOpensOnTheSelectedField() {
   qputenv("XDG_DATA_HOME", dir.filePath(QStringLiteral("data")).toUtf8());
   qputenv("XDG_CACHE_HOME", dir.filePath(QStringLiteral("cache")).toUtf8());
   qputenv("XDG_CONFIG_HOME", dir.filePath(QStringLiteral("config")).toUtf8());
-  qputenv("OMACONTACTS_NO_SYNC", "1");
+  qputenv("CONTACTS_NO_SYNC", "1");
 
   const QString notes = QStringLiteral("Keep this note.");
   auto cara = sampleContact(QStringLiteral("people/cara"), QStringLiteral("Cara"), QStringLiteral("Two"), {},
@@ -914,7 +914,7 @@ void LayoutTests::editOpensOnTheSelectedField() {
       {QStringLiteral("home@example.com"), QStringLiteral("Home"), QStringLiteral("home")},
       {QStringLiteral("work@example.com"), QStringLiteral("Work"), QStringLiteral("work")},
   };
-  omacontacts::MainWindow window;
+  contacts::MainWindow window;
   window.resize(1000, 700);
   window.show();
   QVERIFY(QTest::qWaitForWindowExposed(&window));
@@ -993,21 +993,21 @@ void LayoutTests::companyWithoutAPersonalName() {
   qputenv("XDG_DATA_HOME", dir.filePath(QStringLiteral("data")).toUtf8());
   qputenv("XDG_CACHE_HOME", dir.filePath(QStringLiteral("cache")).toUtf8());
   qputenv("XDG_CONFIG_HOME", dir.filePath(QStringLiteral("config")).toUtf8());
-  qputenv("OMACONTACTS_NO_SYNC", "1");
+  qputenv("CONTACTS_NO_SYNC", "1");
 
-  omacontacts::Contact contact;
+  contacts::Contact contact;
   contact.resourceName = QStringLiteral("people/download");
   contact.organization = QStringLiteral("download.com");
   contact.fileAs = QStringLiteral("Download");
   contact.phoneticGiven = QStringLiteral("down");
   contact.phoneticMiddle = QStringLiteral("load");
   contact.phoneticFamily = QStringLiteral("com");
-  omacontacts::ImClient im;
+  contacts::ImClient im;
   im.username = QStringLiteral("dl");
   im.protocol = QStringLiteral("skype");
   contact.ims.append(im);
   contact.sips.append({QStringLiteral("sip:dl@example.com"), QStringLiteral("Work"), QStringLiteral("work")});
-  omacontacts::PostalAddress office;
+  contacts::PostalAddress office;
   office.label = QStringLiteral("Work");
   office.type = QStringLiteral("work");
   office.street = QStringLiteral("1 Main St");
@@ -1016,7 +1016,7 @@ void LayoutTests::companyWithoutAPersonalName() {
   office.postalCode = QStringLiteral("78701");
   contact.addresses.append(office);
 
-  omacontacts::MainWindow window;
+  contacts::MainWindow window;
   window.resize(1000, 700);
   window.show();
   QVERIFY(QTest::qWaitForWindowExposed(&window));
@@ -1114,7 +1114,7 @@ void LayoutTests::companyWithoutAPersonalName() {
   }
 
   contact.addresses[0].poBox = QStringLiteral("12");
-  omacontacts::ContactEditor direct(contact, {}, nullptr);
+  contacts::ContactEditor direct(contact, {}, nullptr);
   const auto saved = direct.validatedContact();
   QVERIFY(saved.has_value());
   QCOMPARE(saved->organization, QStringLiteral("download.com"));
@@ -1151,15 +1151,15 @@ void LayoutTests::notesWrapInsteadOfEllipsis() {
   qputenv("XDG_DATA_HOME", dir.filePath(QStringLiteral("data")).toUtf8());
   qputenv("XDG_CACHE_HOME", dir.filePath(QStringLiteral("cache")).toUtf8());
   qputenv("XDG_CONFIG_HOME", dir.filePath(QStringLiteral("config")).toUtf8());
-  qputenv("OMACONTACTS_NO_SYNC", "1");
+  qputenv("CONTACTS_NO_SYNC", "1");
 
-  omacontacts::Contact contact;
+  contacts::Contact contact;
   contact.resourceName = QStringLiteral("people/notes");
   contact.givenName = QStringLiteral("Dan");
   contact.familyName = QStringLiteral("Williams");
   contact.notes = QStringLiteral("alpha ").repeated(80).trimmed();
 
-  omacontacts::MainWindow window;
+  contacts::MainWindow window;
   window.resize(1000, 700);
   window.show();
   QVERIFY(QTest::qWaitForWindowExposed(&window));
@@ -1202,15 +1202,15 @@ void LayoutTests::blankPhoneTypeStaysBlank() {
   qputenv("XDG_DATA_HOME", dir.filePath(QStringLiteral("data")).toUtf8());
   qputenv("XDG_CACHE_HOME", dir.filePath(QStringLiteral("cache")).toUtf8());
   qputenv("XDG_CONFIG_HOME", dir.filePath(QStringLiteral("config")).toUtf8());
-  qputenv("OMACONTACTS_NO_SYNC", "1");
+  qputenv("CONTACTS_NO_SYNC", "1");
 
-  omacontacts::Contact contact;
+  contacts::Contact contact;
   contact.resourceName = QStringLiteral("people/phone");
   contact.givenName = QStringLiteral("Dan");
   contact.familyName = QStringLiteral("Williams");
   contact.phones.append({QStringLiteral("+15551212"), QString(), QString()});
 
-  omacontacts::MainWindow window;
+  contacts::MainWindow window;
   window.resize(1000, 700);
   window.show();
   QVERIFY(QTest::qWaitForWindowExposed(&window));
@@ -1235,7 +1235,7 @@ void LayoutTests::blankPhoneTypeStaysBlank() {
   QVERIFY(label != nullptr);
   QCOMPARE(label->currentText(), QString());
   const auto saved = [&] {
-    omacontacts::ContactEditor direct(contact, {}, nullptr);
+    contacts::ContactEditor direct(contact, {}, nullptr);
     return direct.validatedContact();
   }();
   QVERIFY(saved.has_value());
@@ -1252,7 +1252,7 @@ void LayoutTests::blankPhoneTypeStaysBlank() {
 
 void GuardTests::requestsStayOnHttp1() {
   QNetworkRequest request{QUrl(QStringLiteral("https://people.googleapis.com/v1/people/me/connections"))};
-  omacontacts::prepareNetworkRequest(request);
+  contacts::prepareNetworkRequest(request);
   QCOMPARE(request.attribute(QNetworkRequest::Http2AllowedAttribute).toBool(), false);
   QCOMPARE(request.attribute(QNetworkRequest::Http2DirectAttribute).toBool(), false);
   QCOMPARE(request.attribute(QNetworkRequest::Http2CleartextAllowedAttribute).toBool(), false);
@@ -1264,117 +1264,117 @@ void GuardTests::requestsStayOnHttp1() {
 
 void GuardTests::secondLaunchRaisesTheFirst() {
   const QString name = QDir::tempPath() + QStringLiteral("/contacts-test-%1.sock").arg(QCoreApplication::applicationPid());
-  omacontacts::InstanceLock first(name);
+  contacts::InstanceLock first(name);
   int raises = 0;
   QVERIFY(first.claim([&raises] { ++raises; }));
-  omacontacts::InstanceLock second(name);
+  contacts::InstanceLock second(name);
   QVERIFY(!second.claim([] {}));
   QCOMPARE(first.raises(), 1);
   QCOMPARE(raises, 1);
 }
 
 void ShortcutTests::typingSuspendsSingleKeys() {
-  QCOMPARE(omacontacts::routeKey(browser(omacontacts::Key::J, true)), omacontacts::Command::Ignore);
-  QCOMPARE(omacontacts::routeKey(browser(omacontacts::Key::Down, true)), omacontacts::Command::MoveDown);
-  QCOMPARE(omacontacts::routeKey(browser(omacontacts::Key::N, true)), omacontacts::Command::Ignore);
-  auto created = browser(omacontacts::Key::N, true);
+  QCOMPARE(contacts::routeKey(browser(contacts::Key::J, true)), contacts::Command::Ignore);
+  QCOMPARE(contacts::routeKey(browser(contacts::Key::Down, true)), contacts::Command::MoveDown);
+  QCOMPARE(contacts::routeKey(browser(contacts::Key::N, true)), contacts::Command::Ignore);
+  auto created = browser(contacts::Key::N, true);
   created.ctrl = true;
-  QCOMPARE(omacontacts::routeKey(created), omacontacts::Command::NewContact);
-  QCOMPARE(omacontacts::routeKey(browser(omacontacts::Key::F1, true)), omacontacts::Command::Ignore);
+  QCOMPARE(contacts::routeKey(created), contacts::Command::NewContact);
+  QCOMPARE(contacts::routeKey(browser(contacts::Key::F1, true)), contacts::Command::Ignore);
 }
 
 void ShortcutTests::escapeClearsBeforeBack() {
-  auto event = browser(omacontacts::Key::Escape, true);
+  auto event = browser(contacts::Key::Escape, true);
   event.searchEmpty = false;
   event.detailOpen = true;
-  QCOMPARE(omacontacts::routeKey(event), omacontacts::Command::Back);
+  QCOMPARE(contacts::routeKey(event), contacts::Command::Back);
   event.detailOpen = false;
-  QCOMPARE(omacontacts::routeKey(event), omacontacts::Command::ClearSearch);
+  QCOMPARE(contacts::routeKey(event), contacts::Command::ClearSearch);
   event.searchEmpty = true;
-  QCOMPARE(omacontacts::routeKey(event), omacontacts::Command::Ignore);
+  QCOMPARE(contacts::routeKey(event), contacts::Command::Ignore);
   event.detailOpen = true;
-  QCOMPARE(omacontacts::routeKey(event), omacontacts::Command::Back);
-  auto down = browser(omacontacts::Key::Down, true);
+  QCOMPARE(contacts::routeKey(event), contacts::Command::Back);
+  auto down = browser(contacts::Key::Down, true);
   down.detailOpen = true;
-  QCOMPARE(omacontacts::routeKey(down), omacontacts::Command::MoveDown);
-  auto act = browser(omacontacts::Key::Return, true);
+  QCOMPARE(contacts::routeKey(down), contacts::Command::MoveDown);
+  auto act = browser(contacts::Key::Return, true);
   act.detailOpen = true;
-  QCOMPARE(omacontacts::routeKey(act), omacontacts::Command::ActivateField);
-  auto copy = browser(omacontacts::Key::C);
+  QCOMPARE(contacts::routeKey(act), contacts::Command::ActivateField);
+  auto copy = browser(contacts::Key::C);
   copy.ctrl = true;
   copy.detailOpen = true;
-  QCOMPARE(omacontacts::routeKey(copy), omacontacts::Command::CopyField);
+  QCOMPARE(contacts::routeKey(copy), contacts::Command::CopyField);
   copy.textInput = true;
-  QCOMPARE(omacontacts::routeKey(copy), omacontacts::Command::Ignore);
+  QCOMPARE(contacts::routeKey(copy), contacts::Command::Ignore);
 }
 
 void ShortcutTests::listKeys() {
-  QCOMPARE(omacontacts::routeKey(browser(omacontacts::Key::J)), omacontacts::Command::Ignore);
-  QCOMPARE(omacontacts::routeKey(browser(omacontacts::Key::E)), omacontacts::Command::Ignore);
-  QCOMPARE(omacontacts::routeKey(browser(omacontacts::Key::R)), omacontacts::Command::Ignore);
-  QCOMPARE(omacontacts::routeKey(browser(omacontacts::Key::PageDown)), omacontacts::Command::Ignore);
-  QCOMPARE(omacontacts::routeKey(browser(omacontacts::Key::Down)), omacontacts::Command::MoveDown);
-  QCOMPARE(omacontacts::routeKey(browser(omacontacts::Key::Slash)), omacontacts::Command::FocusSearch);
-  QCOMPARE(omacontacts::routeKey(browser(omacontacts::Key::Slash, true)), omacontacts::Command::Ignore);
-  QCOMPARE(omacontacts::routeKey(browser(omacontacts::Key::Delete)), omacontacts::Command::Ignore);
-  auto mail = browser(omacontacts::Key::Return);
+  QCOMPARE(contacts::routeKey(browser(contacts::Key::J)), contacts::Command::Ignore);
+  QCOMPARE(contacts::routeKey(browser(contacts::Key::E)), contacts::Command::Ignore);
+  QCOMPARE(contacts::routeKey(browser(contacts::Key::R)), contacts::Command::Ignore);
+  QCOMPARE(contacts::routeKey(browser(contacts::Key::PageDown)), contacts::Command::Ignore);
+  QCOMPARE(contacts::routeKey(browser(contacts::Key::Down)), contacts::Command::MoveDown);
+  QCOMPARE(contacts::routeKey(browser(contacts::Key::Slash)), contacts::Command::FocusSearch);
+  QCOMPARE(contacts::routeKey(browser(contacts::Key::Slash, true)), contacts::Command::Ignore);
+  QCOMPARE(contacts::routeKey(browser(contacts::Key::Delete)), contacts::Command::Ignore);
+  auto mail = browser(contacts::Key::Return);
   mail.ctrl = true;
   mail.detailOpen = true;
-  QCOMPARE(omacontacts::routeKey(mail), omacontacts::Command::SendEmail);
-  auto backspace = browser(omacontacts::Key::Backspace);
+  QCOMPARE(contacts::routeKey(mail), contacts::Command::SendEmail);
+  auto backspace = browser(contacts::Key::Backspace);
   backspace.detailOpen = true;
-  QCOMPARE(omacontacts::routeKey(backspace), omacontacts::Command::Back);
-  QCOMPARE(omacontacts::routeKey(browser(omacontacts::Key::Return)), omacontacts::Command::OpenContact);
-  QCOMPARE(omacontacts::routeKey(browser(omacontacts::Key::Return, true)), omacontacts::Command::OpenContact);
-  auto edit = browser(omacontacts::Key::Return);
+  QCOMPARE(contacts::routeKey(backspace), contacts::Command::Back);
+  QCOMPARE(contacts::routeKey(browser(contacts::Key::Return)), contacts::Command::OpenContact);
+  QCOMPARE(contacts::routeKey(browser(contacts::Key::Return, true)), contacts::Command::OpenContact);
+  auto edit = browser(contacts::Key::Return);
   edit.ctrl = true;
-  QCOMPARE(omacontacts::routeKey(edit), omacontacts::Command::Ignore);
-  auto ctrlE = browser(omacontacts::Key::E);
+  QCOMPARE(contacts::routeKey(edit), contacts::Command::Ignore);
+  auto ctrlE = browser(contacts::Key::E);
   ctrlE.ctrl = true;
-  QCOMPARE(omacontacts::routeKey(ctrlE), omacontacts::Command::EditContact);
-  QCOMPARE(omacontacts::routeKey(browser(omacontacts::Key::Question)), omacontacts::Command::Help);
-  auto quit = browser(omacontacts::Key::Q);
+  QCOMPARE(contacts::routeKey(ctrlE), contacts::Command::EditContact);
+  QCOMPARE(contacts::routeKey(browser(contacts::Key::Question)), contacts::Command::Help);
+  auto quit = browser(contacts::Key::Q);
   quit.ctrl = true;
-  QCOMPARE(omacontacts::routeKey(quit), omacontacts::Command::Ignore);
+  QCOMPARE(contacts::routeKey(quit), contacts::Command::Ignore);
 }
 
 void ShortcutTests::editorKeepsKeys() {
-  omacontacts::KeyEvent event;
-  event.surface = omacontacts::Surface::Editor;
+  contacts::KeyEvent event;
+  event.surface = contacts::Surface::Editor;
   event.textInput = true;
-  event.key = omacontacts::Key::N;
-  QCOMPARE(omacontacts::routeKey(event), omacontacts::Command::Ignore);
-  event.key = omacontacts::Key::Escape;
-  QCOMPARE(omacontacts::routeKey(event), omacontacts::Command::Cancel);
-  event.key = omacontacts::Key::Return;
-  QCOMPARE(omacontacts::routeKey(event), omacontacts::Command::Save);
+  event.key = contacts::Key::N;
+  QCOMPARE(contacts::routeKey(event), contacts::Command::Ignore);
+  event.key = contacts::Key::Escape;
+  QCOMPARE(contacts::routeKey(event), contacts::Command::Cancel);
+  event.key = contacts::Key::Return;
+  QCOMPARE(contacts::routeKey(event), contacts::Command::Save);
   event.multiline = true;
-  QCOMPARE(omacontacts::routeKey(event), omacontacts::Command::Ignore);
+  QCOMPARE(contacts::routeKey(event), contacts::Command::Ignore);
   event.ctrl = true;
-  QCOMPARE(omacontacts::routeKey(event), omacontacts::Command::Save);
+  QCOMPARE(contacts::routeKey(event), contacts::Command::Save);
 }
 
 void ShortcutTests::accountKeepsQuestionMarks() {
-  omacontacts::KeyEvent event;
-  event.surface = omacontacts::Surface::Account;
+  contacts::KeyEvent event;
+  event.surface = contacts::Surface::Account;
   event.textInput = true;
-  event.key = omacontacts::Key::Question;
-  QCOMPARE(omacontacts::routeKey(event), omacontacts::Command::Ignore);
-  event.key = omacontacts::Key::Escape;
-  QCOMPARE(omacontacts::routeKey(event), omacontacts::Command::Cancel);
+  event.key = contacts::Key::Question;
+  QCOMPARE(contacts::routeKey(event), contacts::Command::Ignore);
+  event.key = contacts::Key::Escape;
+  QCOMPARE(contacts::routeKey(event), contacts::Command::Cancel);
 }
 
 void ShortcutTests::deleteConfirmIgnoresEnter() {
-  omacontacts::KeyEvent event;
-  event.surface = omacontacts::Surface::ConfirmDelete;
-  event.key = omacontacts::Key::Return;
-  QCOMPARE(omacontacts::routeKey(event), omacontacts::Command::Ignore);
-  event.key = omacontacts::Key::Escape;
-  QCOMPARE(omacontacts::routeKey(event), omacontacts::Command::Cancel);
+  contacts::KeyEvent event;
+  event.surface = contacts::Surface::ConfirmDelete;
+  event.key = contacts::Key::Return;
+  QCOMPARE(contacts::routeKey(event), contacts::Command::Ignore);
+  event.key = contacts::Key::Escape;
+  QCOMPARE(contacts::routeKey(event), contacts::Command::Cancel);
 }
 
 void ShortcutTests::helpListsEmail() {
-  const auto rows = omacontacts::bindingHelp();
+  const auto rows = contacts::bindingHelp();
   QVERIFY(rows.size() >= 8);
   bool sawOpen = false;
   bool sawKeybindings = false;

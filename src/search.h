@@ -5,7 +5,7 @@
 #include <QList>
 #include <QString>
 
-namespace omacontacts {
+namespace contacts {
 
 struct SearchHit {
   int index = 0;
@@ -46,4 +46,4 @@ class ContactIndex {
 
 int moveIndex(int current, int count, int delta, bool wrap);
 
-}  // namespace omacontacts
+}  // namespace contacts

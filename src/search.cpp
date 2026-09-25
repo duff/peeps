@@ -4,7 +4,7 @@
 
 #include <algorithm>
 
-namespace omacontacts {
+namespace contacts {
 namespace {
 
 int scoreField(const QString& field, const QString& token, int prefix, int word, int substr) {
@@ -134,4 +134,4 @@ int moveIndex(int current, int count, int delta, bool wrap) {
   return std::clamp(next, 0, count - 1);
 }
 
-}  // namespace omacontacts
+}  // namespace contacts

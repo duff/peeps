@@ -6,7 +6,7 @@
 #include <QStandardPaths>
 #include <QTimer>
 
-namespace omacontacts {
+namespace contacts {
 
 QString instanceSocketName() {
   QString dir = QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation);
@@ -70,4 +70,4 @@ bool InstanceLock::claim(const std::function<void()>& onRaise) {
   return true;
 }
 
-}  // namespace omacontacts
+}  // namespace contacts

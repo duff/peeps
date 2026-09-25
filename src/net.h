@@ -5,7 +5,7 @@
 #include <QNetworkRequest>
 #include <QSslConfiguration>
 
-namespace omacontacts {
+namespace contacts {
 
 // Qt 6 negotiates HTTP/2 by default. That helper thread can enter a userspace
 // spin on a Google connection and never read its event queue again, so one
@@ -23,4 +23,4 @@ inline void prepareNetworkRequest(QNetworkRequest& request) {
   request.setSslConfiguration(ssl);
 }
 
-}  // namespace omacontacts
+}  // namespace contacts

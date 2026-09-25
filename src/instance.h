@@ -5,7 +5,7 @@
 
 #include <functional>
 
-namespace omacontacts {
+namespace contacts {
 
 QString instanceSocketName();
 
@@ -29,4 +29,4 @@ class InstanceLock {
   bool listening_ = false;
 };
 
-}  // namespace omacontacts
+}  // namespace contacts

@@ -23,7 +23,7 @@
 
 #include <functional>
 
-namespace omacontacts {
+namespace contacts {
 namespace {
 
 QPushButton* kindButton(const QString& text, const QString& kind) {
@@ -1105,4 +1105,4 @@ std::optional<AccountResult> accountDialog(QWidget* parent, const AppConfig& con
   return dialog.result();
 }
 
-}  // namespace omacontacts
+}  // namespace contacts

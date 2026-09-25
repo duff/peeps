@@ -32,26 +32,26 @@ int main(int argc, char** argv) {
   // runs an event loop while it asks an already-open copy to come forward.
   // Building the window first starts that sync, then this process exits and
   // tears down Qt's TLS plugin under the sync thread.
-  omacontacts::MainWindow* window = nullptr;
-  omacontacts::InstanceLock instance(omacontacts::instanceSocketName());
+  contacts::MainWindow* window = nullptr;
+  contacts::InstanceLock instance(contacts::instanceSocketName());
   if (!selfTest && !instance.claim([&window] {
         if (window != nullptr) window->present();
       })) {
-    omacontacts::finishBackground(0);
+    contacts::finishBackground(0);
     return 0;
   }
-  omacontacts::MainWindow owned;
+  contacts::MainWindow owned;
   window = &owned;
   if (selfTest) {
     owned.resize(980, 680);
     owned.show();
     QTimer::singleShot(0, &app, &QCoreApplication::quit);
     const int code = app.exec();
-    omacontacts::finishBackground(code);
+    contacts::finishBackground(code);
     return code;
   }
   owned.show();
   const int code = app.exec();
-  omacontacts::finishBackground(code);
+  contacts::finishBackground(code);
   return code;
 }

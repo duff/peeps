@@ -1,6 +1,6 @@
 #include "mail.h"
 
-namespace omacontacts {
+namespace contacts {
 
 MailCommand mailCommand(const Contact& contact) {
   MailCommand command;
@@ -18,4 +18,4 @@ MailCommand mailCommand(const Contact& contact) {
   return command;
 }
 
-}  // namespace omacontacts
+}  // namespace contacts

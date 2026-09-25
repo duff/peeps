@@ -4,7 +4,7 @@
 
 #include <QStringList>
 
-namespace omacontacts {
+namespace contacts {
 
 struct MailCommand {
   QStringList argv;
@@ -16,4 +16,4 @@ struct MailCommand {
 // On this machine it is whatever x-scheme-handler/mailto points at.
 MailCommand mailCommand(const Contact& contact);
 
-}  // namespace omacontacts
+}  // namespace contacts

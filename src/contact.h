@@ -3,7 +3,7 @@
 #include <QList>
 #include <QString>
 
-namespace omacontacts {
+namespace contacts {
 
 struct LabeledValue {
   QString value;
@@ -163,4 +163,4 @@ struct Draft {
 QString digitsOnly(const QString& text);
 QString contactPlainText(const Contact& contact);
 
-}  // namespace omacontacts
+}  // namespace contacts

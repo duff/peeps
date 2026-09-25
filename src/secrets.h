@@ -5,7 +5,7 @@
 #include <memory>
 #include <optional>
 
-namespace omacontacts {
+namespace contacts {
 
 class SecretStore {
  public:
@@ -17,4 +17,4 @@ class SecretStore {
 
 std::unique_ptr<SecretStore> makeSecretStore();
 
-}  // namespace omacontacts
+}  // namespace contacts

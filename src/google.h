@@ -7,7 +7,7 @@
 #include <functional>
 #include <optional>
 
-namespace omacontacts {
+namespace contacts {
 
 struct PersonChange {
   Contact contact;
@@ -59,4 +59,4 @@ WriteResult updateContactPhoto(HttpClient& http, QString& accessToken, const QSt
 WriteResult deleteContactPhoto(HttpClient& http, QString& accessToken, const QString& resourceName, const RefreshFn& refresh);
 QString deleteContact(HttpClient& http, QString& accessToken, const QString& resourceName, const RefreshFn& refresh);
 
-}  // namespace omacontacts
+}  // namespace contacts

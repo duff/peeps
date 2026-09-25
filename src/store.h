@@ -6,7 +6,7 @@
 #include <QString>
 #include <optional>
 
-namespace omacontacts {
+namespace contacts {
 
 struct AppPaths {
   QString configFile;
@@ -42,4 +42,4 @@ std::optional<OAuthTokens> readTokensJson(const QByteArray& json);
 bool writePrivateFile(const QString& path, const QByteArray& contents, QString& error);
 std::optional<QByteArray> readFile(const QString& path);
 
-}  // namespace omacontacts
+}  // namespace contacts

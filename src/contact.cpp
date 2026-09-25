@@ -2,7 +2,7 @@
 
 #include <QStringList>
 
-namespace omacontacts {
+namespace contacts {
 namespace {
 
 QString trimmed(const QString& text) { return text.trimmed(); }
@@ -396,4 +396,4 @@ Contact Draft::toContact(const Contact& base) const {
   return contact;
 }
 
-}  // namespace omacontacts
+}  // namespace contacts

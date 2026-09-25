@@ -8,7 +8,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace omacontacts {
+namespace contacts {
 namespace {
 
 int hexValue(QChar c) {
@@ -314,4 +314,4 @@ QFrame#toast[error="true"] { border: 1px solid @@DANGER@@; }
   return css;
 }
 
-}  // namespace omacontacts
+}  // namespace contacts

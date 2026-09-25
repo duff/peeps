@@ -8,7 +8,7 @@
 #include <functional>
 #include <utility>
 
-namespace omacontacts {
+namespace contacts {
 
 // The global thread pool joins every task when the process exits. A Google
 // request stuck inside Qt's network thread would then keep the process alive
@@ -49,4 +49,4 @@ inline void finishBackground(int code) {
   if (backgroundLiveCount().load(std::memory_order_acquire) > 0) std::_Exit(code);
 }
 
-}  // namespace omacontacts
+}  // namespace contacts

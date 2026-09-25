@@ -4,7 +4,7 @@
 #include <QString>
 #include <optional>
 
-namespace omacontacts {
+namespace contacts {
 
 enum class Appearance { Dark, Light };
 enum class ThemeOrigin { State, Legacy, Builtin };
@@ -57,4 +57,4 @@ ThemeLoad loadTheme(const ThemePaths& paths);
 // Square, quiet widget sheet. Fills are for interaction state only.
 QString stylesheetFor(const Palette& palette);
 
-}  // namespace omacontacts
+}  // namespace contacts

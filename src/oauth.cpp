@@ -6,7 +6,7 @@
 #include <QRandomGenerator>
 #include <QUrl>
 
-namespace omacontacts {
+namespace contacts {
 namespace {
 
 QString base64Url(const QByteArray& data) {
@@ -160,4 +160,4 @@ BrowserCommand browserCommand(const QString& url, bool haveOmarchy) {
   return command;
 }
 
-}  // namespace omacontacts
+}  // namespace contacts

@@ -41,7 +41,7 @@
 #include <algorithm>
 #include <optional>
 
-namespace omacontacts {
+namespace contacts {
 
 class ContactListModel : public QAbstractListModel {
  public:
@@ -369,7 +369,7 @@ MainWindow::MainWindow() : secrets_(makeSecretStore()) {
   reloadTheme();
   refilter();
   qApp->installEventFilter(this);
-  if (!qEnvironmentVariableIsSet("OMACONTACTS_NO_SYNC") && !tokens_.refreshToken.isEmpty()) {
+  if (!qEnvironmentVariableIsSet("CONTACTS_NO_SYNC") && !tokens_.refreshToken.isEmpty()) {
     QTimer::singleShot(0, this, [this] { runSync(false); });
   }
 }
@@ -1340,13 +1340,13 @@ void MainWindow::changeEvent(QEvent* event) {
     if (focusSyncTimer_ != nullptr) focusSyncTimer_->stop();
     return;
   }
-  if (qEnvironmentVariableIsSet("OMACONTACTS_NO_SYNC")) return;
+  if (qEnvironmentVariableIsSet("CONTACTS_NO_SYNC")) return;
   if (lastSyncAt_ == 0 || nowUnix() - lastSyncAt_ >= 60) runSync(false, false);
   if (focusSyncTimer_ != nullptr) focusSyncTimer_->start();
 }
 
 void MainWindow::runSync(bool forceFull, bool announce) {
-  if (!announce && qEnvironmentVariableIsSet("OMACONTACTS_NO_SYNC")) return;
+  if (!announce && qEnvironmentVariableIsSet("CONTACTS_NO_SYNC")) return;
   if (busy_) return;
   if (tokens_.refreshToken.isEmpty() || config_.clientId.isEmpty()) {
     if (announce) toast(QStringLiteral("Connect a Google account first."), true);
@@ -1730,4 +1730,4 @@ void MainWindow::startOAuth() {
   toast(QStringLiteral("Waiting for the browser…"), false);
 }
 
-}  // namespace omacontacts
+}  // namespace contacts

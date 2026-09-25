@@ -11,7 +11,7 @@
 
 class QPixmap;
 
-namespace omacontacts {
+namespace contacts {
 
 enum class EditorField {
   Given,
@@ -79,4 +79,4 @@ struct AccountResult {
 
 std::optional<AccountResult> accountDialog(QWidget* parent, const AppConfig& config, bool connected);
 
-}  // namespace omacontacts
+}  // namespace contacts

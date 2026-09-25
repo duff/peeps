@@ -7,7 +7,7 @@
 #include <QJsonObject>
 #include <QRegularExpression>
 
-namespace omacontacts {
+namespace contacts {
 namespace {
 
 const char* kFields =
@@ -697,4 +697,4 @@ QString deleteContact(HttpClient& http, QString& accessToken, const QString& res
   return {};
 }
 
-}  // namespace omacontacts
+}  // namespace contacts

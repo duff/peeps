@@ -3,7 +3,7 @@
 #include <QList>
 #include <QString>
 
-namespace omacontacts {
+namespace contacts {
 
 enum class Key {
   Up,
@@ -87,4 +87,4 @@ struct BindingHelp {
 
 QList<BindingHelp> bindingHelp();
 
-}  // namespace omacontacts
+}  // namespace contacts

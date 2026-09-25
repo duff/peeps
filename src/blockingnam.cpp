@@ -8,7 +8,7 @@
 #include <QTimer>
 #include <QUrl>
 
-namespace omacontacts {
+namespace contacts {
 
 HttpResponse BlockingNam::request(const QString& method, const QString& url,
                                   const QList<QPair<QString, QString>>& headers, const QByteArray& body) {
@@ -50,4 +50,4 @@ HttpResponse BlockingNam::request(const QString& method, const QString& url,
   return response;
 }
 
-}  // namespace omacontacts
+}  // namespace contacts

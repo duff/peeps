@@ -2,7 +2,7 @@
 
 #include "http.h"
 
-namespace omacontacts {
+namespace contacts {
 
 class BlockingNam final : public HttpClient {
  public:
@@ -10,4 +10,4 @@ class BlockingNam final : public HttpClient {
                        const QByteArray& body) override;
 };
 
-}  // namespace omacontacts
+}  // namespace contacts
