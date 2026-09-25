@@ -67,6 +67,7 @@ class LayoutTests : public QObject {
   void companyWithoutAPersonalName();
   void notesWrapInsteadOfEllipsis();
   void blankPhoneTypeStaysBlank();
+  void copyNamesTheField();
 };
 
 class GuardTests : public QObject {

@@ -1201,6 +1201,79 @@ void LayoutTests::notesWrapInsteadOfEllipsis() {
   else qputenv("XDG_CONFIG_HOME", oldConfig);
 }
 
+void LayoutTests::copyNamesTheField() {
+  QTemporaryDir dir;
+  QVERIFY(dir.isValid());
+  const QByteArray oldData = qgetenv("XDG_DATA_HOME");
+  const QByteArray oldCache = qgetenv("XDG_CACHE_HOME");
+  const QByteArray oldConfig = qgetenv("XDG_CONFIG_HOME");
+  qputenv("XDG_DATA_HOME", dir.filePath(QStringLiteral("data")).toUtf8());
+  qputenv("XDG_CACHE_HOME", dir.filePath(QStringLiteral("cache")).toUtf8());
+  qputenv("XDG_CONFIG_HOME", dir.filePath(QStringLiteral("config")).toUtf8());
+  qputenv("CONTACTS_NO_SYNC", "1");
+
+  contacts::Contact contact = sampleContact(QStringLiteral("people/ada"), QStringLiteral("Ada"), QStringLiteral("Lovelace"),
+                                            QStringLiteral("ada@example.com"), QStringLiteral("+1 555 0100"), QString());
+  contact.birthday.year = 1815;
+  contact.birthday.month = 12;
+  contact.birthday.day = 10;
+  contacts::PostalAddress address;
+  address.label = QStringLiteral("Home");
+  address.type = QStringLiteral("home");
+  address.street = QStringLiteral("1 Main St");
+  contact.addresses.append(address);
+
+  contacts::MainWindow window;
+  window.resize(1000, 700);
+  window.show();
+  QVERIFY(QTest::qWaitForWindowExposed(&window));
+  window.setContacts({contact});
+  QApplication::processEvents();
+  QTest::keyClick(&window, Qt::Key_Return);
+  QApplication::processEvents();
+
+  QListView* fields = nullptr;
+  for (auto* view : window.findChildren<QListView*>()) {
+    if (view->isVisible()) fields = view;
+  }
+  QVERIFY(fields != nullptr);
+  const auto toastText = [&]() {
+    for (auto* label : window.findChildren<QLabel*>()) {
+      if (label->parentWidget() != nullptr && label->parentWidget()->objectName() == QLatin1String("toast")) return label->text();
+    }
+    return QString();
+  };
+  const auto copyLabel = [&](const QString& label) {
+    for (int i = 0; i < fields->model()->rowCount(); ++i) {
+      const QModelIndex index = fields->model()->index(i, 0);
+      if (index.data(Qt::UserRole).toString() != label) continue;
+      fields->setCurrentIndex(index);
+      fields->setFocus();
+      QTest::keyClick(&window, Qt::Key_C, Qt::ControlModifier);
+      QApplication::processEvents();
+      return true;
+    }
+    return false;
+  };
+  QVERIFY(copyLabel(QStringLiteral("Birthday")));
+  QCOMPARE(toastText(), QStringLiteral("Copied birthday"));
+  QVERIFY(copyLabel(QStringLiteral("First name")));
+  QCOMPARE(toastText(), QStringLiteral("Copied first name"));
+  QVERIFY(copyLabel(QStringLiteral("Work")));
+  QCOMPARE(toastText(), QStringLiteral("Copied work email"));
+  QVERIFY(copyLabel(QStringLiteral("Mobile")));
+  QCOMPARE(toastText(), QStringLiteral("Copied mobile phone"));
+  QVERIFY(copyLabel(QStringLiteral("Home")));
+  QCOMPARE(toastText(), QStringLiteral("Copied home address"));
+
+  if (oldData.isNull()) qunsetenv("XDG_DATA_HOME");
+  else qputenv("XDG_DATA_HOME", oldData);
+  if (oldCache.isNull()) qunsetenv("XDG_CACHE_HOME");
+  else qputenv("XDG_CACHE_HOME", oldCache);
+  if (oldConfig.isNull()) qunsetenv("XDG_CONFIG_HOME");
+  else qputenv("XDG_CONFIG_HOME", oldConfig);
+}
+
 void LayoutTests::blankPhoneTypeStaysBlank() {
   QTemporaryDir dir;
   QVERIFY(dir.isValid());

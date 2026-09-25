@@ -989,6 +989,43 @@ void MainWindow::sendSelectedEmail() {
   sendMailTo(index.data(Qt::DisplayRole).toString());
 }
 
+QString copiedNotice(const QModelIndex& index) {
+  QString label = index.data(Qt::UserRole).toString().trimmed();
+  const bool email = index.data(Qt::UserRole + 3).toBool();
+  const QVariant fieldValue = index.data(Qt::UserRole + 4);
+  QString kind;
+  if (email) {
+    kind = QStringLiteral("email");
+  } else if (fieldValue.isValid()) {
+    switch (static_cast<EditorField>(fieldValue.toInt())) {
+      case EditorField::Phone:
+        kind = QStringLiteral("phone");
+        break;
+      case EditorField::Address:
+        kind = QStringLiteral("address");
+        break;
+      case EditorField::Url:
+        kind = QStringLiteral("website");
+        break;
+      default:
+        break;
+    }
+  }
+  bool acronym = false;
+  for (const QChar c : label) {
+    if (!c.isLetter()) continue;
+    if (c.isLower()) {
+      acronym = false;
+      break;
+    }
+    acronym = true;
+  }
+  if (!acronym) label = label.toLower();
+  if (label.isEmpty()) return kind.isEmpty() ? QStringLiteral("Copied") : QStringLiteral("Copied %1").arg(kind);
+  if (!kind.isEmpty() && label.compare(kind, Qt::CaseInsensitive) != 0) return QStringLiteral("Copied %1 %2").arg(label, kind);
+  return QStringLiteral("Copied %1").arg(label);
+}
+
 void MainWindow::copyCurrentField() {
   if (fieldModel_ == nullptr || fieldList_ == nullptr || !fieldList_->currentIndex().isValid()) return;
   const QModelIndex index = fieldList_->currentIndex();
@@ -1008,7 +1045,7 @@ void MainWindow::copyCurrentField() {
   const QString value = index.data(Qt::DisplayRole).toString().trimmed();
   if (value.isEmpty()) return;
   QGuiApplication::clipboard()->setText(value);
-  toast(QStringLiteral("Copied"), false);
+  toast(copiedNotice(index), false);
 }
 
 void MainWindow::sendMailTo(const QString& address) {
@@ -1176,7 +1213,7 @@ void MainWindow::copyEmail() {
     return;
   }
   QGuiApplication::clipboard()->setText(contact->primaryEmail());
-  toast(QStringLiteral("Email copied"), false);
+  toast(QStringLiteral("Copied email"), false);
 }
 
 void MainWindow::copyPhone() {
@@ -1186,7 +1223,7 @@ void MainWindow::copyPhone() {
     return;
   }
   QGuiApplication::clipboard()->setText(contact->primaryPhone());
-  toast(QStringLiteral("Phone copied"), false);
+  toast(QStringLiteral("Copied phone"), false);
 }
 
 void MainWindow::sendMail() {
