@@ -24,6 +24,8 @@ class SearchTests : public QObject {
   Q_OBJECT
  private slots:
   void displayNameAndInitials();
+  void postalAddressBreaksAfterTheStreet();
+  void plainTextSkipsThePhoto();
   void draftValidation();
   void emptyQueryIsAlphabetical();
   void namePrefixOutranksEmail();
@@ -46,6 +48,8 @@ class GoogleTests : public QObject {
   void sizesPhotoUrl();
   void oldCacheRequestsFullSync();
   void roundTripsPerson();
+  void labelTypesRoundTrip();
+  void updatesContactPhoto();
   void fullAndIncrementalSync();
   void retriesOnceAfterUnauthorized();
   void createReadsResource();
@@ -58,6 +62,15 @@ class LayoutTests : public QObject {
   Q_OBJECT
  private slots:
   void enterReplacesTheListWithThatContact();
+  void editOpensOnTheSelectedField();
+  void companyWithoutAPersonalName();
+};
+
+class GuardTests : public QObject {
+  Q_OBJECT
+ private slots:
+  void requestsStayOnHttp1();
+  void secondLaunchRaisesTheFirst();
 };
 
 class ShortcutTests : public QObject {

@@ -29,6 +29,7 @@ enum class Key {
   R,
   S,
   Q,
+  C,
   Comma,
   Other
 };
@@ -47,6 +48,10 @@ enum class Command {
   ClearSearch,
   Back,
   OpenContact,
+  ActivateField,
+  CopyField,
+  CopyContact,
+  SendEmail,
   NewContact,
   EditContact,
   DeleteContact,

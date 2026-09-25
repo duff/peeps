@@ -1,3 +1,4 @@
+#include "instance.h"
 #include "mainwindow.h"
 
 #include <QApplication>
@@ -26,7 +27,10 @@ int main(int argc, char** argv) {
   }
 
   omacontacts::MainWindow window;
-  if (args.contains(QStringLiteral("--self-test"))) {
+  const bool selfTest = args.contains(QStringLiteral("--self-test"));
+  omacontacts::InstanceLock instance(omacontacts::instanceSocketName());
+  if (!selfTest && !instance.claim([&window] { window.present(); })) return 0;
+  if (selfTest) {
     window.resize(980, 680);
     window.show();
     QTimer::singleShot(0, &app, &QCoreApplication::quit);

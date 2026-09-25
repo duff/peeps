@@ -21,7 +21,8 @@ SOURCES += \
     src/store.cpp \
     src/shortcuts.cpp \
     src/mail.cpp \
-    src/photos.cpp
+    src/photos.cpp \
+    src/instance.cpp
 
 HEADERS += \
     src/mainwindow.h \
@@ -37,7 +38,10 @@ HEADERS += \
     src/shortcuts.h \
     src/mail.h \
     src/photos.h \
-    src/http.h
+    src/http.h \
+    src/net.h \
+    src/worker.h \
+    src/instance.h
 
 PREFIX = $$(HOME)/.local
 target.path = $$PREFIX/bin

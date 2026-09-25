@@ -9,10 +9,16 @@
 #include <QSet>
 #include <QString>
 
+#include <optional>
+
 class QNetworkAccessManager;
 class QNetworkReply;
+class QWidget;
 
 namespace omacontacts {
+
+QByteArray photoUploadBytes(const QImage& image);
+std::optional<QByteArray> choosePhotoBytes(QWidget* parent);
 
 // Downloads the original contact photo and keeps those bytes on disk.
 // `logicalSize` is the on-screen size in pixels; the returned pixmap is
@@ -24,6 +30,9 @@ class PhotoStore : public QObject {
 
   void setAccessToken(const QString& token);
   QPixmap imageFor(const QString& resourceName, const QString& url, int logicalSize, qreal devicePixelRatio);
+  QImage originalImage(const QString& resourceName, const QString& url) const;
+  void remember(const QString& resourceName, const QString& url, const QByteArray& bytes);
+  void forget(const QString& resourceName);
 
  signals:
   void updated(const QString& resourceName);

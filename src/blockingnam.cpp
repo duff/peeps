@@ -1,9 +1,10 @@
 #include "blockingnam.h"
 
+#include "net.h"
+
 #include <QEventLoop>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
-#include <QNetworkRequest>
 #include <QTimer>
 #include <QUrl>
 
@@ -14,8 +15,9 @@ HttpResponse BlockingNam::request(const QString& method, const QString& url,
   HttpResponse response;
   response.url = url;
   QNetworkAccessManager network;
+  network.setTransferTimeout(30000);
   QNetworkRequest request{QUrl(url)};
-  request.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("Omacontacts/0.1"));
+  prepareNetworkRequest(request);
   for (const auto& header : headers) {
     request.setRawHeader(header.first.toUtf8(), header.second.toUtf8());
   }

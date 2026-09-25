@@ -24,6 +24,10 @@ int main(int argc, char** argv) {
     status |= QTest::qExec(&tests, argc, argv);
   }
   {
+    GuardTests tests;
+    status |= QTest::qExec(&tests, argc, argv);
+  }
+  {
     ShortcutTests tests;
     status |= QTest::qExec(&tests, argc, argv);
   }

@@ -20,6 +20,7 @@ SOURCES += \
     ../src/dialogs.cpp \
     ../src/photos.cpp \
     ../src/blockingnam.cpp \
+    ../src/instance.cpp \
     ../src/secrets.cpp
 HEADERS += tests.h ../src/mainwindow.h ../src/photos.h
 QMAKE_CXXFLAGS += -Wall -Wextra -Wpedantic

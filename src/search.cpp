@@ -35,7 +35,7 @@ ContactIndex::Entry ContactIndex::makeEntry(Contact contact) {
   QStringList emails;
   for (const auto& email : contact.emails) emails.append(email.value.toCaseFolded());
   entry.emails = emails.join(QLatin1Char(' '));
-  entry.other = (contact.organization + QLatin1Char(' ') + contact.title + QLatin1Char(' ') + contact.notes).toCaseFolded();
+  entry.other = contact.searchText().toCaseFolded();
   for (const auto& phone : contact.phones) entry.digits += digitsOnly(phone.value);
   entry.contact = std::move(contact);
   return entry;

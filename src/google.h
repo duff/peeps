@@ -54,6 +54,9 @@ HttpResponse authorizedRequest(HttpClient& http, QString& accessToken, const Ref
 PeopleResult fetchConnections(HttpClient& http, QString& accessToken, const QString& syncToken, const RefreshFn& refresh);
 WriteResult createContact(HttpClient& http, QString& accessToken, const Contact& draft, const RefreshFn& refresh);
 WriteResult updateContact(HttpClient& http, QString& accessToken, const Contact& contact, const RefreshFn& refresh);
+WriteResult updateContactPhoto(HttpClient& http, QString& accessToken, const QString& resourceName, const QByteArray& jpeg,
+                               const RefreshFn& refresh);
+WriteResult deleteContactPhoto(HttpClient& http, QString& accessToken, const QString& resourceName, const RefreshFn& refresh);
 QString deleteContact(HttpClient& http, QString& accessToken, const QString& resourceName, const RefreshFn& refresh);
 
 }  // namespace omacontacts

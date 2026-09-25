@@ -28,9 +28,11 @@ The refresh token stays in the login keyring. Contacts are cached in `~/.local/s
 | Type | Filter from the search field |
 | Up / Down | Move through matches, including while the search field is focused |
 | `/` | Focus search |
-| Enter | Open the selected contact, replacing the list |
-| Esc | Back to the list, or clear the search |
-| Delete | Delete the selected contact |
+| Enter | Open the selected contact, or copy the selected field |
+| Ctrl+C | Copy the selected field |
+| Ctrl+Shift+C | Copy the whole contact, without the photo |
+| Ctrl+M | Email the selected address |
+| Esc or Backspace | Back to the list, or clear the search |
 | F1 or `?` | Shortcut help |
 | Ctrl+N / Ctrl+E | New contact, edit the selected contact |
 | Ctrl+, | Google account |

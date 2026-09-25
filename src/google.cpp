@@ -10,7 +10,12 @@
 namespace omacontacts {
 namespace {
 
-const char* kFields = "names,emailAddresses,phoneNumbers,organizations,biographies,photos,metadata";
+const char* kFields =
+    "addresses,biographies,birthdays,emailAddresses,events,fileAses,imClients,names,nicknames,occupations,"
+    "organizations,phoneNumbers,photos,relations,sipAddresses,urls,userDefined,metadata";
+const char* kUpdateFields =
+    "addresses,biographies,birthdays,emailAddresses,events,fileAses,imClients,names,nicknames,occupations,"
+    "organizations,phoneNumbers,relations,sipAddresses,urls,userDefined";
 
 QString jsonString(const QJsonObject& object, const char* key) { return object.value(QLatin1String(key)).toString(); }
 
@@ -33,7 +38,7 @@ QJsonObject primaryObject(const QJsonArray& array) {
   return first;
 }
 
-QList<LabeledValue> readLabeled(const QJsonObject& person, const char* key) {
+QList<LabeledValue> readLabeled(const QJsonObject& person, const char* key, LabelField field) {
   QList<LabeledValue> primary;
   QList<LabeledValue> rest;
   const QJsonArray array = person.value(QLatin1String(key)).toArray();
@@ -42,8 +47,18 @@ QList<LabeledValue> readLabeled(const QJsonObject& person, const char* key) {
     const QJsonObject object = value.toObject();
     LabeledValue labeled;
     labeled.value = jsonString(object, "value");
+    labeled.type = jsonString(object, "type");
     labeled.label = jsonString(object, "formattedType");
-    if (labeled.label.isEmpty()) labeled.label = jsonString(object, "type");
+    if (labeled.type == QLatin1String("custom") && !labeled.label.isEmpty()) {
+      const ResolvedLabel resolved = resolveLabel(field, labeled.label);
+      labeled.type = resolved.type;
+    } else if (labeled.type.isEmpty() && !labeled.label.isEmpty()) {
+      labeled.type = resolveLabel(field, labeled.label).type;
+    } else if (!labeled.type.isEmpty()) {
+      labeled.type = resolveLabel(field, labeled.type).type;
+    }
+    if (labeled.type.isEmpty()) labeled.type = QStringLiteral("other");
+    if (labeled.label.isEmpty()) labeled.label = labelDisplay(field, labeled);
     if (labeled.value.isEmpty()) continue;
     if (isPrimary(object)) primary.append(labeled);
     else rest.append(labeled);
@@ -54,20 +69,177 @@ QList<LabeledValue> readLabeled(const QJsonObject& person, const char* key) {
 
 QString choosePhotoUrl(const QJsonArray& photos);
 
+DateValue readDate(const QJsonObject& object) {
+  DateValue date;
+  const QJsonObject parts = object.value(QLatin1String("date")).toObject();
+  date.year = parts.value(QLatin1String("year")).toInt();
+  date.month = parts.value(QLatin1String("month")).toInt();
+  date.day = parts.value(QLatin1String("day")).toInt();
+  date.text = jsonString(object, "text");
+  return date;
+}
+
+QJsonObject writeDate(const DateValue& date) {
+  QJsonObject object;
+  if (date.year > 0 || date.month > 0 || date.day > 0) {
+    QJsonObject parts;
+    if (date.year > 0) parts.insert(QStringLiteral("year"), date.year);
+    if (date.month > 0) parts.insert(QStringLiteral("month"), date.month);
+    if (date.day > 0) parts.insert(QStringLiteral("day"), date.day);
+    object.insert(QStringLiteral("date"), parts);
+  }
+  if (!date.text.trimmed().isEmpty() && (date.year <= 0 && date.month <= 0 && date.day <= 0)) {
+    object.insert(QStringLiteral("text"), date.text.trimmed());
+  }
+  return object;
+}
+
+QList<PostalAddress> readAddresses(const QJsonObject& person) {
+  QList<PostalAddress> primary;
+  QList<PostalAddress> rest;
+  for (const QJsonValue& value : person.value(QLatin1String("addresses")).toArray()) {
+    if (!value.isObject()) continue;
+    const QJsonObject object = value.toObject();
+    PostalAddress address;
+    address.street = jsonString(object, "streetAddress");
+    address.extended = jsonString(object, "extendedAddress");
+    address.poBox = jsonString(object, "poBox");
+    address.city = jsonString(object, "city");
+    address.region = jsonString(object, "region");
+    address.postalCode = jsonString(object, "postalCode");
+    address.country = jsonString(object, "country");
+    address.formatted = jsonString(object, "formattedValue");
+    address.type = jsonString(object, "type");
+    address.label = jsonString(object, "formattedType");
+    if (address.type == QLatin1String("custom") && !address.label.isEmpty()) address.type = address.label;
+    if (address.type.isEmpty()) address.type = QStringLiteral("other");
+    if (address.label.isEmpty()) address.label = address.type;
+    if (address.isEmpty()) continue;
+    if (isPrimary(object)) primary.append(address);
+    else rest.append(address);
+  }
+  primary.append(rest);
+  return primary;
+}
+
+QList<DatedEvent> readEvents(const QJsonObject& person) {
+  QList<DatedEvent> events;
+  for (const QJsonValue& value : person.value(QLatin1String("events")).toArray()) {
+    if (!value.isObject()) continue;
+    const QJsonObject object = value.toObject();
+    DatedEvent event;
+    event.date = readDate(object);
+    event.type = jsonString(object, "type");
+    event.label = jsonString(object, "formattedType");
+    if (event.type.isEmpty()) event.type = QStringLiteral("other");
+    if (event.label.isEmpty()) event.label = event.type;
+    if (!event.isEmpty()) events.append(event);
+  }
+  return events;
+}
+
+QList<ImClient> readIms(const QJsonObject& person) {
+  QList<ImClient> ims;
+  for (const QJsonValue& value : person.value(QLatin1String("imClients")).toArray()) {
+    if (!value.isObject()) continue;
+    const QJsonObject object = value.toObject();
+    ImClient im;
+    im.username = jsonString(object, "username");
+    im.protocol = jsonString(object, "protocol");
+    im.type = jsonString(object, "type");
+    im.label = jsonString(object, "formattedProtocol");
+    if (im.label.isEmpty()) im.label = jsonString(object, "formattedType");
+    if (!im.isEmpty()) ims.append(im);
+  }
+  return ims;
+}
+
+QList<LabeledValue> readRelations(const QJsonObject& person) {
+  QList<LabeledValue> relations;
+  for (const QJsonValue& value : person.value(QLatin1String("relations")).toArray()) {
+    if (!value.isObject()) continue;
+    const QJsonObject object = value.toObject();
+    LabeledValue relation;
+    relation.value = jsonString(object, "person");
+    relation.type = jsonString(object, "type");
+    relation.label = jsonString(object, "formattedType");
+    if (relation.type.isEmpty()) relation.type = QStringLiteral("other");
+    if (relation.label.isEmpty()) relation.label = relation.type;
+    if (!relation.value.isEmpty()) relations.append(relation);
+  }
+  return relations;
+}
+
+QList<LabeledValue> readCustoms(const QJsonObject& person) {
+  QList<LabeledValue> customs;
+  for (const QJsonValue& value : person.value(QLatin1String("userDefined")).toArray()) {
+    if (!value.isObject()) continue;
+    const QJsonObject object = value.toObject();
+    LabeledValue custom;
+    custom.label = jsonString(object, "key");
+    custom.value = jsonString(object, "value");
+    if (custom.label.isEmpty() && custom.value.isEmpty()) continue;
+    customs.append(custom);
+  }
+  return customs;
+}
+
+void readOrganizations(Contact& contact, const QJsonObject& person) {
+  QList<Organization> primary;
+  QList<Organization> rest;
+  for (const QJsonValue& value : person.value(QLatin1String("organizations")).toArray()) {
+    if (!value.isObject()) continue;
+    const QJsonObject object = value.toObject();
+    Organization org;
+    org.name = jsonString(object, "name");
+    org.title = jsonString(object, "title");
+    org.department = jsonString(object, "department");
+    if (org.isEmpty()) continue;
+    if (isPrimary(object)) primary.append(org);
+    else rest.append(org);
+  }
+  primary.append(rest);
+  if (primary.isEmpty()) return;
+  contact.organization = primary.first().name;
+  contact.title = primary.first().title;
+  contact.department = primary.first().department;
+  primary.removeFirst();
+  contact.otherOrganizations = primary;
+}
+
 Contact personFromObject(const QJsonObject& object) {
   Contact contact;
   contact.resourceName = jsonString(object, "resourceName");
   contact.etag = jsonString(object, "etag");
   const QJsonObject name = primaryObject(object.value(QLatin1String("names")).toArray());
+  contact.prefix = jsonString(name, "honorificPrefix");
   contact.givenName = jsonString(name, "givenName");
+  contact.middleName = jsonString(name, "middleName");
   contact.familyName = jsonString(name, "familyName");
-  contact.emails = readLabeled(object, "emailAddresses");
-  contact.phones = readLabeled(object, "phoneNumbers");
-  const QJsonObject org = primaryObject(object.value(QLatin1String("organizations")).toArray());
-  contact.organization = jsonString(org, "name");
-  contact.title = jsonString(org, "title");
+  contact.suffix = jsonString(name, "honorificSuffix");
+  contact.phoneticGiven = jsonString(name, "phoneticGivenName");
+  contact.phoneticMiddle = jsonString(name, "phoneticMiddleName");
+  contact.phoneticFamily = jsonString(name, "phoneticFamilyName");
+  const QJsonObject nickname = primaryObject(object.value(QLatin1String("nicknames")).toArray());
+  contact.nickname = jsonString(nickname, "value");
+  const QJsonObject fileAs = primaryObject(object.value(QLatin1String("fileAses")).toArray());
+  contact.fileAs = jsonString(fileAs, "value");
+  const QJsonObject occupation = primaryObject(object.value(QLatin1String("occupations")).toArray());
+  contact.occupation = jsonString(occupation, "value");
+  contact.emails = readLabeled(object, "emailAddresses", LabelField::Email);
+  contact.phones = readLabeled(object, "phoneNumbers", LabelField::Phone);
+  contact.urls = readLabeled(object, "urls", LabelField::Other);
+  contact.sips = readLabeled(object, "sipAddresses", LabelField::Other);
+  readOrganizations(contact, object);
   const QJsonObject bio = primaryObject(object.value(QLatin1String("biographies")).toArray());
   contact.notes = jsonString(bio, "value");
+  const QJsonObject birthday = primaryObject(object.value(QLatin1String("birthdays")).toArray());
+  contact.birthday = readDate(birthday);
+  contact.addresses = readAddresses(object);
+  contact.relations = readRelations(object);
+  contact.events = readEvents(object);
+  contact.ims = readIms(object);
+  contact.customs = readCustoms(object);
   contact.photoUrl = choosePhotoUrl(object.value(QLatin1String("photos")).toArray());
   return contact;
 }
@@ -90,17 +262,13 @@ bool personDeleted(const QJsonObject& object) {
   return object.value(QLatin1String("metadata")).toObject().value(QLatin1String("deleted")).toBool();
 }
 
-QJsonArray labeledArray(const QList<LabeledValue>& values) {
+QJsonArray labeledArray(const QList<LabeledValue>& values, LabelField field) {
   QJsonArray array;
   for (const auto& value : values) {
     QJsonObject object;
     object.insert(QStringLiteral("value"), value.value);
-    const QString label = value.label.isEmpty() ? QStringLiteral("other") : value.label;
-    const bool standard = label == QLatin1String("home") || label == QLatin1String("work") ||
-                          label == QLatin1String("other") || label == QLatin1String("mobile") ||
-                          label == QLatin1String("main");
-    object.insert(QStringLiteral("type"), standard ? label : QStringLiteral("custom"));
-    if (!standard) object.insert(QStringLiteral("formattedType"), label);
+    const QString type = value.type.isEmpty() ? resolveLabel(field, value.label).type : resolveLabel(field, value.type).type;
+    object.insert(QStringLiteral("type"), type);
     array.append(object);
   }
   return array;
@@ -163,27 +331,133 @@ std::optional<Contact> parsePersonJson(const QByteArray& json) {
   return contact;
 }
 
+void insertIfSet(QJsonObject& object, const char* key, const QString& value) {
+  if (!value.isEmpty()) object.insert(QLatin1String(key), value);
+}
+
+QJsonArray organizationArray(const Contact& contact) {
+  QJsonArray orgs;
+  auto append = [&](const QString& name, const QString& title, const QString& department) {
+    if (name.isEmpty() && title.isEmpty() && department.isEmpty()) return;
+    QJsonObject org;
+    org.insert(QStringLiteral("name"), name);
+    org.insert(QStringLiteral("title"), title);
+    org.insert(QStringLiteral("department"), department);
+    orgs.append(org);
+  };
+  append(contact.organization, contact.title, contact.department);
+  for (const auto& org : contact.otherOrganizations) append(org.name, org.title, org.department);
+  return orgs;
+}
+
+QJsonArray addressArray(const QList<PostalAddress>& addresses) {
+  QJsonArray array;
+  for (const auto& address : addresses) {
+    if (address.isEmpty()) continue;
+    QJsonObject object;
+    object.insert(QStringLiteral("streetAddress"), address.street);
+    object.insert(QStringLiteral("extendedAddress"), address.extended);
+    object.insert(QStringLiteral("poBox"), address.poBox);
+    object.insert(QStringLiteral("city"), address.city);
+    object.insert(QStringLiteral("region"), address.region);
+    object.insert(QStringLiteral("postalCode"), address.postalCode);
+    object.insert(QStringLiteral("country"), address.country);
+    const QString type = address.type.isEmpty() ? QStringLiteral("other") : address.type;
+    object.insert(QStringLiteral("type"), type);
+    array.append(object);
+  }
+  return array;
+}
+
+QJsonArray eventArray(const QList<DatedEvent>& events) {
+  QJsonArray array;
+  for (const auto& event : events) {
+    if (event.isEmpty()) continue;
+    QJsonObject object = writeDate(event.date);
+    object.insert(QStringLiteral("type"), event.type.isEmpty() ? QStringLiteral("other") : event.type);
+    array.append(object);
+  }
+  return array;
+}
+
+QJsonArray relationArray(const QList<LabeledValue>& relations) {
+  QJsonArray array;
+  for (const auto& relation : relations) {
+    if (relation.value.isEmpty()) continue;
+    QJsonObject object;
+    object.insert(QStringLiteral("person"), relation.value);
+    object.insert(QStringLiteral("type"), relation.type.isEmpty() ? QStringLiteral("other") : relation.type);
+    array.append(object);
+  }
+  return array;
+}
+
+QJsonArray imArray(const QList<ImClient>& ims) {
+  QJsonArray array;
+  for (const auto& im : ims) {
+    if (im.isEmpty()) continue;
+    QJsonObject object;
+    object.insert(QStringLiteral("username"), im.username);
+    object.insert(QStringLiteral("protocol"), im.protocol.isEmpty() ? QStringLiteral("other") : im.protocol);
+    if (!im.type.isEmpty()) object.insert(QStringLiteral("type"), im.type);
+    array.append(object);
+  }
+  return array;
+}
+
+QJsonArray customArray(const QList<LabeledValue>& customs) {
+  QJsonArray array;
+  for (const auto& custom : customs) {
+    if (custom.label.isEmpty() && custom.value.isEmpty()) continue;
+    QJsonObject object;
+    object.insert(QStringLiteral("key"), custom.label);
+    object.insert(QStringLiteral("value"), custom.value);
+    array.append(object);
+  }
+  return array;
+}
+
 QByteArray personJson(const Contact& contact) {
   QJsonObject root;
   if (!contact.etag.isEmpty()) root.insert(QStringLiteral("etag"), contact.etag);
   QString given = contact.givenName;
   QString family = contact.familyName;
-  if (given.isEmpty() && family.isEmpty()) given = contact.displayName();
+  if (given.isEmpty() && family.isEmpty() && contact.prefix.isEmpty() && contact.middleName.isEmpty() && contact.suffix.isEmpty()) {
+    given = contact.displayName();
+  }
   QJsonObject name;
   name.insert(QStringLiteral("givenName"), given);
   name.insert(QStringLiteral("familyName"), family);
+  insertIfSet(name, "honorificPrefix", contact.prefix);
+  insertIfSet(name, "middleName", contact.middleName);
+  insertIfSet(name, "honorificSuffix", contact.suffix);
+  insertIfSet(name, "phoneticGivenName", contact.phoneticGiven);
+  insertIfSet(name, "phoneticMiddleName", contact.phoneticMiddle);
+  insertIfSet(name, "phoneticFamilyName", contact.phoneticFamily);
   name.insert(QStringLiteral("displayName"), contact.displayName());
   root.insert(QStringLiteral("names"), QJsonArray{name});
-  root.insert(QStringLiteral("emailAddresses"), labeledArray(contact.emails));
-  root.insert(QStringLiteral("phoneNumbers"), labeledArray(contact.phones));
-  QJsonArray orgs;
-  if (!contact.organization.isEmpty() || !contact.title.isEmpty()) {
-    QJsonObject org;
-    org.insert(QStringLiteral("name"), contact.organization);
-    org.insert(QStringLiteral("title"), contact.title);
-    orgs.append(org);
-  }
-  root.insert(QStringLiteral("organizations"), orgs);
+  QJsonArray nicknames;
+  if (!contact.nickname.isEmpty()) nicknames.append(QJsonObject{{QStringLiteral("value"), contact.nickname}});
+  root.insert(QStringLiteral("nicknames"), nicknames);
+  QJsonArray fileAses;
+  if (!contact.fileAs.isEmpty()) fileAses.append(QJsonObject{{QStringLiteral("value"), contact.fileAs}});
+  root.insert(QStringLiteral("fileAses"), fileAses);
+  QJsonArray occupations;
+  if (!contact.occupation.isEmpty()) occupations.append(QJsonObject{{QStringLiteral("value"), contact.occupation}});
+  root.insert(QStringLiteral("occupations"), occupations);
+  root.insert(QStringLiteral("emailAddresses"), labeledArray(contact.emails, LabelField::Email));
+  root.insert(QStringLiteral("phoneNumbers"), labeledArray(contact.phones, LabelField::Phone));
+  root.insert(QStringLiteral("urls"), labeledArray(contact.urls, LabelField::Other));
+  root.insert(QStringLiteral("sipAddresses"), labeledArray(contact.sips, LabelField::Other));
+  root.insert(QStringLiteral("organizations"), organizationArray(contact));
+  root.insert(QStringLiteral("addresses"), addressArray(contact.addresses));
+  root.insert(QStringLiteral("relations"), relationArray(contact.relations));
+  root.insert(QStringLiteral("events"), eventArray(contact.events));
+  root.insert(QStringLiteral("imClients"), imArray(contact.ims));
+  root.insert(QStringLiteral("userDefined"), customArray(contact.customs));
+  QJsonArray birthdays;
+  if (!contact.birthday.isEmpty()) birthdays.append(writeDate(contact.birthday));
+  root.insert(QStringLiteral("birthdays"), birthdays);
   QJsonArray bios;
   if (!contact.notes.isEmpty()) {
     QJsonObject bio;
@@ -315,9 +589,8 @@ WriteResult updateContact(HttpClient& http, QString& accessToken, const Contact&
     result.error = QStringLiteral("This contact has no Google id.");
     return result;
   }
-  const QString url = QStringLiteral("https://people.googleapis.com/v1/%1:updateContact?updatePersonFields=names,"
-                                     "emailAddresses,phoneNumbers,organizations,biographies")
-                          .arg(contact.resourceName);
+  const QString url = QStringLiteral("https://people.googleapis.com/v1/%1:updateContact?updatePersonFields=%2")
+                          .arg(contact.resourceName, QLatin1String(kUpdateFields));
   const HttpResponse response = authorizedRequest(http, accessToken, refresh, QStringLiteral("PATCH"), url, personJson(contact));
   if (response.status == 0) {
     result.error = response.error.isEmpty() ? QStringLiteral("Could not reach Google Contacts.") : response.error;
@@ -333,6 +606,63 @@ WriteResult updateContact(HttpClient& http, QString& accessToken, const Contact&
     return result;
   }
   result.contact = *parsed;
+  return result;
+}
+
+WriteResult photoResult(const HttpResponse& response) {
+  WriteResult result;
+  if (response.status == 0) {
+    result.error = response.error.isEmpty() ? QStringLiteral("Could not reach Google Contacts.") : response.error;
+    return result;
+  }
+  if (response.status >= 400) {
+    result.error = googleErrorMessage(response.body, response.status);
+    return result;
+  }
+  const QJsonDocument document = QJsonDocument::fromJson(response.body);
+  if (!document.isObject()) {
+    result.error = QStringLiteral("Google did not return the contact photo.");
+    return result;
+  }
+  const QJsonObject person = document.object().value(QLatin1String("person")).toObject();
+  if (person.isEmpty()) {
+    result.error = QStringLiteral("Google did not return the contact photo.");
+    return result;
+  }
+  result.contact = personFromObject(person);
+  if (result.contact.resourceName.isEmpty()) result.error = QStringLiteral("Google did not return the contact photo.");
+  return result;
+}
+
+WriteResult updateContactPhoto(HttpClient& http, QString& accessToken, const QString& resourceName, const QByteArray& jpeg,
+                               const RefreshFn& refresh) {
+  WriteResult result;
+  if (resourceName.isEmpty()) {
+    result.error = QStringLiteral("This contact has no Google id.");
+    return result;
+  }
+  if (jpeg.isEmpty()) {
+    result.error = QStringLiteral("Choose a photo first.");
+    return result;
+  }
+  QJsonObject body;
+  body.insert(QStringLiteral("photoBytes"), QString::fromLatin1(jpeg.toBase64()));
+  body.insert(QStringLiteral("personFields"), QStringLiteral("photos,metadata"));
+  const QString url = QStringLiteral("https://people.googleapis.com/v1/%1:updateContactPhoto").arg(resourceName);
+  return photoResult(authorizedRequest(http, accessToken, refresh, QStringLiteral("PATCH"), url,
+                                       QJsonDocument(body).toJson(QJsonDocument::Compact)));
+}
+
+WriteResult deleteContactPhoto(HttpClient& http, QString& accessToken, const QString& resourceName, const RefreshFn& refresh) {
+  if (resourceName.isEmpty()) {
+    WriteResult result;
+    result.error = QStringLiteral("This contact has no Google id.");
+    return result;
+  }
+  const QString url = QStringLiteral("https://people.googleapis.com/v1/%1:deleteContactPhoto?personFields=photos,metadata")
+                          .arg(resourceName);
+  WriteResult result = photoResult(authorizedRequest(http, accessToken, refresh, QStringLiteral("DELETE"), url, {}));
+  if (result.ok()) result.contact.photoUrl.clear();
   return result;
 }
 

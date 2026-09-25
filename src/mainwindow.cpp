@@ -5,6 +5,7 @@
 #include "google.h"
 #include "mail.h"
 #include "photos.h"
+#include "worker.h"
 
 #include <QAction>
 #include <QApplication>
@@ -26,19 +27,19 @@
 #include <QPainter>
 #include <QProcess>
 #include <QPushButton>
-#include <QScrollArea>
 #include <QScrollBar>
+#include <QStandardItemModel>
 #include <QStandardPaths>
 #include <QPlainTextEdit>
 #include <QStyledItemDelegate>
 #include <QTextEdit>
 #include <QTcpServer>
 #include <QTcpSocket>
-#include <QThreadPool>
 #include <QTimer>
 #include <QVBoxLayout>
 
 #include <algorithm>
+#include <optional>
 
 namespace omacontacts {
 
@@ -82,12 +83,13 @@ class ContactDelegate : public QStyledItemDelegate {
  public:
   Palette palette;
   PhotoStore* photos = nullptr;
+  bool suppressHover = false;
 
   void paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const override {
     painter->save();
     if (option.state & QStyle::State_Selected) {
       painter->fillRect(option.rect, QColor(palette.foreground.red(), palette.foreground.green(), palette.foreground.blue(), 46));
-    } else if (option.state & QStyle::State_MouseOver) {
+    } else if (!suppressHover && (option.state & QStyle::State_MouseOver)) {
       painter->fillRect(option.rect, QColor(palette.foreground.red(), palette.foreground.green(), palette.foreground.blue(), 20));
     }
     const QString name = index.data(Qt::DisplayRole).toString();
@@ -112,6 +114,93 @@ class ContactDelegate : public QStyledItemDelegate {
   }
 
   QSize sizeHint(const QStyleOptionViewItem&, const QModelIndex&) const override { return QSize(0, 28); }
+};
+
+enum class FieldAction { Copy, CopyPhoto, Edit, DeleteContact, CopyContact, ChangePhoto, RemovePhoto };
+
+class FieldDelegate : public QStyledItemDelegate {
+ public:
+  Palette palette;
+
+  void paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const override {
+    painter->save();
+    const auto actionKind = static_cast<FieldAction>(index.data(Qt::UserRole + 2).toInt());
+    const bool photoRow = actionKind == FieldAction::CopyPhoto;
+    const bool selected = option.state & QStyle::State_Selected;
+    const bool hover = option.state & QStyle::State_MouseOver;
+    if (!photoRow && selected) {
+      painter->fillRect(option.rect, QColor(palette.foreground.red(), palette.foreground.green(), palette.foreground.blue(), 46));
+    } else if (!photoRow && hover) {
+      painter->fillRect(option.rect, QColor(palette.foreground.red(), palette.foreground.green(), palette.foreground.blue(), 20));
+    }
+    const QString label = index.data(Qt::UserRole).toString();
+    const QString value = index.data(Qt::DisplayRole).toString();
+    const QString action = index.data(Qt::UserRole + 1).toString();
+    const bool danger = index.data(Qt::UserRole + 2).toInt() == static_cast<int>(FieldAction::DeleteContact);
+    const QPixmap photo = index.data(Qt::DecorationRole).value<QPixmap>();
+    const QRect rect = option.rect.adjusted(8, 0, -8, 0);
+    if (photoRow) {
+      if (!photo.isNull()) {
+        const int maxEdge = std::min(160, rect.width());
+        QSize logical = photo.deviceIndependentSize().toSize();
+        logical.scale(maxEdge, maxEdge, Qt::KeepAspectRatio);
+        const QRect target(rect.center().x() - logical.width() / 2, rect.center().y() - logical.height() / 2, logical.width(),
+                           logical.height());
+        painter->drawPixmap(target, photo);
+        if (selected || hover) {
+          QPen pen(palette.foreground);
+          pen.setWidth(selected ? 2 : 1);
+          painter->setPen(pen);
+          painter->setBrush(Qt::NoBrush);
+          painter->drawRect(target.adjusted(-4, -4, 3, 3));
+        }
+      }
+      painter->restore();
+      return;
+    }
+    QFont font = option.font;
+    font.setPixelSize(12);
+    painter->setFont(font);
+    const QFontMetrics metrics(font);
+    const QStringList lines = value.split(QLatin1Char('\n'));
+    const int lineHeight = std::max(1, metrics.lineSpacing());
+    const int pad = std::max(0, (28 - lineHeight) / 2);
+    const bool several = lines.size() > 1;
+    const int textTop = several ? rect.top() + pad : rect.top();
+    const int textHeight = several ? lineHeight : rect.height();
+    const int actionWidth = action.isEmpty() ? 0 : metrics.horizontalAdvance(action) + 16;
+    const int labelWidth =
+        label.isEmpty() ? 0 : std::min(rect.width() / 3, metrics.horizontalAdvance(QStringLiteral("Phonetic first name")) + 16);
+    painter->setPen(palette.secondary);
+    if (!label.isEmpty()) {
+      painter->drawText(QRect(rect.left(), textTop, labelWidth, textHeight), Qt::AlignVCenter | Qt::AlignLeft,
+                        metrics.elidedText(label, Qt::ElideRight, labelWidth));
+    }
+    int valueLeft = rect.left() + labelWidth;
+    int valueWidth = std::max(0, rect.width() - labelWidth - actionWidth);
+    painter->setPen(danger ? palette.danger : palette.foreground);
+    for (int i = 0; i < lines.size(); ++i) {
+      painter->drawText(QRect(valueLeft, textTop + i * (several ? lineHeight : 0), valueWidth, textHeight),
+                        Qt::AlignVCenter | Qt::AlignLeft, metrics.elidedText(lines.at(i), Qt::ElideRight, valueWidth));
+    }
+    if (!action.isEmpty()) {
+      painter->setPen(danger ? palette.danger : palette.secondary);
+      painter->drawText(QRect(rect.right() - actionWidth + 16, textTop, actionWidth - 16, textHeight),
+                        Qt::AlignVCenter | Qt::AlignRight, action);
+    }
+    painter->restore();
+  }
+
+  QSize sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const override {
+    if (static_cast<FieldAction>(index.data(Qt::UserRole + 2).toInt()) == FieldAction::CopyPhoto) return QSize(0, 176);
+    const int lines = std::max(1, static_cast<int>(index.data(Qt::DisplayRole).toString().count(QLatin1Char('\n'))) + 1);
+    if (lines <= 1) return QSize(0, 28);
+    QFont font = option.font;
+    font.setPixelSize(12);
+    const int lineHeight = std::max(1, QFontMetrics(font).lineSpacing());
+    const int pad = std::max(0, (28 - lineHeight) / 2);
+    return QSize(0, pad + lines * lineHeight + pad);
+  }
 };
 
 namespace {
@@ -182,6 +271,8 @@ Key mapKey(int key) {
       return Key::S;
     case Qt::Key_Q:
       return Key::Q;
+    case Qt::Key_C:
+      return Key::C;
     case Qt::Key_Comma:
       return Key::Comma;
     default:
@@ -207,29 +298,7 @@ void clearLayout(QLayout* layout) {
   }
 }
 
-void showLayout(QLayout* layout) {
-  if (layout == nullptr) return;
-  for (int i = 0; i < layout->count(); ++i) {
-    QLayoutItem* item = layout->itemAt(i);
-    if (item == nullptr) continue;
-    if (QWidget* widget = item->widget()) widget->show();
-    if (QLayout* child = item->layout()) showLayout(child);
-  }
-}
-
 qint64 nowUnix() { return QDateTime::currentSecsSinceEpoch(); }
-
-int photoEdgeFor(const QWidget* detail, int windowWidth) {
-  const int detailWidth = detail != nullptr && detail->width() > 1 ? detail->width() : std::max(1, windowWidth / 2);
-  return std::clamp(detailWidth / 5, 128, 200);
-}
-
-void reserveWrappedHeight(QLabel* label, int width) {
-  const int textWidth = std::max(1, width);
-  const QRect bounds = label->fontMetrics().boundingRect(QRect(0, 0, textWidth, 10000),
-                                                        Qt::AlignLeft | Qt::TextWordWrap, label->text());
-  label->setMinimumHeight(std::max(label->fontMetrics().height(), bounds.height()));
-}
 
 }  // namespace
 
@@ -244,7 +313,10 @@ MainWindow::MainWindow() : secrets_(makeSecretStore()) {
   photos_ = new PhotoStore(paths_.photoDir, this);
   connect(photos_, &PhotoStore::updated, this, [this](const QString& id) {
     if (list_) list_->viewport()->update();
-    if (detailOpen_ && selected() && selected()->resourceName == id) renderDetail();
+    if (detailOpen_ && !editing_ && selected() && selected()->resourceName == id) renderDetail();
+    if (editing_ && editor_ != nullptr && selected() && selected()->resourceName == id && photos_ != nullptr) {
+      editor_->setPreview(photos_->imageFor(id, selected()->photoUrl, 160, devicePixelRatioF()));
+    }
   });
   buildUi();
   loadLocal();
@@ -321,24 +393,37 @@ void MainWindow::buildUi() {
   rule_->hide();
 
   detailPane_ = new QWidget;
-  detailPane_->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Minimum);
+  detailPane_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
   detailLayout_ = new QVBoxLayout(detailPane_);
   detailLayout_->setContentsMargins(0, 0, 0, 0);
   detailLayout_->setSpacing(8);
+  headerPane_ = new QWidget;
+  headerPane_->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Maximum);
+  headerLayout_ = new QVBoxLayout(headerPane_);
+  headerLayout_->setContentsMargins(0, 0, 0, 0);
+  headerLayout_->setSpacing(8);
+  fieldModel_ = new QStandardItemModel(this);
+  fieldDelegate_ = new FieldDelegate;
+  fieldList_ = new QuietListView;
+  fieldList_->setModel(fieldModel_);
+  fieldList_->setItemDelegate(fieldDelegate_);
+  fieldList_->setUniformItemSizes(false);
+  fieldList_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+  fieldList_->setSelectionMode(QAbstractItemView::SingleSelection);
+  fieldList_->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
+  fieldList_->setMouseTracking(true);
+  fieldList_->viewport()->setMouseTracking(true);
+  fieldList_->setMinimumWidth(0);
+  fieldList_->setMinimumHeight(0);
+  fieldList_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+  detailLayout_->addWidget(headerPane_);
+  detailLayout_->addWidget(fieldList_, 1);
   listPane_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
   listPane_->setMinimumHeight(0);
-
-  detailScroll_ = new QScrollArea;
-  detailScroll_->setWidgetResizable(true);
-  detailScroll_->setFrameShape(QFrame::NoFrame);
-  detailScroll_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-  detailScroll_->setWidget(detailPane_);
-  detailScroll_->setFocusPolicy(Qt::StrongFocus);
-  detailScroll_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-  detailScroll_->hide();
+  detailPane_->hide();
 
   splitLayout_->addWidget(listPane_, 1);
-  splitLayout_->addWidget(detailScroll_, 1);
+  splitLayout_->addWidget(detailPane_, 1);
   root->addLayout(splitLayout_, 1);
 
   auto* footer = new QHBoxLayout;
@@ -363,6 +448,12 @@ void MainWindow::buildUi() {
 
   setCentralWidget(central);
 
+  focusSyncTimer_ = new QTimer(this);
+  focusSyncTimer_->setInterval(5 * 60 * 1000);
+  connect(focusSyncTimer_, &QTimer::timeout, this, [this] {
+    if (isActiveWindow()) runSync(false, false);
+  });
+
   connect(search_, &QLineEdit::textChanged, this, [this] {
     if (detailOpen_) closeDetail();
     refilter();
@@ -371,6 +462,7 @@ void MainWindow::buildUi() {
     if (detailOpen_) renderDetail();
   });
   connect(list_, &QListView::activated, this, [this] { openSelected(); });
+  connect(fieldList_, &QListView::activated, this, [this] { activateField(); });
   connect(menuButton_, &QPushButton::clicked, this, [this] {
     const QSize menuSize = menu_->sizeHint();
     const QPoint pos = menuButton_->mapToGlobal(QPoint(menuButton_->width() - menuSize.width(), menuButton_->height()));
@@ -421,15 +513,7 @@ void MainWindow::showEvent(QShowEvent* event) {
   }
 }
 
-void MainWindow::resizeEvent(QResizeEvent* event) {
-  QMainWindow::resizeEvent(event);
-  if (renderingDetail_ || !detailOpen_) return;
-  const int edge = photoEdgeFor(detailPane_, width());
-  if (edge != photoEdge_) {
-    photoEdge_ = edge;
-    renderDetail();
-  }
-}
+void MainWindow::resizeEvent(QResizeEvent* event) { QMainWindow::resizeEvent(event); }
 
 void MainWindow::closeEvent(QCloseEvent* event) {
   closing_ = true;
@@ -442,7 +526,16 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event) {
     toastFrame_->hide();
     return true;
   }
-  if (watched == search_ && event->type() == QEvent::FocusIn && detailOpen_) {
+  if (event->type() == QEvent::KeyPress && delegate_ != nullptr && list_ != nullptr && list_->isVisible()) {
+    delegate_->suppressHover = true;
+    list_->viewport()->update();
+  }
+  if (event->type() == QEvent::MouseMove && list_ != nullptr && watched == list_->viewport() && delegate_ != nullptr &&
+      delegate_->suppressHover) {
+    delegate_->suppressHover = false;
+    list_->viewport()->update();
+  }
+  if (watched == search_ && event->type() == QEvent::FocusIn && detailOpen_ && !editing_) {
     closeDetail();
     return false;
   }
@@ -464,9 +557,21 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event) {
   mapped.textInput = qobject_cast<QLineEdit*>(focus) || qobject_cast<QTextEdit*>(focus) || qobject_cast<QPlainTextEdit*>(focus);
   mapped.searchEmpty = search_->text().isEmpty();
   mapped.detailOpen = detailOpen_;
-  mapped.surface = Surface::Browser;
+  mapped.surface = editing_ ? Surface::Editor : Surface::Browser;
   const Command command = routeKey(mapped);
   if (command == Command::Ignore) return QMainWindow::eventFilter(watched, event);
+  if (editing_ && command == Command::Cancel) {
+    if (QWidget* popup = QApplication::activePopupWidget()) {
+      popup->close();
+      return true;
+    }
+    closeEditor();
+    return true;
+  }
+  if (editing_ && command == Command::Save) {
+    commitEditor();
+    return true;
+  }
   handleCommand(command);
   return true;
 }
@@ -475,6 +580,7 @@ void MainWindow::applyPalette(const Palette& palette) {
   palette_ = palette;
   havePalette_ = true;
   if (delegate_) delegate_->palette = palette;
+  if (fieldDelegate_) fieldDelegate_->palette = palette;
   qApp->setStyleSheet(stylesheetFor(palette));
   const auto buttons = findChildren<QPushButton*>();
   for (auto* button : buttons) {
@@ -525,183 +631,150 @@ void MainWindow::refilter() {
   }
   model_->setRows(std::move(rows));
   if (model_->rowCount() > 0) list_->setCurrentIndex(model_->index(found ? select : 0, 0));
-  else detailOpen_ = false;
-  if (detailOpen_ && selected() == nullptr) detailOpen_ = false;
+  else if (!editing_) detailOpen_ = false;
+  if (!editing_ && detailOpen_ && selected() == nullptr) detailOpen_ = false;
   applyView();
   updateChrome();
 }
 
 void MainWindow::renderDetail() {
-  if (renderingDetail_) return;
+  if (renderingDetail_ || headerLayout_ == nullptr || fieldModel_ == nullptr) return;
   renderingDetail_ = true;
-  portrait_ = nullptr;
-  backButton_ = nullptr;
-  clearLayout(detailLayout_);
+  const int keepRow = fieldList_ != nullptr && fieldList_->currentIndex().isValid() ? fieldList_->currentIndex().row() : 0;
+  fieldModel_->clear();
+  if (headerPane_ != nullptr) headerPane_->hide();
   const Contact* contact = selected();
   if (contact == nullptr) {
-    auto* title = new QLabel(search_->text().isEmpty() ? QStringLiteral("No contact selected") : QStringLiteral("No contacts match"));
-    title->setObjectName(QStringLiteral("panelTitle"));
-    auto* body = new QLabel;
-    body->setObjectName(QStringLiteral("secondary"));
-    body->setWordWrap(true);
-    if (!search_->text().isEmpty()) body->setText(QStringLiteral("Try a shorter name, email, or phone number."));
-    else if (tokens_.refreshToken.isEmpty()) {
-      body->setText(QStringLiteral("Connect Google Contacts from Account. Create a Desktop OAuth client, enable the People API, "
-                                   "and paste the client id."));
-    } else {
-      body->setText(QStringLiteral("Choose New contact from the menu."));
-    }
-    detailLayout_->addWidget(title);
-    detailLayout_->addWidget(body);
-    detailLayout_->addStretch(1);
-    showLayout(detailLayout_);
     renderingDetail_ = false;
     return;
   }
   const Contact shown = *contact;
-  const int photoEdge = photoEdgeFor(detailPane_, width());
-  photoEdge_ = photoEdge;
-  const qreal dpr = devicePixelRatioF();
-  const QPixmap portrait = photos_ ? photos_->imageFor(shown.resourceName, shown.photoUrl, photoEdge, dpr) : QPixmap();
 
-  backButton_ = kindButton(QStringLiteral("Back"), QStringLiteral("outline"));
-  auto* edit = kindButton(QStringLiteral("Edit"), QStringLiteral("primary"));
-  connect(backButton_, &QPushButton::clicked, this, [this] { closeDetail(); });
-  connect(edit, &QPushButton::clicked, this, [this] { editSelected(); });
-  auto* toolbar = new QHBoxLayout;
-  toolbar->setSpacing(6);
-  toolbar->addWidget(backButton_);
-  toolbar->addStretch(1);
-  toolbar->addWidget(edit);
-  detailLayout_->addLayout(toolbar);
-
-  auto* identity = new QHBoxLayout;
-  identity->setSpacing(16);
-  if (!portrait.isNull()) {
-    auto* photo = new QLabel;
-    photo->setObjectName(QStringLiteral("portrait"));
-    photo->setPixmap(portrait);
-    photo->setFixedSize(portrait.deviceIndependentSize().toSize());
-    photo->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
-    photo->setAccessibleName(shown.displayName() + QStringLiteral(" photo"));
-    portrait_ = photo;
-    identity->addWidget(photo, 0, Qt::AlignTop);
-  }
-  auto* names = new QVBoxLayout;
-  names->setSpacing(4);
-  auto* name = new QLabel(shown.displayName());
-  name->setObjectName(QStringLiteral("title"));
-  name->setTextInteractionFlags(Qt::TextSelectableByMouse);
-  name->setWordWrap(true);
-  name->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Maximum);
-  reserveWrappedHeight(name, std::max(1, width() - photoEdge - 80));
-  auto* sub = new QLabel(shown.subtitle());
-  sub->setObjectName(QStringLiteral("secondary"));
-  sub->setTextInteractionFlags(Qt::TextSelectableByMouse);
-  sub->setWordWrap(true);
-  sub->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Maximum);
-  reserveWrappedHeight(sub, std::max(1, width() - photoEdge - 80));
-  names->addWidget(name);
-  if (!shown.subtitle().isEmpty()) names->addWidget(sub);
-  else sub->deleteLater();
-  identity->addLayout(names, 1);
-  detailLayout_->addLayout(identity);
-
-  if (shown.emails.isEmpty()) {
-    auto* none = new QLabel(QStringLiteral("No email address"));
-    none->setObjectName(QStringLiteral("secondary"));
-    detailLayout_->addWidget(none);
-  } else {
-    auto* heading = new QLabel(QStringLiteral("Email"));
-    heading->setObjectName(QStringLiteral("panelTitle"));
-    detailLayout_->addWidget(heading);
-    for (const auto& email : shown.emails) {
-      auto* row = new QHBoxLayout;
-      row->setSpacing(8);
-      auto* label = new QLabel(email.label.isEmpty() ? QStringLiteral("Email") : email.label);
-      label->setObjectName(QStringLiteral("secondary"));
-      label->setFixedWidth(96);
-      label->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-      auto* value = new QLabel(email.value);
-      value->setTextInteractionFlags(Qt::TextSelectableByMouse);
-      value->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Maximum);
-      auto* send = kindButton(QStringLiteral("Email"), QStringLiteral("outline"));
-      const QString address = email.value;
-      connect(send, &QPushButton::clicked, this, [this, address] {
-        Contact one;
-        one.givenName = selected() ? selected()->displayName() : address;
-        one.emails.append({address, {}});
-        const auto command = mailCommand(one);
-        if (!command.ok()) {
-          toast(command.error, true);
-          return;
-        }
-        QProcess::startDetached(command.argv.first(), command.argv.mid(1));
-        toast(QStringLiteral("Opening email…"), false);
-      });
-      row->addWidget(label);
-      row->addWidget(value, 1);
-      row->addWidget(send);
-      detailLayout_->addLayout(row);
+  auto addField = [this](const QString& label, const QString& value, FieldAction action, bool email = false,
+                         std::optional<EditorFocus> focus = std::nullopt) {
+    const bool textRow = action == FieldAction::Copy;
+    if (textRow && value.trimmed().isEmpty()) return;
+    auto* item = new QStandardItem(value);
+    item->setEditable(false);
+    item->setData(label, Qt::UserRole);
+    const QString actionText = action == FieldAction::Edit             ? QStringLiteral("Edit")
+                               : action == FieldAction::DeleteContact   ? QStringLiteral("Delete")
+                               : action == FieldAction::Copy             ? QStringLiteral("Copy")
+                               : action == FieldAction::CopyContact      ? QStringLiteral("Copy")
+                                                                         : QString();
+    item->setData(actionText, Qt::UserRole + 1);
+    item->setData(static_cast<int>(action), Qt::UserRole + 2);
+    item->setData(email, Qt::UserRole + 3);
+    if (focus) {
+      item->setData(static_cast<int>(focus->field), Qt::UserRole + 4);
+      item->setData(focus->index, Qt::UserRole + 5);
+    }
+    fieldModel_->appendRow(item);
+  };
+  if (!shown.photoUrl.isEmpty()) {
+    const QPixmap thumb = photos_ != nullptr ? photos_->imageFor(shown.resourceName, shown.photoUrl, 160, devicePixelRatioF()) : QPixmap();
+    if (!thumb.isNull()) {
+      auto* item = new QStandardItem;
+      item->setEditable(false);
+      item->setData(QString(), Qt::UserRole);
+      item->setData(QString(), Qt::UserRole + 1);
+      item->setData(static_cast<int>(FieldAction::CopyPhoto), Qt::UserRole + 2);
+      item->setData(false, Qt::UserRole + 3);
+      item->setData(thumb, Qt::DecorationRole);
+      fieldModel_->appendRow(item);
     }
   }
-
-  if (!shown.phones.isEmpty()) {
-    auto* heading = new QLabel(QStringLiteral("Phone"));
-    heading->setObjectName(QStringLiteral("panelTitle"));
-    detailLayout_->addWidget(heading);
-    for (const auto& phone : shown.phones) {
-      auto* row = new QHBoxLayout;
-      row->setSpacing(8);
-      auto* label = new QLabel(phone.label.isEmpty() ? QStringLiteral("Phone") : phone.label);
-      label->setObjectName(QStringLiteral("secondary"));
-      label->setFixedWidth(96);
-      label->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-      auto* value = new QLabel(phone.value);
-      value->setTextInteractionFlags(Qt::TextSelectableByMouse);
-      value->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Maximum);
-      auto* copy = kindButton(QStringLiteral("Copy"), QStringLiteral("outline"));
-      const QString number = phone.value;
-      connect(copy, &QPushButton::clicked, this, [this, number] {
-        QGuiApplication::clipboard()->setText(number);
-        toast(QStringLiteral("Phone copied"), false);
-      });
-      row->addWidget(label);
-      row->addWidget(value, 1);
-      row->addWidget(copy);
-      detailLayout_->addLayout(row);
-    }
+  const bool hasPersonalName = !shown.givenName.trimmed().isEmpty() || !shown.familyName.trimmed().isEmpty();
+  if (hasPersonalName) {
+    addField(QStringLiteral("Full name"), shown.displayName(), FieldAction::Copy, false, EditorFocus{EditorField::Given, 0});
   }
-
-  if (!shown.notes.isEmpty()) {
-    auto* heading = new QLabel(QStringLiteral("Notes"));
-    heading->setObjectName(QStringLiteral("panelTitle"));
-    auto* notes = new QLabel(shown.notes);
-    notes->setWordWrap(true);
-    notes->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    notes->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Maximum);
-    reserveWrappedHeight(notes, std::max(1, width() - 36));
-    detailLayout_->addWidget(heading);
-    detailLayout_->addWidget(notes);
+  addField(QStringLiteral("Prefix"), shown.prefix, FieldAction::Copy, false, EditorFocus{EditorField::Prefix, 0});
+  addField(QStringLiteral("First name"), shown.givenName, FieldAction::Copy, false, EditorFocus{EditorField::Given, 0});
+  addField(QStringLiteral("Middle name"), shown.middleName, FieldAction::Copy, false, EditorFocus{EditorField::Middle, 0});
+  addField(QStringLiteral("Last name"), shown.familyName, FieldAction::Copy, false, EditorFocus{EditorField::Family, 0});
+  addField(QStringLiteral("Suffix"), shown.suffix, FieldAction::Copy, false, EditorFocus{EditorField::Suffix, 0});
+  addField(QStringLiteral("Nickname"), shown.nickname, FieldAction::Copy, false, EditorFocus{EditorField::Nickname, 0});
+  addField(QStringLiteral("File as"), shown.fileAs, FieldAction::Copy);
+  addField(QStringLiteral("Phonetic first name"), shown.phoneticGiven, FieldAction::Copy);
+  addField(QStringLiteral("Phonetic middle name"), shown.phoneticMiddle, FieldAction::Copy);
+  addField(QStringLiteral("Phonetic last name"), shown.phoneticFamily, FieldAction::Copy);
+  addField(QStringLiteral("Company"), shown.organization, FieldAction::Copy, false, EditorFocus{EditorField::Organization, 0});
+  addField(QStringLiteral("Job title"), shown.title, FieldAction::Copy, false, EditorFocus{EditorField::Title, 0});
+  addField(QStringLiteral("Department"), shown.department, FieldAction::Copy, false, EditorFocus{EditorField::Department, 0});
+  for (int i = 0; i < shown.otherOrganizations.size(); ++i) {
+    const auto& org = shown.otherOrganizations.at(i);
+    addField(QStringLiteral("Company"), org.name, FieldAction::Copy, false, EditorFocus{EditorField::OtherOrganization, i});
+    addField(QStringLiteral("Job title"), org.title, FieldAction::Copy, false, EditorFocus{EditorField::OtherOrganization, i});
+    addField(QStringLiteral("Department"), org.department, FieldAction::Copy, false, EditorFocus{EditorField::OtherOrganization, i});
   }
-  detailLayout_->addSpacing(16);
-  auto* remove = kindButton(QStringLiteral("Delete"), QStringLiteral("danger"));
-  connect(remove, &QPushButton::clicked, this, [this] { deleteSelected(); });
-  auto* removeRow = new QHBoxLayout;
-  removeRow->addWidget(remove);
-  removeRow->addStretch(1);
-  detailLayout_->addLayout(removeRow);
-  detailLayout_->addStretch(1);
-  showLayout(detailLayout_);
+  addField(QStringLiteral("Occupation"), shown.occupation, FieldAction::Copy, false, EditorFocus{EditorField::Occupation, 0});
+  for (int i = 0; i < shown.emails.size(); ++i) {
+    const auto& email = shown.emails.at(i);
+    const QString emailLabel = labelDisplay(LabelField::Email, email);
+    addField(emailLabel.isEmpty() ? QStringLiteral("Email") : emailLabel, email.value, FieldAction::Copy, true,
+             EditorFocus{EditorField::Email, i});
+  }
+  for (int i = 0; i < shown.phones.size(); ++i) {
+    const auto& phone = shown.phones.at(i);
+    const QString phoneLabel = labelDisplay(LabelField::Phone, phone);
+    addField(phoneLabel.isEmpty() ? QStringLiteral("Phone") : phoneLabel, phone.value, FieldAction::Copy, false,
+             EditorFocus{EditorField::Phone, i});
+  }
+  for (int i = 0; i < shown.addresses.size(); ++i) {
+    const auto& address = shown.addresses.at(i);
+    const QString addressLabel = address.label.trimmed().isEmpty() ? QStringLiteral("Address") : address.label;
+    addField(addressLabel, address.display(), FieldAction::Copy, false, EditorFocus{EditorField::Address, i});
+  }
+  addField(QStringLiteral("Birthday"), shown.birthday.display(), FieldAction::Copy, false, EditorFocus{EditorField::Birthday, 0});
+  for (int i = 0; i < shown.urls.size(); ++i) {
+    const auto& url = shown.urls.at(i);
+    const QString urlLabel = labelDisplay(LabelField::Other, url);
+    addField(urlLabel.isEmpty() ? QStringLiteral("Website") : urlLabel, url.value, FieldAction::Copy, false, EditorFocus{EditorField::Url, i});
+  }
+  for (int i = 0; i < shown.relations.size(); ++i) {
+    const auto& relation = shown.relations.at(i);
+    const QString relationLabel = labelDisplay(LabelField::Other, relation);
+    addField(relationLabel.isEmpty() ? QStringLiteral("Related") : relationLabel, relation.value, FieldAction::Copy, false,
+             EditorFocus{EditorField::Relation, i});
+  }
+  for (int i = 0; i < shown.events.size(); ++i) {
+    const auto& event = shown.events.at(i);
+    const QString eventLabel = event.label.trimmed().isEmpty() ? QStringLiteral("Significant date") : event.label;
+    addField(eventLabel, event.date.display(), FieldAction::Copy, false, EditorFocus{EditorField::Event, i});
+  }
+  for (int i = 0; i < shown.ims.size(); ++i) {
+    addField(QStringLiteral("Instant message"), shown.ims.at(i).display(), FieldAction::Copy);
+  }
+  for (int i = 0; i < shown.sips.size(); ++i) {
+    addField(QStringLiteral("SIP"), shown.sips.at(i).value, FieldAction::Copy);
+  }
+  for (int i = 0; i < shown.customs.size(); ++i) {
+    const auto& custom = shown.customs.at(i);
+    const QString customLabel = custom.label.trimmed().isEmpty() ? QStringLiteral("Custom") : custom.label;
+    addField(customLabel, custom.value, FieldAction::Copy, false, EditorFocus{EditorField::Custom, i});
+  }
+  addField(QStringLiteral("Notes"), shown.notes, FieldAction::Copy, false, EditorFocus{EditorField::Notes, 0});
+  addField({}, QStringLiteral("Copy this contact"), FieldAction::CopyContact);
+  addField({}, QStringLiteral("Edit this contact"), FieldAction::Edit);
+  addField({}, QStringLiteral("Delete this contact"), FieldAction::DeleteContact);
+
+  if (fieldList_ != nullptr && fieldModel_->rowCount() > 0) {
+    const int row = std::clamp(keepRow, 0, fieldModel_->rowCount() - 1);
+    const QModelIndex index = fieldModel_->index(row, 0);
+    fieldList_->setCurrentIndex(index);
+    fieldList_->scrollTo(index);
+  }
   renderingDetail_ = false;
 }
 
 void MainWindow::updateChrome() {
   const int shown = model_ ? model_->rowCount() : 0;
   const int total = index_.size();
-  if (search_ && !search_->text().isEmpty()) countLabel_->setText(QStringLiteral("%1 of %2").arg(shown).arg(total));
+  if (detailOpen_) countLabel_->clear();
+  else if (search_ && !search_->text().isEmpty()) countLabel_->setText(QStringLiteral("%1 of %2").arg(shown).arg(total));
   else countLabel_->setText(QStringLiteral("%1 contacts").arg(total));
   if (busy_) statusLabel_->setText(QStringLiteral("Syncing…"));
+  else if (saving_) statusLabel_->setText(QStringLiteral("Saving to Google"));
   else if (tokens_.refreshToken.isEmpty()) statusLabel_->setText(QStringLiteral("Not signed in"));
   else statusLabel_->clear();
   if (syncAction_) syncAction_->setEnabled(!busy_);
@@ -741,10 +814,12 @@ void MainWindow::handleCommand(Command command) {
       moveSelection(10, false);
       break;
     case Command::MoveHome:
-      if (model_->rowCount() > 0) list_->setCurrentIndex(model_->index(0, 0));
+      if (detailOpen_) moveField(-100000, false);
+      else if (model_->rowCount() > 0) list_->setCurrentIndex(model_->index(0, 0));
       break;
     case Command::MoveEnd:
-      if (model_->rowCount() > 0) list_->setCurrentIndex(model_->index(model_->rowCount() - 1, 0));
+      if (detailOpen_) moveField(100000, false);
+      else if (model_->rowCount() > 0) list_->setCurrentIndex(model_->index(model_->rowCount() - 1, 0));
       break;
     case Command::FocusSearch:
       search_->setFocus();
@@ -759,6 +834,18 @@ void MainWindow::handleCommand(Command command) {
       break;
     case Command::OpenContact:
       openSelected();
+      break;
+    case Command::ActivateField:
+      activateField();
+      break;
+    case Command::CopyField:
+      copyCurrentField();
+      break;
+    case Command::CopyContact:
+      copyWholeContact();
+      break;
+    case Command::SendEmail:
+      sendSelectedEmail();
       break;
     case Command::NewContact:
       newContact();
@@ -798,7 +885,85 @@ void MainWindow::handleCommand(Command command) {
   }
 }
 
+void MainWindow::moveField(int delta, bool wrap) {
+  if (fieldList_ == nullptr || fieldModel_ == nullptr) return;
+  const int count = fieldModel_->rowCount();
+  if (count <= 0) return;
+  const int current = fieldList_->currentIndex().isValid() ? fieldList_->currentIndex().row() : 0;
+  const int next = moveIndex(current, count, delta, wrap);
+  const QModelIndex index = fieldModel_->index(next, 0);
+  fieldList_->setCurrentIndex(index);
+  fieldList_->scrollTo(index);
+}
+
+void MainWindow::activateField() {
+  if (fieldModel_ == nullptr || fieldList_ == nullptr || !fieldList_->currentIndex().isValid()) return;
+  const QModelIndex index = fieldList_->currentIndex();
+  const auto action = static_cast<FieldAction>(index.data(Qt::UserRole + 2).toInt());
+  if (action == FieldAction::DeleteContact) deleteSelected();
+  else if (action == FieldAction::Edit) editSelected();
+  else if (action == FieldAction::CopyContact) copyWholeContact();
+  else if (action == FieldAction::ChangePhoto) changeSelectedPhoto(false);
+  else if (action == FieldAction::RemovePhoto) changeSelectedPhoto(true);
+  else copyCurrentField();
+}
+
+void MainWindow::sendSelectedEmail() {
+  if (fieldList_ == nullptr || !fieldList_->currentIndex().isValid()) {
+    toast(QStringLiteral("Select an email address first."), true);
+    return;
+  }
+  const QModelIndex index = fieldList_->currentIndex();
+  if (!index.data(Qt::UserRole + 3).toBool()) {
+    toast(QStringLiteral("Select an email address first."), true);
+    return;
+  }
+  sendMailTo(index.data(Qt::DisplayRole).toString());
+}
+
+void MainWindow::copyCurrentField() {
+  if (fieldModel_ == nullptr || fieldList_ == nullptr || !fieldList_->currentIndex().isValid()) return;
+  const QModelIndex index = fieldList_->currentIndex();
+  const auto action = static_cast<FieldAction>(index.data(Qt::UserRole + 2).toInt());
+  if (action != FieldAction::Copy && action != FieldAction::CopyPhoto) return;
+  if (action == FieldAction::CopyPhoto) {
+    const Contact* contact = selected();
+    const QImage image = contact == nullptr || photos_ == nullptr ? QImage() : photos_->originalImage(contact->resourceName, contact->photoUrl);
+    if (image.isNull()) {
+      toast(QStringLiteral("Photo isn’t available yet."), true);
+      return;
+    }
+    QGuiApplication::clipboard()->setImage(image);
+    toast(QStringLiteral("Copied photo"), false);
+    return;
+  }
+  const QString value = index.data(Qt::DisplayRole).toString().trimmed();
+  if (value.isEmpty()) return;
+  QGuiApplication::clipboard()->setText(value);
+  toast(QStringLiteral("Copied"), false);
+}
+
+void MainWindow::sendMailTo(const QString& address) {
+  Contact one;
+  const Contact* contact = selected();
+  one.givenName = contact != nullptr ? contact->displayName() : address;
+  LabeledValue email;
+  email.value = address;
+  one.emails.append(email);
+  const auto command = mailCommand(one);
+  if (!command.ok()) {
+    toast(command.error, true);
+    return;
+  }
+  QProcess::startDetached(command.argv.first(), command.argv.mid(1));
+  toast(QStringLiteral("Opening email…"), false);
+}
+
 void MainWindow::moveSelection(int delta, bool wrap) {
+  if (detailOpen_) {
+    moveField(delta, wrap);
+    return;
+  }
   const int count = model_->rowCount();
   if (count <= 0) return;
   const int current = list_->currentIndex().isValid() ? list_->currentIndex().row() : 0;
@@ -826,17 +991,102 @@ const Contact* MainWindow::selected() const {
 
 void MainWindow::editSelected() {
   const Contact* contact = selected();
-  if (contact == nullptr || busy_) return;
-  auto edited = editContactDialog(this, *contact);
-  if (!edited) return;
-  runSave(*edited, false);
+  if (contact == nullptr || busy_ || editing_) return;
+  EditorFocus focus;
+  if (detailOpen_ && fieldList_ != nullptr && fieldList_->currentIndex().isValid()) {
+    const QModelIndex index = fieldList_->currentIndex();
+    const QVariant kind = index.data(Qt::UserRole + 4);
+    if (kind.isValid()) {
+      focus.field = static_cast<EditorField>(kind.toInt());
+      focus.index = index.data(Qt::UserRole + 5).toInt();
+    }
+  }
+  showEditor(*contact, focus, false);
 }
 
 void MainWindow::newContact() {
-  if (busy_) return;
-  auto created = editContactDialog(this, {});
-  if (!created) return;
-  runSave(*created, true);
+  if (busy_ || editing_) return;
+  showEditor(Contact{}, {}, true);
+}
+
+void MainWindow::showEditor(const Contact& contact, EditorFocus focus, bool isNew) {
+  editorRestoreDetail_ = detailOpen_ && !isNew;
+  editing_ = true;
+  editingNew_ = isNew;
+  if (editor_ != nullptr) {
+    detailLayout_->removeWidget(editor_);
+    editor_->deleteLater();
+    editor_ = nullptr;
+  }
+  editor_ = new ContactEditor(contact, focus, detailPane_);
+  editor_->setOnSave([this] { commitEditor(); });
+  editor_->setOnCancel([this] { closeEditor(); });
+  detailLayout_->addWidget(editor_, 1);
+  if (!contact.photoUrl.isEmpty() && photos_ != nullptr) {
+    editor_->setPreview(photos_->imageFor(contact.resourceName, contact.photoUrl, 160, devicePixelRatioF()));
+  }
+  detailOpen_ = true;
+  applyView();
+  editor_->focusField();
+  QTimer::singleShot(0, editor_, [editor = editor_] {
+    if (editor != nullptr) editor->focusField();
+  });
+}
+
+void MainWindow::closeEditor() {
+  const bool restoreDetail = editorRestoreDetail_;
+  editing_ = false;
+  editingNew_ = false;
+  editorRestoreDetail_ = false;
+  if (editor_ != nullptr) {
+    detailLayout_->removeWidget(editor_);
+    editor_->deleteLater();
+    editor_ = nullptr;
+  }
+  if (restoreDetail && selected() != nullptr) {
+    detailOpen_ = true;
+    applyView();
+    renderDetail();
+    if (fieldList_ != nullptr) fieldList_->setFocus();
+    return;
+  }
+  closeDetail();
+}
+
+void MainWindow::commitEditor() {
+  if (editor_ == nullptr) return;
+  const auto contact = editor_->validatedContact();
+  if (!contact) return;
+  const QByteArray photo = editor_->photoBytes();
+  const bool remove = editor_->removePhoto();
+  const bool isNew = editingNew_;
+  closeEditor();
+  runSave(*contact, isNew, photo, remove);
+}
+
+void MainWindow::copyWholeContact() {
+  const Contact* contact = selected();
+  if (contact == nullptr) return;
+  const QString text = contactPlainText(*contact);
+  if (text.isEmpty()) return;
+  QGuiApplication::clipboard()->setText(text);
+  toast(QStringLiteral("Copied name, addresses and phones."), false);
+}
+
+void MainWindow::changeSelectedPhoto(bool remove) {
+  const Contact* contact = selected();
+  if (contact == nullptr || contact->resourceName.isEmpty() || busy_ || saving_ || editing_) return;
+  QByteArray bytes;
+  if (!remove) {
+    const std::optional<QByteArray> chosen = choosePhotoBytes(this);
+    if (!chosen) return;
+    if (chosen->isEmpty()) {
+      toast(QStringLiteral("Could not read that image."), true);
+      return;
+    }
+    bytes = *chosen;
+  }
+  runPhoto(*contact, bytes, remove);
 }
 
 void MainWindow::deleteSelected() {
@@ -935,21 +1185,30 @@ void MainWindow::setContacts(QList<Contact> contacts) {
   refilter();
 }
 
+void MainWindow::present() {
+  show();
+  raise();
+  activateWindow();
+}
+
 int MainWindow::detailPaneHeight() const { return detailPane_ == nullptr ? 0 : detailPane_->height(); }
 
 bool MainWindow::detailShows(const QString& text) const {
-  if (detailPane_ == nullptr || !detailPane_->isVisible() || detailPane_->height() < 80) return false;
-  const auto labels = detailPane_->findChildren<QLabel*>();
-  for (const QLabel* label : labels) {
-    if (!label->isVisible() || label->height() < 1 || !label->text().contains(text)) continue;
-    if (label->wordWrap() && label->width() > 1) {
-      const int wanted = label->heightForWidth(label->width());
-      if (wanted > label->height() + 1) continue;
+  if (!detailOpen_ || fieldList_ == nullptr || !fieldList_->isVisible() || fieldModel_ == nullptr) return false;
+  for (int i = 0; i < fieldModel_->rowCount(); ++i) {
+    const QModelIndex index = fieldModel_->index(i, 0);
+    const QString value = index.data(Qt::DisplayRole).toString();
+    const QString label = index.data(Qt::UserRole).toString();
+    if (!value.contains(text) && !label.contains(text)) continue;
+    QRect row = fieldList_->visualRect(index);
+    if (row.height() < 1) {
+      const int scrolled = fieldList_->verticalScrollBar() != nullptr ? fieldList_->verticalScrollBar()->value() : 0;
+      row = QRect(0, i * 28 - scrolled, std::max(1, fieldList_->viewport()->width()), 28);
     }
-    const QRect inPane(label->mapTo(detailPane_, QPoint(0, 0)), label->size());
-    if (!detailPane_->rect().contains(inPane)) continue;
-    const QRect inWindow(label->mapTo(this, QPoint(0, 0)), label->size());
-    if (rect().contains(inWindow)) return true;
+    const int viewport = std::max(fieldList_->viewport()->height(), fieldList_->height());
+    if (viewport < 1) return true;
+    if (row.bottom() < 0 || row.top() >= viewport) continue;
+    return true;
   }
   return false;
 }
@@ -961,10 +1220,14 @@ bool MainWindow::detailIsOnScreen() const {
 }
 
 QString MainWindow::detailPlainText() const {
-  if (detailPane_ == nullptr) return {};
   QStringList parts;
-  const auto labels = detailPane_->findChildren<QLabel*>();
-  for (const QLabel* label : labels) parts.append(label->text());
+  if (detailName_ != nullptr) parts.append(detailName_->text());
+  if (fieldModel_ == nullptr) return parts.join(QStringLiteral(" | "));
+  for (int i = 0; i < fieldModel_->rowCount(); ++i) {
+    const QModelIndex index = fieldModel_->index(i, 0);
+    parts.append(index.data(Qt::UserRole).toString());
+    parts.append(index.data(Qt::DisplayRole).toString());
+  }
   return parts.join(QStringLiteral(" | "));
 }
 
@@ -973,9 +1236,7 @@ void MainWindow::openSelected() {
   detailOpen_ = true;
   applyView();
   renderDetail();
-  if (detailScroll_ == nullptr) return;
-  if (detailScroll_->verticalScrollBar() != nullptr) detailScroll_->verticalScrollBar()->setValue(0);
-  detailScroll_->setFocus();
+  if (fieldList_ != nullptr) fieldList_->setFocus();
 }
 
 void MainWindow::closeDetail() {
@@ -985,29 +1246,50 @@ void MainWindow::closeDetail() {
 }
 
 void MainWindow::applyView() {
-  if (listPane_ == nullptr || detailScroll_ == nullptr) return;
+  if (listPane_ == nullptr || detailPane_ == nullptr) return;
   if (detailOpen_ && selected() == nullptr) detailOpen_ = false;
   listPane_->setMinimumWidth(0);
   listPane_->setMaximumWidth(QWIDGETSIZE_MAX);
   listPane_->setMinimumHeight(0);
   listPane_->setMaximumHeight(QWIDGETSIZE_MAX);
   listPane_->setVisible(!detailOpen_);
-  detailScroll_->setVisible(detailOpen_);
+  detailPane_->setVisible(detailOpen_);
+  if (fieldList_ != nullptr) fieldList_->setVisible(detailOpen_ && !editing_);
+  if (editor_ != nullptr) editor_->setVisible(editing_);
+  if (search_ != nullptr) search_->setVisible(!detailOpen_);
   if (rule_ != nullptr) rule_->setVisible(false);
+  updateChrome();
 }
 
-void MainWindow::runSync(bool forceFull) {
-  if (busy_) return;
-  if (tokens_.refreshToken.isEmpty() || config_.clientId.isEmpty()) {
-    toast(QStringLiteral("Connect a Google account first."), true);
+void MainWindow::changeEvent(QEvent* event) {
+  QMainWindow::changeEvent(event);
+  if (event->type() != QEvent::ActivationChange) return;
+  const bool active = isActiveWindow();
+  if (active == windowActive_) return;
+  windowActive_ = active;
+  if (!active) {
+    if (focusSyncTimer_ != nullptr) focusSyncTimer_->stop();
     return;
   }
+  if (qEnvironmentVariableIsSet("OMACONTACTS_NO_SYNC")) return;
+  if (lastSyncAt_ == 0 || nowUnix() - lastSyncAt_ >= 60) runSync(false, false);
+  if (focusSyncTimer_ != nullptr) focusSyncTimer_->start();
+}
+
+void MainWindow::runSync(bool forceFull, bool announce) {
+  if (!announce && qEnvironmentVariableIsSet("OMACONTACTS_NO_SYNC")) return;
+  if (busy_) return;
+  if (tokens_.refreshToken.isEmpty() || config_.clientId.isEmpty()) {
+    if (announce) toast(QStringLiteral("Connect a Google account first."), true);
+    return;
+  }
+  lastSyncAt_ = nowUnix();
   setBusy(true);
   const auto client = OAuthClient{config_.clientId, config_.clientSecret};
   auto tokens = tokens_;
   const QString syncToken = forceFull ? QString() : syncToken_;
   const QList<Contact> current = index_.all();
-  QThreadPool::globalInstance()->start([this, client, tokens, syncToken, current]() mutable {
+  runInBackground([this, client, tokens, syncToken, current, announce]() mutable {
     BlockingNam http;
     QString error;
     auto ensured = ensureAccess(http, client, tokens, nowUnix());
@@ -1033,7 +1315,7 @@ void MainWindow::runSync(bool forceFull) {
     }
     QMetaObject::invokeMethod(
         this,
-        [this, error, contacts = std::move(contacts), nextToken, tokens]() mutable {
+        [this, error, contacts = std::move(contacts), nextToken, tokens, announce]() mutable {
           if (closing_) return;
           setBusy(false);
           saveTokens(tokens);
@@ -1044,6 +1326,10 @@ void MainWindow::runSync(bool forceFull) {
             return;
           }
           resyncing_ = false;
+          if (saving_) {
+            setBusy(false);
+            return;
+          }
           if (!error.isEmpty()) {
             toast(error, true);
             return;
@@ -1052,25 +1338,39 @@ void MainWindow::runSync(bool forceFull) {
           syncToken_ = nextToken;
           saveCache();
           refilter();
-          toast(QStringLiteral("Synced %1 contacts").arg(index_.size()), false);
+          if (announce) toast(QStringLiteral("Synced %1 contacts").arg(index_.size()), false);
         },
         Qt::QueuedConnection);
   });
 }
 
-void MainWindow::runSave(const Contact& contact, bool isNew) {
-  if (busy_) return;
+void MainWindow::runSave(const Contact& contact, bool isNew, const QByteArray& photoBytes, bool removePhoto) {
+  if (saving_) return;
   if (tokens_.refreshToken.isEmpty()) {
     toast(QStringLiteral("Connect a Google account before saving."), true);
     return;
   }
-  setBusy(true);
+  Contact previous;
+  bool hadPrevious = false;
+  if (!isNew && !contact.resourceName.isEmpty()) {
+    if (const Contact* existing = index_.find(contact.resourceName)) {
+      previous = *existing;
+      hadPrevious = true;
+    }
+    index_.upsert(contact);
+    saveCache();
+    refilter();
+    selectId(contact.resourceName);
+  }
+  saving_ = true;
+  updateChrome();
   const auto client = OAuthClient{config_.clientId, config_.clientSecret};
   auto tokens = tokens_;
-  QThreadPool::globalInstance()->start([this, client, tokens, contact, isNew]() mutable {
+  runInBackground([this, client, tokens, contact, previous, hadPrevious, isNew, photoBytes, removePhoto]() mutable {
     BlockingNam http;
     auto ensured = ensureAccess(http, client, tokens, nowUnix());
     QString error = ensured.ok() ? QString() : ensured.error;
+    QString photoError;
     Contact saved = contact;
     if (error.isEmpty()) {
       QString access = tokens.accessToken;
@@ -1084,23 +1384,127 @@ void MainWindow::runSave(const Contact& contact, bool isNew) {
       const auto written = isNew ? createContact(http, access, contact, refresh) : updateContact(http, access, contact, refresh);
       tokens.accessToken = access;
       if (!written.ok()) error = written.error;
-      else saved = written.contact;
+      else {
+        saved = written.contact;
+        if (!photoBytes.isEmpty()) {
+          auto pictured = updateContactPhoto(http, access, saved.resourceName, photoBytes, refresh);
+          tokens.accessToken = access;
+          if (!pictured.ok()) photoError = pictured.error;
+          else {
+            if (!pictured.contact.photoUrl.isEmpty()) saved.photoUrl = pictured.contact.photoUrl;
+            if (!pictured.contact.etag.isEmpty()) saved.etag = pictured.contact.etag;
+          }
+        } else if (removePhoto && !saved.resourceName.isEmpty()) {
+          auto cleared = deleteContactPhoto(http, access, saved.resourceName, refresh);
+          tokens.accessToken = access;
+          if (!cleared.ok()) photoError = cleared.error;
+          else {
+            saved.photoUrl.clear();
+            if (!cleared.contact.etag.isEmpty()) saved.etag = cleared.contact.etag;
+          }
+        }
+      }
     }
     QMetaObject::invokeMethod(
         this,
-        [this, error, saved, tokens, isNew]() {
+        [this, error, photoError, saved, tokens, contact, previous, hadPrevious, isNew, photoBytes, removePhoto]() {
           if (closing_) return;
-          setBusy(false);
+          saving_ = false;
           saveTokens(tokens);
+          updateChrome();
+          if (!error.isEmpty()) {
+            if (hadPrevious) {
+              index_.upsert(previous);
+              saveCache();
+              refilter();
+              selectId(previous.resourceName);
+            }
+            toast(error, true);
+            return;
+          }
+          Contact merged = contact;
+          if (!saved.resourceName.isEmpty()) merged.resourceName = saved.resourceName;
+          if (!saved.etag.isEmpty()) merged.etag = saved.etag;
+          if (merged.photoUrl.isEmpty() && !saved.photoUrl.isEmpty()) merged.photoUrl = saved.photoUrl;
+          if (!isNew) {
+            if (const Contact* current = index_.find(contact.resourceName)) {
+              merged = *current;
+              if (!saved.etag.isEmpty()) merged.etag = saved.etag;
+              if (!saved.resourceName.isEmpty()) merged.resourceName = saved.resourceName;
+            }
+          }
+          if (removePhoto) merged.photoUrl.clear();
+          else if (!photoBytes.isEmpty() && !saved.photoUrl.isEmpty()) merged.photoUrl = saved.photoUrl;
+          index_.upsert(merged);
+          if (photos_ != nullptr) {
+            if (removePhoto) photos_->forget(merged.resourceName);
+            else if (!photoBytes.isEmpty() && !merged.photoUrl.isEmpty()) photos_->remember(merged.resourceName, merged.photoUrl, photoBytes);
+          }
+          saveCache();
+          refilter();
+          selectId(merged.resourceName);
+          if (!photoError.isEmpty()) toast(photoError, true);
+          else toast(isNew ? QStringLiteral("Contact added") : QStringLiteral("Contact saved"), false);
+        },
+        Qt::QueuedConnection);
+  });
+}
+
+void MainWindow::runPhoto(const Contact& contact, const QByteArray& photoBytes, bool removePhoto) {
+  if (saving_ || contact.resourceName.isEmpty()) return;
+  if (!removePhoto && photoBytes.isEmpty()) return;
+  saving_ = true;
+  updateChrome();
+  const auto client = OAuthClient{config_.clientId, config_.clientSecret};
+  auto tokens = tokens_;
+  const QString id = contact.resourceName;
+  runInBackground([this, client, tokens, id, photoBytes, removePhoto]() mutable {
+    BlockingNam http;
+    auto ensured = ensureAccess(http, client, tokens, nowUnix());
+    QString error = ensured.ok() ? QString() : ensured.error;
+    Contact pictured;
+    if (error.isEmpty()) {
+      QString access = tokens.accessToken;
+      auto refresh = [&]() -> QString {
+        auto refreshed = refreshAccess(http, client, tokens, nowUnix());
+        if (!refreshed.ok()) return refreshed.error;
+        tokens = refreshed.tokens;
+        access = tokens.accessToken;
+        return {};
+      };
+      const auto written = removePhoto ? deleteContactPhoto(http, access, id, refresh)
+                                       : updateContactPhoto(http, access, id, photoBytes, refresh);
+      tokens.accessToken = access;
+      if (!written.ok()) error = written.error;
+      else pictured = written.contact;
+    }
+    QMetaObject::invokeMethod(
+        this,
+        [this, error, pictured, tokens, id, photoBytes, removePhoto]() {
+          if (closing_) return;
+          saving_ = false;
+          saveTokens(tokens);
+          updateChrome();
           if (!error.isEmpty()) {
             toast(error, true);
             return;
           }
-          index_.upsert(saved);
-          saveCache();
-          refilter();
-          selectId(saved.resourceName);
-          toast(isNew ? QStringLiteral("Contact added") : QStringLiteral("Contact saved"), false);
+          if (const Contact* current = index_.find(id)) {
+            Contact merged = *current;
+            if (removePhoto) merged.photoUrl.clear();
+            else if (!pictured.photoUrl.isEmpty()) merged.photoUrl = pictured.photoUrl;
+            if (!pictured.etag.isEmpty()) merged.etag = pictured.etag;
+            index_.upsert(merged);
+            saveCache();
+            if (photos_ != nullptr) {
+              if (removePhoto) photos_->forget(id);
+              else if (!photoBytes.isEmpty() && !merged.photoUrl.isEmpty()) photos_->remember(id, merged.photoUrl, photoBytes);
+            }
+            refilter();
+            selectId(id);
+            if (detailOpen_ && !editing_) renderDetail();
+          }
+          toast(removePhoto ? QStringLiteral("Photo removed") : QStringLiteral("Photo saved"), false);
         },
         Qt::QueuedConnection);
   });
@@ -1111,7 +1515,7 @@ void MainWindow::runDelete(const QString& id) {
   setBusy(true);
   const auto client = OAuthClient{config_.clientId, config_.clientSecret};
   auto tokens = tokens_;
-  QThreadPool::globalInstance()->start([this, client, tokens, id]() mutable {
+  runInBackground([this, client, tokens, id]() mutable {
     BlockingNam http;
     auto ensured = ensureAccess(http, client, tokens, nowUnix());
     QString error = ensured.ok() ? QString() : ensured.error;
@@ -1198,7 +1602,7 @@ void MainWindow::startOAuth() {
       const QString code = query.code;
       const QString redirect = oauthRedirect_;
       const QString verifier = oauthVerifier_;
-      QThreadPool::globalInstance()->start([this, client, code, redirect, verifier] {
+      runInBackground([this, client, code, redirect, verifier] {
         BlockingNam http;
         auto exchanged = exchangeCode(http, client, code, redirect, verifier, nowUnix());
         QList<Contact> contacts;

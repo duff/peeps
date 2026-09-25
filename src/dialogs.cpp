@@ -1,21 +1,27 @@
 #include "dialogs.h"
 
+#include "photos.h"
 #include "shortcuts.h"
 
+#include <QApplication>
 #include <QComboBox>
+#include <QCompleter>
 #include <QDialog>
-#include <QGuiApplication>
 #include <QHBoxLayout>
+#include <QImage>
 #include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
+#include <QPixmap>
 #include <QPlainTextEdit>
 #include <QPushButton>
-#include <QScreen>
+#include <QRegularExpression>
 #include <QScrollArea>
+#include <QTextCursor>
+#include <QTimer>
 #include <QVBoxLayout>
 
-#include <algorithm>
+#include <functional>
 
 namespace omacontacts {
 namespace {
@@ -29,37 +35,98 @@ QPushButton* kindButton(const QString& text, const QString& kind) {
   return button;
 }
 
-enum class LabelKind { Email, Phone };
-
 struct ValueRow {
+  LabelField field = LabelField::Email;
   QComboBox* preset = nullptr;
-  QLineEdit* custom = nullptr;
-  QLineEdit* value = nullptr;
+  QLineEdit* editor = nullptr;
+  QString originalType;
+  QString originalDisplay;
 };
 
-QStringList presetsFor(LabelKind kind) {
-  if (kind == LabelKind::Email) {
-    return {QStringLiteral("Personal"), QStringLiteral("Work"), QStringLiteral("Custom")};
-  }
-  return {QStringLiteral("Mobile"), QStringLiteral("Office"), QStringLiteral("Custom")};
+QStringList emphasizedLabels(LabelField field) {
+  if (field == LabelField::Email) return {QStringLiteral("Home"), QStringLiteral("Work")};
+  if (field == LabelField::Phone) return {QStringLiteral("Mobile"), QStringLiteral("Work")};
+  return {QStringLiteral("Home"), QStringLiteral("Work"), QStringLiteral("Other")};
 }
 
-int presetIndex(LabelKind kind, const QString& label) {
-  const QString normalized = label.trimmed().toLower();
-  if (kind == LabelKind::Email) {
-    if (normalized.isEmpty() || normalized == QLatin1String("personal") || normalized == QLatin1String("home")) return 0;
-    if (normalized == QLatin1String("work")) return 1;
-    return 2;
+bool fieldIsMore(EditorField field) {
+  switch (field) {
+    case EditorField::Title:
+    case EditorField::Prefix:
+    case EditorField::Middle:
+    case EditorField::Suffix:
+    case EditorField::Nickname:
+    case EditorField::Department:
+    case EditorField::Occupation:
+    case EditorField::Birthday:
+    case EditorField::Url:
+    case EditorField::Relation:
+    case EditorField::Event:
+    case EditorField::Custom:
+    case EditorField::OtherOrganization:
+      return true;
+    default:
+      return false;
   }
-  if (normalized.isEmpty() || normalized == QLatin1String("mobile") || normalized == QLatin1String("cell")) return 0;
-  if (normalized == QLatin1String("office") || normalized == QLatin1String("work")) return 1;
-  return 2;
 }
 
-QString labelFrom(const ValueRow& row) {
-  if (row.preset->currentIndex() == row.preset->count() - 1) return row.custom->text();
-  return row.preset->currentText();
+DateValue dateFromEditor(const QString& text, const DateValue& original) {
+  const QString trimmed = text.trimmed();
+  if (trimmed == original.display()) return original;
+  DateValue date;
+  const QRegularExpression iso(QStringLiteral("^(\\d{4})-(\\d{1,2})-(\\d{1,2})$"));
+  const QRegularExpression monthDay(QStringLiteral("^(\\d{1,2})-(\\d{1,2})$"));
+  const auto full = iso.match(trimmed);
+  if (full.hasMatch()) {
+    date.year = full.captured(1).toInt();
+    date.month = full.captured(2).toInt();
+    date.day = full.captured(3).toInt();
+    return date;
+  }
+  const auto partial = monthDay.match(trimmed);
+  if (partial.hasMatch()) {
+    date.month = partial.captured(1).toInt();
+    date.day = partial.captured(2).toInt();
+    return date;
+  }
+  date.text = trimmed;
+  return date;
 }
+
+LabeledValue labelFrom(const ValueRow& row) {
+  LabeledValue result;
+  result.value = row.editor->text();
+  const QString text = row.preset->currentText().trimmed();
+  if (!row.originalType.isEmpty() && text == row.originalDisplay) {
+    result.type = row.originalType;
+    result.label = row.originalDisplay;
+    return result;
+  }
+  const ResolvedLabel resolved = resolveLabel(row.field, text);
+  result.type = resolved.type;
+  result.label = resolved.display;
+  return result;
+}
+
+class OpenListOnClick : public QObject {
+ public:
+  explicit OpenListOnClick(QComboBox* combo) : QObject(combo), combo_(combo) {}
+
+ protected:
+  bool eventFilter(QObject*, QEvent* event) override {
+    if (event->type() == QEvent::MouseButtonPress && combo_->completer() != nullptr) {
+      QTimer::singleShot(0, combo_, [combo = combo_] {
+        if (combo->lineEdit() != nullptr) combo->lineEdit()->selectAll();
+        combo->completer()->setCompletionPrefix(QString());
+        combo->completer()->complete();
+      });
+    }
+    return false;
+  }
+
+ private:
+  QComboBox* combo_ = nullptr;
+};
 
 QLabel* caption(const QString& text) {
   auto* label = new QLabel(text);
@@ -99,197 +166,6 @@ KeyEvent eventFrom(QKeyEvent* event, Surface surface) {
   mapped.surface = surface;
   return mapped;
 }
-
-class EditDialog : public QDialog {
- public:
-  EditDialog(QWidget* parent, const Contact& base) : QDialog(parent), base_(base) {
-    setWindowTitle(base.resourceName.isEmpty() ? QStringLiteral("New contact") : QStringLiteral("Edit contact"));
-    setModal(true);
-    setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
-    setMinimumWidth(420);
-    auto* root = new QVBoxLayout(this);
-    root->setContentsMargins(18, 18, 18, 18);
-    root->setSpacing(14);
-    auto* title = new QLabel(windowTitle());
-    title->setObjectName(QStringLiteral("title"));
-    root->addWidget(title);
-
-    auto* form = new QWidget;
-    auto* formLayout = new QVBoxLayout(form);
-    formLayout->setContentsMargins(0, 0, 0, 0);
-    formLayout->setSpacing(14);
-
-    given_ = new QLineEdit(base.givenName);
-    family_ = new QLineEdit(base.familyName);
-    organization_ = new QLineEdit(base.organization);
-    titleEdit_ = new QLineEdit(base.title);
-    formLayout->addWidget(caption(QStringLiteral("Given name")));
-    formLayout->addWidget(given_);
-    formLayout->addWidget(caption(QStringLiteral("Family name")));
-    formLayout->addWidget(family_);
-    formLayout->addWidget(caption(QStringLiteral("Organization")));
-    formLayout->addWidget(organization_);
-    formLayout->addWidget(caption(QStringLiteral("Title")));
-    formLayout->addWidget(titleEdit_);
-
-    formLayout->addWidget(caption(QStringLiteral("Email")));
-    emailLayout_ = new QVBoxLayout;
-    emailLayout_->setSpacing(6);
-    formLayout->addLayout(emailLayout_);
-    for (const auto& email : base.emails) addEmail(email);
-    if (base.emails.isEmpty()) addEmail({});
-    auto* addEmailButton = kindButton(QStringLiteral("Add email"), QStringLiteral("outline"));
-    formLayout->addWidget(addEmailButton, 0, Qt::AlignLeft);
-    connect(addEmailButton, &QPushButton::clicked, this, [this] { addEmail({}); });
-
-    formLayout->addWidget(caption(QStringLiteral("Phone")));
-    phoneLayout_ = new QVBoxLayout;
-    phoneLayout_->setSpacing(6);
-    formLayout->addLayout(phoneLayout_);
-    for (const auto& phone : base.phones) addPhone(phone);
-    auto* addPhoneButton = kindButton(QStringLiteral("Add phone"), QStringLiteral("outline"));
-    formLayout->addWidget(addPhoneButton, 0, Qt::AlignLeft);
-    connect(addPhoneButton, &QPushButton::clicked, this, [this] { addPhone({}); });
-
-    formLayout->addWidget(caption(QStringLiteral("Notes")));
-    notes_ = new QPlainTextEdit(base.notes);
-    notes_->setObjectName(QStringLiteral("notes"));
-    notes_->setMinimumHeight(96);
-    formLayout->addWidget(notes_);
-
-    auto* scroll = new QScrollArea;
-    scroll->setWidgetResizable(true);
-    scroll->setFrameShape(QFrame::NoFrame);
-    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    scroll->setWidget(form);
-    root->addWidget(scroll, 1);
-
-    error_ = new QLabel;
-    error_->setObjectName(QStringLiteral("danger"));
-    error_->setWordWrap(true);
-    root->addWidget(error_);
-
-    auto* footer = new QHBoxLayout;
-    footer->addStretch(1);
-    auto* cancel = kindButton(QStringLiteral("Cancel"), QStringLiteral("outline"));
-    auto* save = kindButton(QStringLiteral("Save"), QStringLiteral("primary"));
-    save->setDefault(false);
-    cancel->setDefault(true);
-    cancel->setAutoDefault(true);
-    footer->addWidget(cancel);
-    footer->addWidget(save);
-    root->addLayout(footer);
-    connect(cancel, &QPushButton::clicked, this, &QDialog::reject);
-    connect(save, &QPushButton::clicked, this, [this] { trySave(); });
-    const QScreen* screen = parent != nullptr && parent->screen() != nullptr ? parent->screen()
-                                                                              : QGuiApplication::primaryScreen();
-    if (screen != nullptr) {
-      const int available = std::max(320, screen->availableGeometry().height() - 48);
-      setMaximumHeight(available);
-      resize(std::max(420, sizeHint().width()), std::min(sizeHint().height(), available));
-    }
-    given_->setFocus();
-  }
-
-  Contact result() const { return result_; }
-
- protected:
-  void keyPressEvent(QKeyEvent* event) override {
-    const Command command = routeKey(eventFrom(event, Surface::Editor));
-    if (command == Command::Cancel) {
-      reject();
-      return;
-    }
-    if (command == Command::Save) {
-      trySave();
-      return;
-    }
-    QDialog::keyPressEvent(event);
-  }
-
- private:
-  void addEmail(const LabeledValue& value) {
-    addRow(emailLayout_, emails_, LabelKind::Email, value, QStringLiteral("name@example.com"));
-  }
-  void addPhone(const LabeledValue& value) {
-    addRow(phoneLayout_, phones_, LabelKind::Phone, value, QStringLiteral("+1 555 010 1000"));
-  }
-
-  void addRow(QVBoxLayout* layout, QList<ValueRow>& rows, LabelKind kind, const LabeledValue& value,
-              const QString& placeholder) {
-    auto* row = new QWidget;
-    auto* box = new QHBoxLayout(row);
-    box->setContentsMargins(0, 0, 0, 0);
-    box->setSpacing(6);
-    auto* preset = new QComboBox;
-    preset->addItems(presetsFor(kind));
-    preset->setFixedWidth(128);
-    preset->setAccessibleName(kind == LabelKind::Email ? QStringLiteral("Email label") : QStringLiteral("Phone label"));
-    auto* custom = new QLineEdit;
-    custom->setPlaceholderText(QStringLiteral("Label"));
-    custom->setFixedWidth(120);
-    custom->setAccessibleName(kind == LabelKind::Email ? QStringLiteral("Custom email label")
-                                                       : QStringLiteral("Custom phone label"));
-    const int index = presetIndex(kind, value.label);
-    preset->setCurrentIndex(index);
-    if (index == preset->count() - 1) custom->setText(value.label);
-    custom->setVisible(index == preset->count() - 1);
-    auto* edit = new QLineEdit(value.value);
-    edit->setPlaceholderText(placeholder);
-    auto* remove = kindButton(QStringLiteral("Remove"), QStringLiteral("outline"));
-    box->addWidget(preset);
-    box->addWidget(custom);
-    box->addWidget(edit, 1);
-    box->addWidget(remove);
-    layout->addWidget(row);
-    rows.append(ValueRow{preset, custom, edit});
-    connect(preset, &QComboBox::currentIndexChanged, row, [preset, custom](int index) {
-      const bool customOn = index == preset->count() - 1;
-      custom->setVisible(customOn);
-      if (customOn) custom->setFocus();
-    });
-    connect(remove, &QPushButton::clicked, this, [this, edit, &rows, row] {
-      for (int i = 0; i < rows.size(); ++i) {
-        if (rows.at(i).value == edit) {
-          rows.removeAt(i);
-          break;
-        }
-      }
-      row->deleteLater();
-    });
-  }
-
-  void trySave() {
-    Draft draft;
-    draft.givenName = given_->text();
-    draft.familyName = family_->text();
-    draft.organization = organization_->text();
-    draft.title = titleEdit_->text();
-    draft.notes = notes_->toPlainText();
-    for (const auto& row : emails_) draft.emails.append({row.value->text(), labelFrom(row)});
-    for (const auto& row : phones_) draft.phones.append({row.value->text(), labelFrom(row)});
-    const QString error = draft.validate();
-    if (!error.isEmpty()) {
-      error_->setText(error);
-      return;
-    }
-    result_ = draft.toContact(base_);
-    accept();
-  }
-
-  Contact base_;
-  Contact result_;
-  QLineEdit* given_ = nullptr;
-  QLineEdit* family_ = nullptr;
-  QLineEdit* organization_ = nullptr;
-  QLineEdit* titleEdit_ = nullptr;
-  QPlainTextEdit* notes_ = nullptr;
-  QVBoxLayout* emailLayout_ = nullptr;
-  QVBoxLayout* phoneLayout_ = nullptr;
-  QList<ValueRow> emails_;
-  QList<ValueRow> phones_;
-  QLabel* error_ = nullptr;
-};
 
 class ConfirmBox : public QDialog {
  public:
@@ -466,11 +342,697 @@ class AccountBox : public QDialog {
 
 }  // namespace
 
-std::optional<Contact> editContactDialog(QWidget* parent, const Contact& base) {
-  EditDialog dialog(parent, base);
-  if (dialog.exec() != QDialog::Accepted) return std::nullopt;
-  return dialog.result();
+struct AddressRow {
+  QComboBox* type = nullptr;
+  QLineEdit* street = nullptr;
+  QLineEdit* extended = nullptr;
+  QLineEdit* poBox = nullptr;
+  QLineEdit* city = nullptr;
+  QLineEdit* region = nullptr;
+  QLineEdit* postal = nullptr;
+  QLineEdit* country = nullptr;
+  QString originalType;
+};
+
+struct OrgRow {
+  QLineEdit* name = nullptr;
+  QLineEdit* title = nullptr;
+  QLineEdit* department = nullptr;
+};
+
+struct EventRow {
+  QLineEdit* type = nullptr;
+  QLineEdit* date = nullptr;
+  DateValue original;
+};
+
+class ContactEditor::Form {
+ public:
+  Contact base;
+  EditorFocus focus;
+  bool hadPhoto = false;
+  bool removePhotoFlag = false;
+  QByteArray photoBytes;
+  std::function<void()> onSave;
+  std::function<void()> onCancel;
+  QScrollArea* scroll = nullptr;
+  QLabel* photoLabel = nullptr;
+  QPushButton* photoButton = nullptr;
+  QPushButton* removePhotoButton = nullptr;
+  QPushButton* moreButton = nullptr;
+  QWidget* morePane = nullptr;
+  QLineEdit* prefix = nullptr;
+  QLineEdit* given = nullptr;
+  QLineEdit* middle = nullptr;
+  QLineEdit* family = nullptr;
+  QLineEdit* suffix = nullptr;
+  QLineEdit* nickname = nullptr;
+  QLineEdit* organization = nullptr;
+  QLineEdit* titleEdit = nullptr;
+  QLineEdit* department = nullptr;
+  QLineEdit* occupation = nullptr;
+  QLineEdit* birthday = nullptr;
+  DateValue originalBirthday;
+  QPlainTextEdit* notes = nullptr;
+  QVBoxLayout* emailLayout = nullptr;
+  QVBoxLayout* phoneLayout = nullptr;
+  QVBoxLayout* addressLayout = nullptr;
+  QVBoxLayout* urlLayout = nullptr;
+  QVBoxLayout* relationLayout = nullptr;
+  QVBoxLayout* eventLayout = nullptr;
+  QVBoxLayout* customLayout = nullptr;
+  QVBoxLayout* orgLayout = nullptr;
+  QList<ValueRow> emails;
+  QList<ValueRow> phones;
+  QList<ValueRow> urls;
+  QList<ValueRow> relations;
+  QList<ValueRow> customs;
+  QList<AddressRow> addresses;
+  QList<EventRow> events;
+  QList<OrgRow> orgs;
+  QLabel* error = nullptr;
+  bool revealed = false;
+  bool moreOpen = false;
+
+  void showPixmap(const QPixmap& pixmap) {
+    if (photoLabel == nullptr) return;
+    if (pixmap.isNull()) {
+      photoLabel->setPixmap({});
+      photoLabel->setText(QStringLiteral("No photo"));
+      return;
+    }
+    const qreal ratio = std::max(1.0, photoLabel->devicePixelRatioF());
+    QPixmap shown = pixmap.scaled(QSize(qRound(160 * ratio), qRound(160 * ratio)), Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    shown.setDevicePixelRatio(ratio);
+    photoLabel->setText({});
+    photoLabel->setPixmap(shown);
+  }
+
+  void refreshPhotoButtons() {
+    const bool has = !photoBytes.isEmpty() || (hadPhoto && !removePhotoFlag);
+    if (photoButton != nullptr) photoButton->setText(has ? QStringLiteral("Change photo") : QStringLiteral("Add photo"));
+    if (removePhotoButton != nullptr) removePhotoButton->setVisible(has);
+  }
+
+  void choosePhoto(QWidget* host) {
+    const std::optional<QByteArray> chosen = choosePhotoBytes(host);
+    if (!chosen) return;
+    if (chosen->isEmpty()) {
+      error->setText(QStringLiteral("Could not read that image."));
+      return;
+    }
+    QImage image;
+    image.loadFromData(*chosen);
+    photoBytes = *chosen;
+    removePhotoFlag = false;
+    showPixmap(QPixmap::fromImage(image));
+    error->setText({});
+    refreshPhotoButtons();
+  }
+
+  void clearPhoto() {
+    photoBytes.clear();
+    removePhotoFlag = true;
+    showPixmap({});
+    refreshPhotoButtons();
+  }
+
+  void addEmail(LabeledValue value) {
+    if (value.label.isEmpty() && value.type.isEmpty()) {
+      value.type = QStringLiteral("home");
+      value.label = QStringLiteral("Home");
+    }
+    addRow(emailLayout, emails, LabelField::Email, value, QStringLiteral("name@example.com"));
+  }
+
+  void addPhone(LabeledValue value) {
+    if (value.label.isEmpty() && value.type.isEmpty()) {
+      value.type = QStringLiteral("mobile");
+      value.label = QStringLiteral("Mobile");
+    }
+    addRow(phoneLayout, phones, LabelField::Phone, value, QStringLiteral("+1 555 010 1000"));
+  }
+
+  void addRow(QVBoxLayout* layout, QList<ValueRow>& rows, LabelField field, const LabeledValue& value, const QString& placeholder) {
+    auto* row = new QWidget;
+    auto* box = new QHBoxLayout(row);
+    box->setContentsMargins(0, 0, 0, 0);
+    box->setSpacing(6);
+    auto* preset = new QComboBox;
+    preset->addItems(emphasizedLabels(field));
+    preset->setEditable(true);
+    preset->setInsertPolicy(QComboBox::NoInsert);
+    preset->setFixedWidth(160);
+    preset->setAccessibleName(field == LabelField::Email   ? QStringLiteral("Email label")
+                               : field == LabelField::Phone ? QStringLiteral("Phone label")
+                                                            : QStringLiteral("Label"));
+    if (QCompleter* completer = preset->completer()) {
+      completer->setCaseSensitivity(Qt::CaseInsensitive);
+      completer->setFilterMode(Qt::MatchStartsWith);
+      completer->setCompletionMode(QCompleter::PopupCompletion);
+    }
+    if (preset->lineEdit() != nullptr) preset->lineEdit()->installEventFilter(new OpenListOnClick(preset));
+    const QString shown = labelDisplay(field, value);
+    if (shown.isEmpty()) preset->setCurrentIndex(0);
+    else preset->setEditText(shown);
+    auto* edit = new QLineEdit(value.value);
+    edit->setPlaceholderText(placeholder);
+    auto* remove = kindButton(QStringLiteral("Remove"), QStringLiteral("outline"));
+    box->addWidget(preset);
+    box->addWidget(edit, 1);
+    box->addWidget(remove);
+    layout->addWidget(row);
+    ValueRow stored;
+    stored.field = field;
+    stored.preset = preset;
+    stored.editor = edit;
+    stored.originalDisplay = preset->currentText();
+    stored.originalType = value.type.isEmpty() ? resolveLabel(field, stored.originalDisplay).type : value.type;
+    rows.append(stored);
+    connect(remove, &QPushButton::clicked, row, [edit, &rows, row] {
+      for (int i = 0; i < rows.size(); ++i) {
+        if (rows.at(i).editor == edit) {
+          rows.removeAt(i);
+          break;
+        }
+      }
+      row->deleteLater();
+    });
+  }
+
+  QWidget* indexed(const QList<ValueRow>& rows) const {
+    if (focus.index >= 0 && focus.index < rows.size()) return rows.at(focus.index).editor;
+    return nullptr;
+  }
+
+  QWidget* focusTarget() const {
+    QWidget* target = given;
+    switch (focus.field) {
+      case EditorField::Given:
+        target = given;
+        break;
+      case EditorField::Family:
+        target = family;
+        break;
+      case EditorField::Organization:
+        target = organization;
+        break;
+      case EditorField::Title:
+        target = titleEdit;
+        break;
+      case EditorField::Email:
+        target = indexed(emails);
+        break;
+      case EditorField::Phone:
+        target = indexed(phones);
+        break;
+      case EditorField::Notes:
+        target = notes;
+        break;
+      case EditorField::Prefix:
+        target = prefix;
+        break;
+      case EditorField::Middle:
+        target = middle;
+        break;
+      case EditorField::Suffix:
+        target = suffix;
+        break;
+      case EditorField::Nickname:
+        target = nickname;
+        break;
+      case EditorField::FileAs:
+      case EditorField::PhoneticGiven:
+      case EditorField::PhoneticMiddle:
+      case EditorField::PhoneticFamily:
+        break;
+      case EditorField::Department:
+        target = department;
+        break;
+      case EditorField::Occupation:
+        target = occupation;
+        break;
+      case EditorField::Birthday:
+        target = birthday;
+        break;
+      case EditorField::Address:
+        if (focus.index >= 0 && focus.index < addresses.size()) target = addresses.at(focus.index).street;
+        break;
+      case EditorField::Url:
+        target = indexed(urls);
+        break;
+      case EditorField::Relation:
+        target = indexed(relations);
+        break;
+      case EditorField::Event:
+        if (focus.index >= 0 && focus.index < events.size()) target = events.at(focus.index).date;
+        break;
+      case EditorField::Im:
+      case EditorField::Sip:
+        break;
+      case EditorField::Custom:
+        target = indexed(customs);
+        break;
+      case EditorField::OtherOrganization:
+        if (focus.index >= 0 && focus.index < orgs.size()) target = orgs.at(focus.index).name;
+        break;
+    }
+    return target == nullptr ? given : target;
+  }
+
+  void revealFocus() {
+    if (fieldIsMore(focus.field) && morePane != nullptr && !morePane->isVisible()) setMoreOpen(true);
+    QWidget* target = focusTarget();
+    if (target == nullptr) return;
+    if (scroll != nullptr) scroll->ensureWidgetVisible(target, 0, 24);
+    target->setFocus(Qt::OtherFocusReason);
+    if (auto* line = qobject_cast<QLineEdit*>(target)) line->selectAll();
+    if (auto* note = qobject_cast<QPlainTextEdit*>(target)) {
+      QTextCursor cursor = note->textCursor();
+      cursor.movePosition(QTextCursor::End);
+      note->setTextCursor(cursor);
+    }
+  }
+
+  void setMoreOpen(bool open) {
+    moreOpen = open;
+    if (morePane != nullptr) morePane->setVisible(open);
+    if (moreButton != nullptr) moreButton->setText(open ? QStringLiteral("Less") : QStringLiteral("More"));
+  }
+
+  PostalAddress addressFromRow(const AddressRow& row) const {
+    PostalAddress address;
+    const QString text = row.type == nullptr ? QString() : row.type->currentText().trimmed();
+    const QString folded = text.toLower();
+    QString type = row.originalType;
+    if (text.isEmpty()) type = row.originalType.isEmpty() ? QStringLiteral("home") : row.originalType;
+    else if (folded == QLatin1String("home")) type = QStringLiteral("home");
+    else if (folded == QLatin1String("work")) type = QStringLiteral("work");
+    else if (folded == QLatin1String("other")) type = QStringLiteral("other");
+    else if (text != row.originalType) type = text;
+    address.type = type;
+    address.label = text.isEmpty() ? type : text;
+    address.street = row.street->text();
+    address.extended = row.extended->text();
+    address.poBox = row.poBox->text();
+    address.city = row.city->text();
+    address.region = row.region->text();
+    address.postalCode = row.postal->text();
+    address.country = row.country->text();
+    return address;
+  }
+
+  std::optional<Contact> validated() {
+    Draft draft = Draft::fromContact(base);
+    draft.prefix = prefix->text();
+    draft.givenName = given->text();
+    draft.middleName = middle->text();
+    draft.familyName = family->text();
+    draft.suffix = suffix->text();
+    draft.nickname = nickname->text();
+    draft.organization = organization->text();
+    draft.title = titleEdit->text();
+    draft.department = department->text();
+    draft.occupation = occupation->text();
+    draft.birthday = dateFromEditor(birthday->text(), originalBirthday);
+    draft.notes = notes->toPlainText();
+    draft.emails.clear();
+    draft.phones.clear();
+    draft.urls.clear();
+    draft.relations.clear();
+    draft.customs.clear();
+    draft.addresses.clear();
+    draft.events.clear();
+    draft.otherOrganizations.clear();
+    for (const auto& row : emails) draft.emails.append(labelFrom(row));
+    for (const auto& row : phones) draft.phones.append(labelFrom(row));
+    for (const auto& row : urls) draft.urls.append(labelFrom(row));
+    for (const auto& row : relations) draft.relations.append(labelFrom(row));
+    for (const auto& row : customs) {
+      LabeledValue custom;
+      custom.label = row.preset->currentText().trimmed();
+      custom.value = row.editor->text().trimmed();
+      draft.customs.append(custom);
+    }
+    for (const auto& row : addresses) draft.addresses.append(addressFromRow(row));
+    for (const auto& row : events) {
+      DatedEvent event;
+      event.type = row.type->text().trimmed().isEmpty() ? QStringLiteral("other") : row.type->text().trimmed();
+      event.label = event.type;
+      event.date = dateFromEditor(row.date->text(), row.original);
+      draft.events.append(event);
+    }
+    for (const auto& row : orgs) {
+      Organization org;
+      org.name = row.name->text();
+      org.title = row.title->text();
+      org.department = row.department->text();
+      draft.otherOrganizations.append(org);
+    }
+    const QString problem = draft.validate();
+    if (!problem.isEmpty()) {
+      error->setText(problem);
+      return std::nullopt;
+    }
+    error->setText({});
+    return draft.toContact(base);
+  }
+
+  QLineEdit* pairedLine(const QString& text, const QString& placeholder) {
+    auto* field = new QLineEdit(text);
+    field->setPlaceholderText(placeholder);
+    return field;
+  }
+
+  void removeWidgetRow(QWidget* row, const std::function<void()>& erase) {
+    erase();
+    row->deleteLater();
+  }
+
+  void addOrganization(Organization org) {
+    auto* row = new QWidget;
+    auto* box = new QVBoxLayout(row);
+    box->setContentsMargins(0, 0, 0, 0);
+    box->setSpacing(6);
+    auto* name = pairedLine(org.name, QStringLiteral("Company"));
+    auto* title = pairedLine(org.title, QStringLiteral("Job title"));
+    auto* departmentEdit = pairedLine(org.department, QStringLiteral("Department"));
+    auto* remove = kindButton(QStringLiteral("Remove company"), QStringLiteral("outline"));
+    box->addWidget(name);
+    box->addWidget(title);
+    box->addWidget(departmentEdit);
+    box->addWidget(remove, 0, Qt::AlignLeft);
+    orgLayout->addWidget(row);
+    orgs.append(OrgRow{name, title, departmentEdit});
+    QObject::connect(remove, &QPushButton::clicked, row, [this, name, row] {
+      removeWidgetRow(row, [this, name] {
+        for (int i = 0; i < orgs.size(); ++i) {
+          if (orgs.at(i).name == name) {
+            orgs.removeAt(i);
+            return;
+          }
+        }
+      });
+    });
+  }
+
+  void addAddress(PostalAddress address) {
+    auto* row = new QWidget;
+    auto* box = new QVBoxLayout(row);
+    box->setContentsMargins(0, 0, 0, 0);
+    box->setSpacing(6);
+    auto* type = new QComboBox;
+    type->setEditable(true);
+    type->addItems({QStringLiteral("Home"), QStringLiteral("Work"), QStringLiteral("Other")});
+    type->setEditText(address.label.isEmpty() ? (address.type.isEmpty() ? QStringLiteral("Home") : address.type) : address.label);
+    auto* street = pairedLine(address.street, QStringLiteral("Street"));
+    auto* extended = pairedLine(address.extended, QStringLiteral("Line 2"));
+    auto* poBox = pairedLine(address.poBox, QStringLiteral("PO box"));
+    auto* city = pairedLine(address.city, QStringLiteral("City"));
+    auto* region = pairedLine(address.region, QStringLiteral("State"));
+    auto* postal = pairedLine(address.postalCode, QStringLiteral("Postal code"));
+    auto* country = pairedLine(address.country, QStringLiteral("Country"));
+    auto* remove = kindButton(QStringLiteral("Remove address"), QStringLiteral("outline"));
+    box->addWidget(type);
+    box->addWidget(street);
+    box->addWidget(extended);
+    box->addWidget(poBox);
+    box->addWidget(city);
+    box->addWidget(region);
+    box->addWidget(postal);
+    box->addWidget(country);
+    box->addWidget(remove, 0, Qt::AlignLeft);
+    addressLayout->addWidget(row);
+    addresses.append(AddressRow{type, street, extended, poBox, city, region, postal, country, address.type});
+    QObject::connect(remove, &QPushButton::clicked, row, [this, street, row] {
+      removeWidgetRow(row, [this, street] {
+        for (int i = 0; i < addresses.size(); ++i) {
+          if (addresses.at(i).street == street) {
+            addresses.removeAt(i);
+            return;
+          }
+        }
+      });
+    });
+  }
+
+  void addUrl(LabeledValue value) { addRow(urlLayout, urls, LabelField::Other, value, QStringLiteral("https://")); }
+
+  void addRelation(LabeledValue value) {
+    if (value.label.isEmpty() && !value.type.isEmpty()) value.label = value.type;
+    addRow(relationLayout, relations, LabelField::Other, value, QStringLiteral("Name"));
+  }
+
+  void addCustom(LabeledValue value) {
+    if (value.type.isEmpty()) value.type = value.label;
+    addRow(customLayout, customs, LabelField::Other, value, QStringLiteral("Value"));
+  }
+
+  void addEvent(DatedEvent event) {
+    auto* row = new QWidget;
+    auto* box = new QHBoxLayout(row);
+    box->setContentsMargins(0, 0, 0, 0);
+    box->setSpacing(6);
+    auto* type = pairedLine(event.label.isEmpty() ? event.type : event.label, QStringLiteral("Anniversary"));
+    auto* date = pairedLine(event.date.display(), QStringLiteral("YYYY-MM-DD"));
+    auto* remove = kindButton(QStringLiteral("Remove"), QStringLiteral("outline"));
+    box->addWidget(type);
+    box->addWidget(date, 1);
+    box->addWidget(remove);
+    eventLayout->addWidget(row);
+    events.append(EventRow{type, date, event.date});
+    QObject::connect(remove, &QPushButton::clicked, row, [this, date, row] {
+      removeWidgetRow(row, [this, date] {
+        for (int i = 0; i < events.size(); ++i) {
+          if (events.at(i).date == date) {
+            events.removeAt(i);
+            return;
+          }
+        }
+      });
+    });
+  }
+
+  void build(QWidget* host) {
+    hadPhoto = !base.photoUrl.isEmpty();
+    auto* root = new QVBoxLayout(host);
+    root->setContentsMargins(0, 0, 0, 0);
+    root->setSpacing(14);
+    auto* title = new QLabel(base.resourceName.isEmpty() ? QStringLiteral("New contact") : QStringLiteral("Edit contact"));
+    title->setObjectName(QStringLiteral("title"));
+    root->addWidget(title);
+
+    auto* form = new QWidget;
+    auto* formLayout = new QVBoxLayout(form);
+    formLayout->setContentsMargins(0, 0, 0, 0);
+    formLayout->setSpacing(14);
+
+    photoLabel = new QLabel(QStringLiteral("No photo"));
+    photoLabel->setObjectName(QStringLiteral("photo"));
+    photoLabel->setAlignment(Qt::AlignCenter);
+    photoLabel->setMinimumHeight(160);
+    photoLabel->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+    formLayout->addWidget(photoLabel, 0, Qt::AlignHCenter);
+    auto* photoButtons = new QHBoxLayout;
+    photoButtons->setAlignment(Qt::AlignHCenter);
+    photoButton = kindButton(QStringLiteral("Add photo"), QStringLiteral("outline"));
+    removePhotoButton = kindButton(QStringLiteral("Remove photo"), QStringLiteral("outline"));
+    photoButtons->addWidget(photoButton);
+    photoButtons->addWidget(removePhotoButton);
+    formLayout->addLayout(photoButtons);
+    QObject::connect(photoButton, &QPushButton::clicked, host, [this, host] { choosePhoto(host); });
+    QObject::connect(removePhotoButton, &QPushButton::clicked, host, [this] { clearPhoto(); });
+    refreshPhotoButtons();
+
+    auto edit = [](const QString& text, const QString& name) {
+      auto* field = new QLineEdit(text);
+      if (!name.isEmpty()) field->setObjectName(name);
+      return field;
+    };
+    prefix = edit(base.prefix, QStringLiteral("prefix"));
+    given = edit(base.givenName, QStringLiteral("given"));
+    middle = edit(base.middleName, QStringLiteral("middle"));
+    family = edit(base.familyName, QStringLiteral("family"));
+    suffix = edit(base.suffix, QStringLiteral("suffix"));
+    nickname = edit(base.nickname, {});
+    organization = edit(base.organization, QStringLiteral("organization"));
+    titleEdit = edit(base.title, QStringLiteral("title-field"));
+    department = edit(base.department, {});
+    occupation = edit(base.occupation, {});
+    originalBirthday = base.birthday;
+    birthday = edit(base.birthday.display(), QStringLiteral("birthday"));
+    formLayout->addWidget(caption(QStringLiteral("First name")));
+    formLayout->addWidget(given);
+    formLayout->addWidget(caption(QStringLiteral("Last name")));
+    formLayout->addWidget(family);
+    formLayout->addWidget(caption(QStringLiteral("Company")));
+    formLayout->addWidget(organization);
+
+    formLayout->addWidget(caption(QStringLiteral("Email")));
+    emailLayout = new QVBoxLayout;
+    emailLayout->setSpacing(6);
+    formLayout->addLayout(emailLayout);
+    for (const auto& email : base.emails) addEmail(email);
+    if (base.emails.isEmpty()) addEmail({});
+    auto* addEmailButton = kindButton(QStringLiteral("Add email"), QStringLiteral("outline"));
+    formLayout->addWidget(addEmailButton, 0, Qt::AlignLeft);
+    QObject::connect(addEmailButton, &QPushButton::clicked, host, [this] { addEmail({}); });
+
+    formLayout->addWidget(caption(QStringLiteral("Phone")));
+    phoneLayout = new QVBoxLayout;
+    phoneLayout->setSpacing(6);
+    formLayout->addLayout(phoneLayout);
+    for (const auto& phone : base.phones) addPhone(phone);
+    auto* addPhoneButton = kindButton(QStringLiteral("Add phone"), QStringLiteral("outline"));
+    formLayout->addWidget(addPhoneButton, 0, Qt::AlignLeft);
+    QObject::connect(addPhoneButton, &QPushButton::clicked, host, [this] { addPhone({}); });
+
+    formLayout->addWidget(caption(QStringLiteral("Address")));
+    addressLayout = new QVBoxLayout;
+    addressLayout->setSpacing(10);
+    formLayout->addLayout(addressLayout);
+    for (const auto& address : base.addresses) addAddress(address);
+    auto* addAddressButton = kindButton(QStringLiteral("Add address"), QStringLiteral("outline"));
+    formLayout->addWidget(addAddressButton, 0, Qt::AlignLeft);
+    QObject::connect(addAddressButton, &QPushButton::clicked, host, [this] { addAddress({}); });
+
+    moreOpen = base.hasLessCommonFields() || fieldIsMore(focus.field);
+    moreButton = kindButton(moreOpen ? QStringLiteral("Less") : QStringLiteral("More"), QStringLiteral("outline"));
+    formLayout->addWidget(moreButton, 0, Qt::AlignLeft);
+    morePane = new QWidget;
+    auto* moreLayout = new QVBoxLayout(morePane);
+    moreLayout->setContentsMargins(0, 0, 0, 0);
+    moreLayout->setSpacing(14);
+    auto addPair = [&](QVBoxLayout* parent, const QString& title) {
+      parent->addWidget(caption(title));
+    };
+    addPair(moreLayout, QStringLiteral("Prefix"));
+    moreLayout->addWidget(prefix);
+    addPair(moreLayout, QStringLiteral("Middle name"));
+    moreLayout->addWidget(middle);
+    addPair(moreLayout, QStringLiteral("Suffix"));
+    moreLayout->addWidget(suffix);
+    addPair(moreLayout, QStringLiteral("Nickname"));
+    moreLayout->addWidget(nickname);
+    addPair(moreLayout, QStringLiteral("Job title"));
+    moreLayout->addWidget(titleEdit);
+    addPair(moreLayout, QStringLiteral("Department"));
+    moreLayout->addWidget(department);
+    addPair(moreLayout, QStringLiteral("Occupation"));
+    moreLayout->addWidget(occupation);
+    addPair(moreLayout, QStringLiteral("Birthday"));
+    birthday->setPlaceholderText(QStringLiteral("YYYY-MM-DD"));
+    moreLayout->addWidget(birthday);
+
+    moreLayout->addWidget(caption(QStringLiteral("Another company")));
+    orgLayout = new QVBoxLayout;
+    orgLayout->setSpacing(6);
+    moreLayout->addLayout(orgLayout);
+    for (const auto& org : base.otherOrganizations) addOrganization(org);
+    auto* addOrgButton = kindButton(QStringLiteral("Add company"), QStringLiteral("outline"));
+    moreLayout->addWidget(addOrgButton, 0, Qt::AlignLeft);
+    QObject::connect(addOrgButton, &QPushButton::clicked, host, [this] { addOrganization({}); });
+
+    moreLayout->addWidget(caption(QStringLiteral("Website")));
+    urlLayout = new QVBoxLayout;
+    urlLayout->setSpacing(6);
+    moreLayout->addLayout(urlLayout);
+    for (const auto& url : base.urls) addUrl(url);
+    auto* addUrlButton = kindButton(QStringLiteral("Add website"), QStringLiteral("outline"));
+    moreLayout->addWidget(addUrlButton, 0, Qt::AlignLeft);
+    QObject::connect(addUrlButton, &QPushButton::clicked, host, [this] { addUrl({}); });
+
+    moreLayout->addWidget(caption(QStringLiteral("Related person")));
+    relationLayout = new QVBoxLayout;
+    relationLayout->setSpacing(6);
+    moreLayout->addLayout(relationLayout);
+    for (const auto& relation : base.relations) addRelation(relation);
+    auto* addRelationButton = kindButton(QStringLiteral("Add related person"), QStringLiteral("outline"));
+    moreLayout->addWidget(addRelationButton, 0, Qt::AlignLeft);
+    QObject::connect(addRelationButton, &QPushButton::clicked, host, [this] { addRelation({}); });
+
+    moreLayout->addWidget(caption(QStringLiteral("Significant date")));
+    eventLayout = new QVBoxLayout;
+    eventLayout->setSpacing(6);
+    moreLayout->addLayout(eventLayout);
+    for (const auto& event : base.events) addEvent(event);
+    auto* addEventButton = kindButton(QStringLiteral("Add significant date"), QStringLiteral("outline"));
+    moreLayout->addWidget(addEventButton, 0, Qt::AlignLeft);
+    QObject::connect(addEventButton, &QPushButton::clicked, host, [this] { addEvent({}); });
+
+    moreLayout->addWidget(caption(QStringLiteral("Custom field")));
+    customLayout = new QVBoxLayout;
+    customLayout->setSpacing(6);
+    moreLayout->addLayout(customLayout);
+    for (const auto& custom : base.customs) addCustom(custom);
+    auto* addCustomButton = kindButton(QStringLiteral("Add custom field"), QStringLiteral("outline"));
+    moreLayout->addWidget(addCustomButton, 0, Qt::AlignLeft);
+    QObject::connect(addCustomButton, &QPushButton::clicked, host, [this] { addCustom({}); });
+
+    morePane->setVisible(moreOpen);
+    formLayout->addWidget(morePane);
+    QObject::connect(moreButton, &QPushButton::clicked, host, [this] { setMoreOpen(!moreOpen); });
+
+    formLayout->addWidget(caption(QStringLiteral("Notes")));
+    notes = new QPlainTextEdit(base.notes);
+    notes->setObjectName(QStringLiteral("notes"));
+    notes->setMinimumHeight(96);
+    notes->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    formLayout->addWidget(notes, 1);
+
+    scroll = new QScrollArea;
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    scroll->setWidget(form);
+    root->addWidget(scroll, 1);
+
+    error = new QLabel;
+    error->setObjectName(QStringLiteral("danger"));
+    error->setWordWrap(true);
+    root->addWidget(error);
+
+    auto* footer = new QHBoxLayout;
+    footer->addStretch(1);
+    auto* cancel = kindButton(QStringLiteral("Cancel"), QStringLiteral("outline"));
+    auto* save = kindButton(QStringLiteral("Save"), QStringLiteral("primary"));
+    footer->addWidget(cancel);
+    footer->addWidget(save);
+    root->addLayout(footer);
+    QObject::connect(cancel, &QPushButton::clicked, host, [this] {
+      if (onCancel) onCancel();
+    });
+    QObject::connect(save, &QPushButton::clicked, host, [this] {
+      if (onSave) onSave();
+    });
+  }
+};
+
+ContactEditor::ContactEditor(const Contact& base, EditorFocus focus, QWidget* parent) : QWidget(parent), form_(new Form) {
+  setObjectName(QStringLiteral("editor"));
+  form_->base = base;
+  form_->focus = focus;
+  form_->build(this);
 }
+
+ContactEditor::~ContactEditor() { delete form_; }
+
+void ContactEditor::setOnSave(std::function<void()> save) { form_->onSave = std::move(save); }
+
+void ContactEditor::setOnCancel(std::function<void()> cancel) { form_->onCancel = std::move(cancel); }
+
+std::optional<Contact> ContactEditor::validatedContact() { return form_->validated(); }
+
+QByteArray ContactEditor::photoBytes() const { return form_->photoBytes; }
+
+bool ContactEditor::removePhoto() const { return form_->removePhotoFlag && form_->photoBytes.isEmpty(); }
+
+void ContactEditor::setPreview(const QPixmap& pixmap) {
+  if (form_->removePhotoFlag || !form_->photoBytes.isEmpty()) return;
+  form_->showPixmap(pixmap);
+}
+
+void ContactEditor::focusField() { form_->revealFocus(); }
 
 bool confirmDialog(QWidget* parent, const QString& title, const QString& body, const QString& action) {
   ConfirmBox dialog(parent, title, body, action);
