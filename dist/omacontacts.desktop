@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Omacontacts
+GenericName=Contacts
+Comment=Fast Google Contacts for Omarchy
+Exec=omacontacts
+Icon=omacontacts
+Terminal=false
+Categories=Office;ContactManagement;
+Keywords=contacts;google;people;email;
+StartupWMClass=omacontacts
