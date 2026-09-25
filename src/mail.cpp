@@ -13,8 +13,9 @@ MailCommand mailCommand(const Contact& contact) {
     command.error = QStringLiteral("The email address is not usable.");
     return command;
   }
-  command.argv = {QStringLiteral("xdg-email"), QStringLiteral("--subject"),
-                  QStringLiteral("Hello ") + contact.displayName(), email};
+  // A subject becomes mailto:addr?subject=... Omarchy's HEY handler treats
+  // everything after mailto: as the address, so the To field stays empty.
+  command.argv = {QStringLiteral("xdg-email"), email};
   return command;
 }
 

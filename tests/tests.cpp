@@ -743,9 +743,9 @@ void GoogleTests::mailUsesDesktopHandler() {
   contact.emails.append({QStringLiteral("ada@example.com"), QStringLiteral("Work"), QStringLiteral("work")});
   const auto command = contacts::mailCommand(contact);
   QVERIFY(command.ok());
-  QCOMPARE(command.argv.size(), 4);
+  QCOMPARE(command.argv.size(), 2);
   QCOMPARE(command.argv.at(0), QStringLiteral("xdg-email"));
-  QCOMPARE(command.argv.at(3), QStringLiteral("ada@example.com"));
+  QCOMPARE(command.argv.at(1), QStringLiteral("ada@example.com"));
   contacts::Contact nameless;
   QVERIFY(!contacts::mailCommand(nameless).ok());
 }

@@ -12,8 +12,8 @@ struct MailCommand {
   bool ok() const { return error.isEmpty(); }
 };
 
-// xdg-email follows the desktop mailto handler. On stock Omarchy that is HEY.
-// On this machine it is whatever x-scheme-handler/mailto points at.
+// xdg-email follows the desktop mailto handler. Pass only the address.
+// Omarchy's HEY handler cannot separate a subject from that address.
 MailCommand mailCommand(const Contact& contact);
 
 }  // namespace contacts
