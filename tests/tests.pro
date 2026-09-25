@@ -21,6 +21,8 @@ SOURCES += \
     ../src/photos.cpp \
     ../src/blockingnam.cpp \
     ../src/instance.cpp \
-    ../src/secrets.cpp
+    ../src/secrets.cpp \
+    ../src/cli.cpp \
+    cli_tests.cpp
 HEADERS += tests.h ../src/mainwindow.h ../src/photos.h
 QMAKE_CXXFLAGS += -Wall -Wextra -Wpedantic

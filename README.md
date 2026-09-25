@@ -12,6 +12,8 @@ make install
 
 `make install` puts the binary in `~/.local/bin` and adds a launcher entry. Qt 6 (widgets, network), libsecret, and a C++20 compiler are required. Tests use Qt Test and the offscreen platform plugin.
 
+With no arguments, `contacts` opens the window. A command stays in the terminal. `contacts help` lists them. List, search, and show read the local cache. Add, update, delete, and sync talk to Google, then refresh that cache. A pipe prints JSON.
+
 ## Google
 
 1. In Google Cloud, create a project and enable the People API.

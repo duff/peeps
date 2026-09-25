@@ -31,5 +31,9 @@ int main(int argc, char** argv) {
     ShortcutTests tests;
     status |= QTest::qExec(&tests, argc, argv);
   }
+  {
+    CliTests tests;
+    status |= QTest::qExec(&tests, argc, argv);
+  }
   return status;
 }

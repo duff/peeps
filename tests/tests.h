@@ -87,3 +87,17 @@ class ShortcutTests : public QObject {
   void deleteConfirmIgnoresEnter();
   void helpListsEmail();
 };
+
+class CliTests : public QObject {
+  Q_OBJECT
+ private slots:
+  void invocationLeavesTheWindowAlone();
+  void helpAndCommands();
+  void usageAndVersion();
+  void listAndSearchStayOnTheCache();
+  void showResolvesIdNameAndEmail();
+  void addUpdateAndDelete();
+  void jsonDataRoundTrip();
+  void syncRefreshesTheCache();
+  void liveCacheAndGoogle();
+};
