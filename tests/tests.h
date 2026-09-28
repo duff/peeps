@@ -46,6 +46,8 @@ class GoogleTests : public QObject {
   void parsesPrimaryFields();
   void prefersRealPhotoOverDefault();
   void sizesPhotoUrl();
+  void savedPhotoIsVisibleImmediately();
+  void downloadedPhotoIsVisibleImmediately();
   void oldCacheRequestsFullSync();
   void roundTripsPerson();
   void labelTypesRoundTrip();

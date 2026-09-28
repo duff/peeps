@@ -60,6 +60,16 @@ QString cacheKey(const QString& resourceName, int logicalSize, qreal devicePixel
   return resourceName + QStringLiteral("@%1@%2").arg(logicalSize).arg(devicePixelRatio, 0, 'f', 2);
 }
 
+// Callers emit updated() as soon as this returns, and that handler reads the
+// marker. QFile keeps the write in a buffer, so close it here. Otherwise the
+// handler sees an empty file, treats the photo as missing, and downloads again.
+void writeFetchMarker(const QString& imagePath, const QString& url) {
+  QFile marker(imagePath + QStringLiteral(".fetch"));
+  if (!marker.open(QIODevice::WriteOnly | QIODevice::Truncate)) return;
+  marker.write(photoFetchUrl(url).toUtf8());
+  marker.close();
+}
+
 }  // namespace
 
 PhotoStore::PhotoStore(QString directory, QObject* parent) : QObject(parent), directory_(std::move(directory)) {
@@ -117,8 +127,7 @@ void PhotoStore::remember(const QString& resourceName, const QString& url, const
   QDir().mkpath(directory_);
   QSaveFile file(path);
   if (!(file.open(QIODevice::WriteOnly) && file.write(bytes) == bytes.size() && file.commit())) return;
-  QFile marker(path + QStringLiteral(".fetch"));
-  if (marker.open(QIODevice::WriteOnly | QIODevice::Truncate)) marker.write(photoFetchUrl(url).toUtf8());
+  writeFetchMarker(path, url);
   dropMemory(resourceName);
   emit updated(resourceName);
 }
@@ -183,8 +192,7 @@ void PhotoStore::finished(QNetworkReply* reply, const QString& resourceName, con
     QDir().mkpath(directory_);
     QSaveFile file(path);
     if (file.open(QIODevice::WriteOnly) && file.write(bytes) == bytes.size() && file.commit()) {
-      QFile marker(path + QStringLiteral(".fetch"));
-      if (marker.open(QIODevice::WriteOnly | QIODevice::Truncate)) marker.write(photoFetchUrl(url).toUtf8());
+      writeFetchMarker(path, url);
       dropMemory(resourceName);
       emit updated(resourceName);
     } else {

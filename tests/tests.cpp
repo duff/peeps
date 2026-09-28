@@ -7,13 +7,19 @@
 #include "google.h"
 #include "mail.h"
 #include "oauth.h"
+#include "photos.h"
 #include "search.h"
 #include "shortcuts.h"
 #include "store.h"
 #include "theme.h"
 
+#include <QBuffer>
 #include <QDir>
 #include <QApplication>
+#include <QImage>
+#include <QPixmap>
+#include <QTcpServer>
+#include <QTcpSocket>
 #include <QDialog>
 #include <QElapsedTimer>
 #include <QNetworkRequest>
@@ -517,6 +523,72 @@ void GoogleTests::sizesPhotoUrl() {
            QStringLiteral("https://lh3.googleusercontent.com/a=s0"));
   QCOMPARE(contacts::photoFetchUrl(QStringLiteral("https://lh3.googleusercontent.com/a=s100-c")),
            QStringLiteral("https://lh3.googleusercontent.com/a=s0"));
+}
+
+void GoogleTests::savedPhotoIsVisibleImmediately() {
+  QTemporaryDir dir;
+  QVERIFY(dir.isValid());
+  QImage source(16, 16, QImage::Format_RGB32);
+  source.fill(Qt::red);
+  QByteArray jpeg;
+  QBuffer buffer(&jpeg);
+  QVERIFY(buffer.open(QIODevice::WriteOnly));
+  QVERIFY(source.save(&buffer, "JPEG", 90));
+  const QString url = QStringLiteral("https://lh3.googleusercontent.com/contacts/abc=s100");
+  const QString id = QStringLiteral("people/c1");
+  contacts::PhotoStore store(dir.path());
+  QPixmap shown;
+  connect(&store, &contacts::PhotoStore::updated, &store, [&](const QString& resourceName) {
+    shown = store.imageFor(resourceName, url, 32, 1);
+  });
+  store.remember(id, url, jpeg);
+  QVERIFY(!shown.isNull());
+  QCOMPARE(store.originalImage(id, url).size(), source.size());
+}
+
+void GoogleTests::downloadedPhotoIsVisibleImmediately() {
+  QTemporaryDir dir;
+  QVERIFY(dir.isValid());
+  QImage source(16, 16, QImage::Format_RGB32);
+  source.fill(Qt::blue);
+  QByteArray jpeg;
+  QBuffer buffer(&jpeg);
+  QVERIFY(buffer.open(QIODevice::WriteOnly));
+  QVERIFY(source.save(&buffer, "JPEG", 90));
+
+  QTcpServer server;
+  QVERIFY(server.listen(QHostAddress::LocalHost));
+  int requests = 0;
+  connect(&server, &QTcpServer::newConnection, &server, [&] {
+    while (QTcpSocket* socket = server.nextPendingConnection()) {
+      ++requests;
+      connect(socket, &QTcpSocket::readyRead, socket, [socket, jpeg] {
+        if (socket->property("sent").toBool()) {
+          socket->readAll();
+          return;
+        }
+        if (socket->bytesAvailable() <= 0) return;
+        socket->setProperty("sent", true);
+        socket->readAll();
+        const QByteArray header = QByteArray("HTTP/1.1 200 OK\r\nContent-Type: image/jpeg\r\nContent-Length: ") +
+                                  QByteArray::number(jpeg.size()) + "\r\nConnection: close\r\n\r\n";
+        socket->write(header + jpeg);
+        socket->disconnectFromHost();
+      });
+    }
+  });
+
+  const QString url = QStringLiteral("http://%1:%2/face").arg(server.serverAddress().toString()).arg(server.serverPort());
+  const QString id = QStringLiteral("people/c1");
+  contacts::PhotoStore store(dir.path());
+  QPixmap shown;
+  connect(&store, &contacts::PhotoStore::updated, &store, [&](const QString& resourceName) {
+    shown = store.imageFor(resourceName, url, 32, 1);
+  });
+  QVERIFY(store.imageFor(id, url, 32, 1).isNull());
+  QTRY_VERIFY_WITH_TIMEOUT(!shown.isNull(), 3000);
+  QCOMPARE(requests, 1);
+  QCOMPARE(store.originalImage(id, url).size(), source.size());
 }
 
 void GoogleTests::oldCacheRequestsFullSync() {
