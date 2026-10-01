@@ -74,7 +74,7 @@ Tab moves through the page in reading order, including rows you just added. Ente
 
 ### Sharing a contact
 
-Share this contact is the last group of rows on a contact, next to Copy, Edit, and Delete. It writes a vCard, the format phones and mail apps import, with the photo inside it.
+Share this contact sits with Edit and Delete at the end of a contact. It writes a vCard, the format phones and mail apps import, with the photo inside it.
 
 | Choice | What happens |
 | --- | --- |

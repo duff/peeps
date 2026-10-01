@@ -142,7 +142,7 @@ class ContactDelegate : public QStyledItemDelegate {
   }
 };
 
-enum class FieldAction { Copy, CopyPhoto, Edit, DeleteContact, CopyContact, ShareContact };
+enum class FieldAction { Copy, CopyPhoto, Edit, DeleteContact, ShareContact };
 
 enum FieldRole {
   LabelRole = Qt::UserRole,
@@ -753,8 +753,8 @@ void MainWindow::renderDetail() {
     const QString cue = action == FieldAction::Edit            ? QStringLiteral("Edit")
                         : action == FieldAction::DeleteContact ? QStringLiteral("Delete")
                         : action == FieldAction::ShareContact  ? QStringLiteral("Share")
-                        : action == FieldAction::Copy || action == FieldAction::CopyContact ? QStringLiteral("Copy")
-                                                                                            : QString();
+                        : action == FieldAction::Copy          ? QStringLiteral("Copy")
+                                                               : QString();
     item->setData(cue, CueRole);
     item->setData(static_cast<int>(action), ActionRole);
     item->setData(email, EmailRole);
@@ -837,7 +837,6 @@ void MainWindow::renderDetail() {
              EditorFocus{EditorField::Custom, i});
   }
   addField(QStringLiteral("Notes"), shown.notes, FieldAction::Copy, false, EditorFocus{EditorField::Notes, 0});
-  addField({}, QStringLiteral("Copy this contact"), FieldAction::CopyContact);
   addField({}, QStringLiteral("Share this contact"), FieldAction::ShareContact);
   addField({}, QStringLiteral("Edit this contact"), FieldAction::Edit);
   addField({}, QStringLiteral("Delete this contact"), FieldAction::DeleteContact);
@@ -983,9 +982,6 @@ void MainWindow::activateField() {
       break;
     case FieldAction::Edit:
       editSelected();
-      break;
-    case FieldAction::CopyContact:
-      copyWholeContact();
       break;
     case FieldAction::ShareContact:
       shareSelected();
