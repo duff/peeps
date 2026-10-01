@@ -153,11 +153,4 @@ TokenResult ensureAccess(HttpClient& http, const OAuthClient& client, OAuthToken
   return refreshed;
 }
 
-BrowserCommand browserCommand(const QString& url, bool haveOmarchy) {
-  BrowserCommand command;
-  if (haveOmarchy) command.argv = {QStringLiteral("omarchy"), QStringLiteral("launch"), QStringLiteral("browser"), url};
-  else command.argv = {QStringLiteral("xdg-open"), url};
-  return command;
-}
-
 }  // namespace contacts

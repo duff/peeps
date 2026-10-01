@@ -2,6 +2,8 @@
 
 #include <QDir>
 #include <QFile>
+#include <QFont>
+#include <QFontInfo>
 #include <QHash>
 #include <QStringList>
 
@@ -118,10 +120,81 @@ ThemePaths ThemePaths::forHome(const QString& home) {
   paths.stateDir = home + QStringLiteral("/.local/state/omarchy/current");
   paths.stateColors = paths.stateDir + QStringLiteral("/theme/colors.toml");
   paths.stateName = paths.stateDir + QStringLiteral("/theme.name");
+  paths.stateShell = paths.stateDir + QStringLiteral("/theme/shell.toml");
   paths.legacyDir = home + QStringLiteral("/.config/omarchy/current");
   paths.legacyColors = paths.legacyDir + QStringLiteral("/theme/colors.toml");
   paths.legacyName = paths.legacyDir + QStringLiteral("/theme.name");
+  paths.legacyShell = paths.legacyDir + QStringLiteral("/theme/shell.toml");
+  paths.userShell = home + QStringLiteral("/.config/omarchy/shell.toml");
   return paths;
+}
+
+int ShellMetrics::text(int px) const { return std::max(1, static_cast<int>(std::lround(px * basePx / 12.0))); }
+
+int ShellMetrics::space(int px) const { return std::max(0, static_cast<int>(std::lround(px * spacingScale))); }
+
+std::optional<QString> tomlValue(const QString& text, const QString& section, const QString& key) {
+  QString current;
+  for (QString line : text.split(QLatin1Char('\n'))) {
+    line = line.trimmed();
+    if (line.isEmpty() || line.startsWith(QLatin1Char('#'))) continue;
+    if (line.startsWith(QLatin1Char('['))) {
+      const int close = line.indexOf(QLatin1Char(']'));
+      current = close < 0 ? QString() : line.mid(1, close - 1).trimmed();
+      continue;
+    }
+    if (current != section) continue;
+    const int eq = line.indexOf(QLatin1Char('='));
+    if (eq < 0 || line.left(eq).trimmed() != key) continue;
+    QString value = line.mid(eq + 1).trimmed();
+    if (value.startsWith(QLatin1Char('"'))) {
+      const int close = value.indexOf(QLatin1Char('"'), 1);
+      return close < 0 ? value.mid(1) : value.mid(1, close - 1);
+    }
+    const int comment = value.indexOf(QLatin1Char('#'));
+    if (comment >= 0) value.truncate(comment);
+    return value.trimmed();
+  }
+  return std::nullopt;
+}
+
+ShellMetrics parseShellMetrics(const QString& themeToml, const QString& userToml) {
+  const auto value = [&](const char* section, const char* key) {
+    if (auto user = tomlValue(userToml, QLatin1String(section), QLatin1String(key))) return user;
+    return tomlValue(themeToml, QLatin1String(section), QLatin1String(key));
+  };
+  const auto number = [&](const char* section, const char* key, double fallback) {
+    bool ok = false;
+    const double parsed = value(section, key).value_or(QString()).toDouble(&ok);
+    return ok && parsed > 0 ? parsed : fallback;
+  };
+  ShellMetrics metrics;
+  // The shell floors base-size at 1px. Below 9px the window stops being usable.
+  metrics.basePx = std::clamp(static_cast<int>(std::lround(number("font", "base-size", 12))), 9, 32);
+  const bool followFont = value("spacing", "scale-with-font").value_or(QStringLiteral("true")) != QLatin1String("false");
+  metrics.spacingScale = std::clamp(number("spacing", "scale", 1.0), 0.5, 3.0) * (followFont ? metrics.basePx / 12.0 : 1.0);
+  return metrics;
+}
+
+ShellMetrics loadShellMetrics(const ThemePaths& paths) {
+  const QString theme = QDir(paths.stateDir).exists() ? paths.stateShell : paths.legacyShell;
+  return parseShellMetrics(readText(theme), readText(paths.userShell));
+}
+
+namespace {
+ShellMetrics& metricsSlot() {
+  static ShellMetrics metrics;
+  return metrics;
+}
+}  // namespace
+
+const ShellMetrics& activeMetrics() { return metricsSlot(); }
+
+void setActiveMetrics(const ShellMetrics& metrics) { metricsSlot() = metrics; }
+
+QString monospaceFamily() {
+  const QString family = QFontInfo(QFont(QStringLiteral("monospace"))).family();
+  return family.isEmpty() ? QStringLiteral("monospace") : family;
 }
 
 Palette tokyoNight() {
@@ -249,56 +322,81 @@ ThemeLoad loadTheme(const ThemePaths& paths) {
   return fallback;
 }
 
-QString stylesheetFor(const Palette& palette) {
+QString stylesheetFor(const Palette& palette, const ShellMetrics& m, const QString& family) {
   const auto a = [&](double alpha) { return rgba(palette.foreground, alpha); };
+  const auto px = [](int value) { return QString::number(value) + QStringLiteral("px"); };
   QString css = QStringLiteral(R"(
-QWidget { background: @@BG@@; color: @@FG@@; font-family: "JetBrainsMono Nerd Font", monospace; font-size: 12px; }
+QWidget { background: @@BG@@; color: @@FG@@; font-family: "@@FAMILY@@", monospace; font-size: @@BODY@@; }
 QMainWindow, QDialog { background: @@BG@@; color: @@FG@@; }
-QLabel { background: transparent; color: @@FG@@; font-size: 12px; }
-QLabel#title { color: @@BRIGHT@@; font-size: 16px; font-weight: 700; }
-QLabel#panelTitle { color: @@BRIGHT@@; font-size: 14px; font-weight: 700; }
-QLabel#secondary, QLabel#themeName, QLabel#status { color: @@SECONDARY@@; }
+QLabel { background: transparent; color: @@FG@@; font-size: @@BODY@@; }
+QLabel#title { color: @@BRIGHT@@; font-size: @@HEADING@@; font-weight: 700; }
+QLabel#section { color: @@BRIGHT@@; font-weight: 700; }
+QLabel#secondary, QLabel#status, QLabel#hint { color: @@SECONDARY@@; }
+QLabel#caption { color: @@SECONDARY@@; font-size: @@SMALL@@; }
 QLabel#danger { color: @@DANGER@@; }
 QLabel#accent { color: @@ACCENT@@; }
-QLabel#avatar { background: @@SURFACE@@; color: @@FG@@; border: 1px solid @@EDGE@@; min-width: 48px; max-width: 48px; min-height: 48px; max-height: 48px; font-weight: 700; qproperty-alignment: AlignCenter; }
-QLabel#portrait { background: transparent; border: none; padding: 0; }
-QPushButton { background: transparent; color: @@FG@@; border: 1px solid transparent; border-radius: 0; padding: 6px 10px; font-size: 12px; font-weight: 400; }
+QLabel#photo { background: @@INSET@@; color: @@SECONDARY@@; border: 1px solid @@EDGE@@; font-size: @@HEADING@@; font-weight: 700; }
+QPushButton { background: transparent; color: @@FG@@; border: 1px solid transparent; border-radius: 0; padding: @@BTNY@@ @@BTNX@@; font-size: @@BODY@@; font-weight: 400; }
 QPushButton[kind="outline"] { border-color: @@EDGE@@; }
 QPushButton[kind="primary"] { color: @@ACCENT@@; border-color: @@ACCENT@@; }
 QPushButton[kind="danger"] { color: @@DANGER@@; border-color: @@DANGER@@; }
+QPushButton[kind="link"] { color: @@ACCENT@@; padding: @@LINKY@@ @@LINKX@@; text-align: left; }
+QPushButton[kind="icon"] { color: @@SECONDARY@@; padding: @@BTNY@@ @@ICONX@@; }
+QPushButton[kind="icon"]:hover, QPushButton[kind="icon"]:focus { color: @@DANGER@@; }
 QPushButton:hover { background: @@HOVER@@; }
+QPushButton:focus { border-color: @@FOCUS@@; }
+QPushButton[kind="primary"]:focus { border-color: @@ACCENT@@; background: @@HOVER@@; }
 QPushButton:pressed { background: @@PRESSED@@; }
 QPushButton:disabled { color: @@DISABLED@@; }
-QLineEdit, QTextEdit, QPlainTextEdit, QComboBox { background: transparent; color: @@FG@@; border: 1px solid @@EDGE@@; border-radius: 0; padding: 7px 10px; selection-background-color: @@SELECTION@@; selection-color: @@FG@@; font-size: 12px; }
+QLineEdit, QTextEdit, QPlainTextEdit, QComboBox { background: transparent; color: @@FG@@; border: 1px solid @@EDGE@@; border-radius: 0; padding: @@INPUTY@@ @@INPUTX@@; selection-background-color: @@SELECTION@@; selection-color: @@FG@@; font-size: @@BODY@@; }
 QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QComboBox:focus { border: 1px solid @@ACCENT@@; }
-QComboBox::drop-down { border: none; width: 16px; }
+QComboBox::drop-down { border: none; width: @@DROPDOWN@@; }
 QComboBox QAbstractItemView { background: @@BG@@; color: @@FG@@; border: 1px solid @@EDGE@@; selection-background-color: @@SELECTION@@; selection-color: @@FG@@; outline: none; }
-QMenu { background: @@BG@@; color: @@FG@@; border: 1px solid @@EDGE@@; padding: 4px 0; }
-QMenu::item { padding: 8px 18px; background: transparent; }
-QMenu::item:selected { background: @@HOVER@@; }
-QMenu::separator { height: 1px; background: @@DIVIDER@@; margin: 4px 8px; }
+QMenu { background: @@BG@@; color: @@FG@@; border: 1px solid @@EDGE@@; padding: @@MENUPAD@@ 0; }
+QMenu::item { padding: @@MENUY@@ @@MENUX@@; background: transparent; }
+QMenu::item:selected { background: @@HOVER@@; color: @@ACCENT@@; }
+QMenu::item:disabled { color: @@DISABLED@@; }
+QMenu::separator { height: 1px; background: @@DIVIDER@@; margin: @@MENUPAD@@ @@MENUSEP@@; }
 QTextEdit#notes, QPlainTextEdit#notes { background: @@INSET@@; }
 QListView { background: transparent; border: none; outline: none; }
-QScrollBar:vertical { background: @@SCROLLTRACK@@; width: 8px; margin: 0; border: none; }
-QScrollBar::handle:vertical { background: @@SCROLL@@; min-height: 24px; border: none; }
+QScrollArea { background: transparent; border: none; }
+QScrollBar:vertical { background: @@SCROLLTRACK@@; width: @@SCROLLW@@; margin: 0; border: none; }
+QScrollBar::handle:vertical { background: @@SCROLL@@; min-height: @@SCROLLMIN@@; border: none; }
 QScrollBar::handle:vertical:hover { background: @@SCROLLHOVER@@; }
 QScrollBar::handle:vertical:pressed { background: @@SCROLLPRESS@@; }
 QScrollBar::add-line, QScrollBar::sub-line, QScrollBar::add-page, QScrollBar::sub-page { background: none; height: 0; width: 0; }
 QScrollBar:horizontal { height: 0; }
-QFrame#hairline { background: @@DIVIDER@@; max-height: 1px; border: none; }
-QFrame#vhairline { background: @@DIVIDER@@; max-width: 1px; border: none; }
+QFrame#hairline { background: @@DIVIDER@@; max-height: 1px; min-height: 1px; border: none; }
 QFrame#toast { background: @@BG@@; border: 1px solid @@EDGE@@; }
 QFrame#toast[error="true"] { border: 1px solid @@DANGER@@; }
 )");
   const QList<QPair<QString, QString>> tokens = {
+      {QStringLiteral("@@FAMILY@@"), family},
+      {QStringLiteral("@@BODY@@"), px(m.text(12))},
+      {QStringLiteral("@@SMALL@@"), px(m.text(11))},
+      {QStringLiteral("@@HEADING@@"), px(m.text(16))},
+      {QStringLiteral("@@BTNY@@"), px(m.space(6))},
+      {QStringLiteral("@@BTNX@@"), px(m.space(10))},
+      {QStringLiteral("@@ICONX@@"), px(m.space(8))},
+      {QStringLiteral("@@LINKY@@"), px(m.space(4))},
+      {QStringLiteral("@@LINKX@@"), px(m.space(2))},
+      {QStringLiteral("@@INPUTY@@"), px(m.space(7))},
+      {QStringLiteral("@@INPUTX@@"), px(m.space(10))},
+      {QStringLiteral("@@DROPDOWN@@"), px(m.space(16))},
+      {QStringLiteral("@@MENUPAD@@"), px(m.space(4))},
+      {QStringLiteral("@@MENUY@@"), px(m.space(8))},
+      {QStringLiteral("@@MENUX@@"), px(m.space(18))},
+      {QStringLiteral("@@MENUSEP@@"), px(m.space(8))},
+      {QStringLiteral("@@SCROLLW@@"), px(std::max(6, m.space(8)))},
+      {QStringLiteral("@@SCROLLMIN@@"), px(m.space(24))},
       {QStringLiteral("@@BG@@"), palette.background.name(QColor::HexRgb)},
       {QStringLiteral("@@FG@@"), palette.foreground.name(QColor::HexRgb)},
       {QStringLiteral("@@BRIGHT@@"), palette.bright.name(QColor::HexRgb)},
       {QStringLiteral("@@SECONDARY@@"), palette.secondary.name(QColor::HexRgb)},
       {QStringLiteral("@@DANGER@@"), palette.danger.name(QColor::HexRgb)},
       {QStringLiteral("@@ACCENT@@"), palette.accent.name(QColor::HexRgb)},
-      {QStringLiteral("@@SURFACE@@"), palette.surface.name(QColor::HexRgb)},
       {QStringLiteral("@@EDGE@@"), a(0.40)},
+      {QStringLiteral("@@FOCUS@@"), a(0.70)},
       {QStringLiteral("@@HOVER@@"), a(0.08)},
       {QStringLiteral("@@PRESSED@@"), a(0.22)},
       {QStringLiteral("@@DISABLED@@"), a(0.45)},

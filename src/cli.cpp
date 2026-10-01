@@ -3,6 +3,8 @@
 #include "blockingnam.h"
 #include "oauth.h"
 #include "search.h"
+#include "vcard.h"
+#include "version.h"
 
 #include <QBuffer>
 #include <QDateTime>
@@ -22,7 +24,7 @@ namespace {
 
 enum class Take { No, Yes, Error };
 
-const char* kCommands[] = {"list", "search", "show", "add", "update", "delete", "sync", "help", "commands", "version"};
+const char* kCommands[] = {"list", "search", "show", "export", "add", "update", "delete", "sync", "help", "commands", "version"};
 
 bool isCommand(const QString& text) {
   for (const char* command : kCommands) {
@@ -46,12 +48,13 @@ QString overview() {
   return QStringLiteral(
       "contacts — look up and change Google contacts\n"
       "\n"
-      "List, search, and show read the local cache, so they stay fast.\n"
+      "List, search, show, and export read the local cache, so they stay fast.\n"
       "Add, update, delete, and sync talk to Google, then refresh that cache.\n"
       "\n"
       "  contacts list [--limit N]\n"
       "  contacts search QUERY [--limit N]\n"
       "  contacts show ID\n"
+      "  contacts export [ID...]\n"
       "  contacts add FLAGS\n"
       "  contacts update ID FLAGS\n"
       "  contacts delete ID --yes\n"
@@ -134,6 +137,14 @@ QString commandHelp(const QString& command) {
         "\n"
         "JSON is the object --data accepts, plus id, name, etag, and photo_url.\n");
   }
+  if (command == QLatin1String("export")) {
+    return QStringLiteral(
+        "Print contacts from the local cache as vCard 3.0, which Google, iOS,\n"
+        "Android, and most mail apps import. With no ID, every contact.\n"
+        "\n"
+        "  contacts export [ID...]\n"
+        "  contacts export ada@example.com > ada.vcf\n");
+  }
   if (command == QLatin1String("add")) {
     return QStringLiteral("Create a contact on Google, then store it in the local cache.\n"
                           "A name or a company is required.\n"
@@ -180,6 +191,7 @@ const CommandRow kCatalog[] = {
     {"list", "List contacts from the local cache"},
     {"search", "Find contacts in the local cache"},
     {"show", "Print one contact"},
+    {"export", "Print contacts as vCards"},
     {"add", "Create a contact on Google"},
     {"update", "Change a contact on Google"},
     {"delete", "Delete a contact on Google"},
@@ -281,19 +293,6 @@ Take takeValue(const QStringList& args, int& index, const QString& flag, QString
   }
   value = args.at(++index);
   return Take::Yes;
-}
-
-QString dateText(const DateValue& date) {
-  if (date.year > 0 && date.month > 0 && date.day > 0) {
-    return QStringLiteral("%1-%2-%3")
-        .arg(date.year, 4, 10, QLatin1Char('0'))
-        .arg(date.month, 2, 10, QLatin1Char('0'))
-        .arg(date.day, 2, 10, QLatin1Char('0'));
-  }
-  if (date.year <= 0 && date.month > 0 && date.day > 0) {
-    return QStringLiteral("%1-%2").arg(date.month, 2, 10, QLatin1Char('0')).arg(date.day, 2, 10, QLatin1Char('0'));
-  }
-  return date.text;
 }
 
 std::optional<DateValue> parseDate(const QString& text, QString& error) {
@@ -690,7 +689,7 @@ QJsonObject contactJson(const Contact& contact) {
   }
   object.insert(QStringLiteral("other_organizations"), organizations);
   object.insert(QStringLiteral("notes"), contact.notes);
-  object.insert(QStringLiteral("birthday"), dateText(contact.birthday));
+  object.insert(QStringLiteral("birthday"), contact.birthday.isoText());
   object.insert(QStringLiteral("photo_url"), contact.photoUrl);
   object.insert(QStringLiteral("emails"), labeledArray(contact.emails));
   object.insert(QStringLiteral("phones"), labeledArray(contact.phones));
@@ -717,7 +716,7 @@ QJsonObject contactJson(const Contact& contact) {
     QJsonObject item;
     item.insert(QStringLiteral("label"), event.label);
     if (!event.type.isEmpty()) item.insert(QStringLiteral("type"), event.type);
-    item.insert(QStringLiteral("date"), dateText(event.date));
+    item.insert(QStringLiteral("date"), event.date.isoText());
     events.append(item);
   }
   object.insert(QStringLiteral("events"), events);
@@ -1157,7 +1156,7 @@ Parsed parseArgs(const QStringList& args) {
   for (const QString& arg : args) {
     if (arg == QLatin1String("--version")) {
       parsed.stop = true;
-      parsed.early = finish(kCliOk, QStringLiteral("contacts 0.1.0"));
+      parsed.early = finish(kCliOk, QStringLiteral("contacts ") + QLatin1String(kVersion));
       return parsed;
     }
   }
@@ -1301,7 +1300,7 @@ Parsed parseArgs(const QStringList& args) {
   }
   if (parsed.command == QLatin1String("version")) {
     parsed.stop = true;
-    parsed.early = finish(kCliOk, QStringLiteral("contacts 0.1.0"));
+    parsed.early = finish(kCliOk, QStringLiteral("contacts ") + QLatin1String(kVersion));
     return parsed;
   }
   if (!parsed.command.isEmpty() && !isCommand(parsed.command)) {
@@ -1396,6 +1395,26 @@ CliResult execute(Parsed parsed, CliSession& session, bool stdoutIsTty) {
     const Found found = resolveContact(session.contacts, id);
     if (found.code != kCliOk) return finish(found.code, {}, found.error);
     return finish(kCliOk, renderContact(found.contact, json));
+  }
+
+  if (command == QLatin1String("export")) {
+    if (parsed.json) return usage(QStringLiteral("export prints vCards, not JSON."));
+    QList<Contact> chosen;
+    if (parsed.positionals.isEmpty()) {
+      index.replaceAll(session.contacts);
+      chosen = index.all();
+    } else {
+      for (const QString& id : parsed.positionals) {
+        const Found found = resolveContact(session.contacts, id);
+        if (found.code != kCliOk) return finish(found.code, {}, found.error);
+        chosen.append(found.contact);
+      }
+    }
+    QByteArray cards;
+    for (const Contact& contact : chosen) cards += contactVCard(contact);
+    CliResult result;
+    result.out = QString::fromUtf8(cards);
+    return result;
   }
 
   if (command == QLatin1String("sync")) {
@@ -1535,45 +1554,6 @@ CliResult execute(Parsed parsed, CliSession& session, bool stdoutIsTty) {
   return finish(kCliOk, verb + QLatin1Char(' ') + saved.displayName() + QStringLiteral(".\n\n") + card);
 }
 
-struct GoogleSession {
-  HttpClient* http = nullptr;
-  OAuthClient client;
-  OAuthTokens tokens;
-  SecretStore* secrets = nullptr;
-  bool dirty = false;
-
-  QString prepare() {
-    const QString before = tokens.accessToken;
-    const qint64 now = QDateTime::currentSecsSinceEpoch();
-    const TokenResult ensured = ensureAccess(*http, client, tokens, now);
-    if (!ensured.ok()) return ensured.error;
-    if (tokens.accessToken != before) dirty = true;
-    return {};
-  }
-
-  template <typename Fn>
-  auto call(Fn&& fn) {
-    QString access = tokens.accessToken;
-    auto refresh = [&]() -> QString {
-      const TokenResult refreshed = refreshAccess(*http, client, tokens, QDateTime::currentSecsSinceEpoch());
-      if (!refreshed.ok()) return refreshed.error;
-      tokens = refreshed.tokens;
-      access = tokens.accessToken;
-      dirty = true;
-      return {};
-    };
-    auto result = fn(access, refresh);
-    tokens.accessToken = access;
-    return result;
-  }
-
-  void saveSecrets() {
-    if (!dirty || secrets == nullptr) return;
-    QString error;
-    secrets->save(QString::fromUtf8(writeTokensJson(tokens)), error);
-  }
-};
-
 }  // namespace
 
 bool isCliInvocation(const QStringList& args) {
@@ -1594,7 +1574,6 @@ CliResult runContactsCommand(const QStringList& args, const CliLaunch& launch) {
   const Parsed parsed = parseArgs(args);
   if (parsed.stop) return parsed.early;
 
-  migrateLegacyPaths(launch.paths);
   CliSession session;
   session.stdinBytes = launch.stdinBytes;
   if (const auto bytes = readFile(launch.paths.cacheFile)) {
@@ -1611,7 +1590,8 @@ CliResult runContactsCommand(const QStringList& args, const CliLaunch& launch) {
   std::unique_ptr<BlockingNam> ownedHttp;
   SecretStore* secrets = launch.secrets;
   HttpClient* http = launch.http;
-  GoogleSession google;
+  std::optional<GoogleSession> google;
+  OAuthTokens loaded;
   if (parsed.needsAccount) {
     if (secrets == nullptr) {
       ownedSecrets = makeSecretStore();
@@ -1625,6 +1605,7 @@ CliResult runContactsCommand(const QStringList& args, const CliLaunch& launch) {
     if (const auto bytes = readFile(launch.paths.configFile)) {
       if (const auto read = readConfigJson(*bytes)) config = *read;
     }
+    config = effectiveClient(config);
     QString secretError;
     const auto secret = secrets->load(secretError);
     OAuthTokens tokens;
@@ -1636,34 +1617,36 @@ CliResult runContactsCommand(const QStringList& args, const CliLaunch& launch) {
     } else if (config.clientId.isEmpty() || tokens.refreshToken.isEmpty()) {
       session.signedIn = false;
     } else {
-      google.http = http;
-      google.client = OAuthClient{config.clientId, config.clientSecret};
-      google.tokens = tokens;
-      google.secrets = secrets;
-      const QString ready = google.prepare();
+      loaded = tokens;
+      google.emplace(*http, OAuthClient{config.clientId, config.clientSecret}, tokens);
+      const QString ready = google->prepare(QDateTime::currentSecsSinceEpoch());
       if (!ready.isEmpty()) {
-        session.signedIn = true;
         session.authError = ready;
-        session.signedIn = false;
       } else {
         session.signedIn = true;
         session.create = [&](const Contact& contact) {
-          return google.call([&](QString& access, const RefreshFn& refresh) { return createContact(*http, access, contact, refresh); });
+          return google->call([&](HttpClient& client, QString& access, const RefreshFn& refresh) {
+            return createContact(client, access, contact, refresh);
+          });
         };
         session.update = [&](const Contact& contact) {
-          return google.call([&](QString& access, const RefreshFn& refresh) { return updateContact(*http, access, contact, refresh); });
+          return google->call([&](HttpClient& client, QString& access, const RefreshFn& refresh) {
+            return updateContact(client, access, contact, refresh);
+          });
         };
         session.remove = [&](const QString& id) {
-          return google.call([&](QString& access, const RefreshFn& refresh) { return deleteContact(*http, access, id, refresh); });
+          return google->call([&](HttpClient& client, QString& access, const RefreshFn& refresh) {
+            return deleteContact(client, access, id, refresh);
+          });
         };
         session.photo = [&](const QString& id, const QByteArray& jpeg, bool removePhoto) {
-          return google.call([&](QString& access, const RefreshFn& refresh) {
-            return removePhoto ? deleteContactPhoto(*http, access, id, refresh) : updateContactPhoto(*http, access, id, jpeg, refresh);
+          return google->call([&](HttpClient& client, QString& access, const RefreshFn& refresh) {
+            return removePhoto ? deleteContactPhoto(client, access, id, refresh) : updateContactPhoto(client, access, id, jpeg, refresh);
           });
         };
         session.syncPeople = [&](bool full) {
-          return google.call([&](QString& access, const RefreshFn& refresh) {
-            return fetchConnections(*http, access, full ? QString() : session.syncToken, refresh);
+          return google->call([&](HttpClient& client, QString& access, const RefreshFn& refresh) {
+            return fetchConnections(client, access, full ? QString() : session.syncToken, refresh);
           });
         };
       }
@@ -1671,7 +1654,11 @@ CliResult runContactsCommand(const QStringList& args, const CliLaunch& launch) {
   }
 
   const CliResult result = execute(parsed, session, launch.stdoutIsTty);
-  google.saveSecrets();
+  // A refreshed access token saves the next command a round trip.
+  if (google && google->tokens() != loaded) {
+    QString error;
+    secrets->save(QString::fromUtf8(writeTokensJson(google->tokens())), error);
+  }
   return result;
 }
 

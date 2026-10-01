@@ -2,6 +2,7 @@
 
 #include "oauth.h"
 
+#include <QHash>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -369,6 +370,13 @@ QJsonArray addressArray(const QList<PostalAddress>& addresses) {
     object.insert(QStringLiteral("region"), address.region);
     object.insert(QStringLiteral("postalCode"), address.postalCode);
     object.insert(QStringLiteral("country"), address.country);
+    // An address typed as one line has no parts. Without formattedValue the
+    // update would leave it empty on Google.
+    const bool parts = !(address.street + address.extended + address.poBox + address.city + address.region +
+                         address.postalCode + address.country)
+                            .trimmed()
+                            .isEmpty();
+    if (!parts) object.insert(QStringLiteral("formattedValue"), address.formatted);
     if (!address.type.isEmpty()) {
       const ResolvedLabel resolved = resolveLabel(LabelField::Address, address.type);
       if (!resolved.type.isEmpty()) object.insert(QStringLiteral("type"), resolved.type);
@@ -480,14 +488,15 @@ QByteArray personJson(const Contact& contact) {
 
 QString photoFetchUrl(const QString& url) {
   if (url.isEmpty()) return {};
-  QString result = url;
-  result.remove(QRegularExpression(QStringLiteral("([?&])sz=\\d+")));
-  if (result.endsWith(QLatin1Char('?')) || result.endsWith(QLatin1Char('&'))) result.chop(1);
+  static const QRegularExpression sizeParam(QStringLiteral("([?&])sz=\\d+"));
   // Google's image servers use "=s100" (or "=s100-c") at the end of the URL.
   // "=s0" asks for the original file instead of that thumbnail.
-  const QRegularExpression googleSize(QStringLiteral("=s\\d+(-[A-Za-z0-9]+)?$"));
+  static const QRegularExpression googleSize(QStringLiteral("=s\\d+(-[A-Za-z0-9]+)?$"));
+  static const QRegularExpression googleBox(QStringLiteral("=[wh]\\d+-[wh]\\d+(-[A-Za-z0-9]+)?$"));
+  QString result = url;
+  result.remove(sizeParam);
+  if (result.endsWith(QLatin1Char('?')) || result.endsWith(QLatin1Char('&'))) result.chop(1);
   if (googleSize.match(result).hasMatch()) return result.replace(googleSize, QStringLiteral("=s0"));
-  const QRegularExpression googleBox(QStringLiteral("=[wh]\\d+-[wh]\\d+(-[A-Za-z0-9]+)?$"));
   if (googleBox.match(result).hasMatch()) return result.replace(googleBox, QStringLiteral("=s0"));
   return result + (result.contains(QLatin1Char('?')) ? QStringLiteral("&sz=2048") : QStringLiteral("?sz=2048"));
 }
@@ -511,11 +520,13 @@ QList<Contact> applyFullSync(const QList<PersonChange>& people) {
 }
 
 QList<Contact> applyIncrementalSync(QList<Contact> current, const QList<PersonChange>& changes) {
+  // The last change for a person wins, whatever order the pages arrive in.
+  QHash<QString, const PersonChange*> latest;
+  latest.reserve(changes.size());
+  for (const auto& change : changes) latest.insert(change.contact.resourceName, &change);
+  current.removeIf([&](const Contact& contact) { return latest.contains(contact.resourceName); });
   for (const auto& change : changes) {
-    current.erase(std::remove_if(current.begin(), current.end(),
-                                 [&](const Contact& contact) { return contact.resourceName == change.contact.resourceName; }),
-                  current.end());
-    if (!change.deleted) current.append(change.contact);
+    if (!change.deleted && latest.value(change.contact.resourceName) == &change) current.append(change.contact);
   }
   return current;
 }
@@ -687,6 +698,18 @@ WriteResult deleteContactPhoto(HttpClient& http, QString& accessToken, const QSt
   WriteResult result = photoResult(authorizedRequest(http, accessToken, refresh, QStringLiteral("DELETE"), url, {}));
   if (result.ok()) result.contact.photoUrl.clear();
   return result;
+}
+
+QString GoogleSession::prepare(qint64 nowUnix) {
+  const TokenResult ensured = ensureAccess(http_, client_, tokens_, nowUnix);
+  return ensured.ok() ? QString() : ensured.error;
+}
+
+QString GoogleSession::refreshTokens(qint64 nowUnix) {
+  const TokenResult refreshed = refreshAccess(http_, client_, tokens_, nowUnix);
+  if (!refreshed.ok()) return refreshed.error;
+  tokens_ = refreshed.tokens;
+  return {};
 }
 
 QString deleteContact(HttpClient& http, QString& accessToken, const QString& resourceName, const RefreshFn& refresh) {

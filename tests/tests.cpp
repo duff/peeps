@@ -5,13 +5,14 @@
 #include "mainwindow.h"
 #include "net.h"
 #include "google.h"
-#include "mail.h"
+#include "desktop.h"
 #include "oauth.h"
 #include "photos.h"
 #include "search.h"
 #include "shortcuts.h"
 #include "store.h"
 #include "theme.h"
+#include "vcard.h"
 
 #include <QBuffer>
 #include <QDir>
@@ -36,6 +37,11 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QTemporaryDir>
+#include <QMimeData>
+
+#include <memory>
+
+#include <unistd.h>
 
 #include <QtTest>
 
@@ -813,13 +819,19 @@ void GoogleTests::mailUsesDesktopHandler() {
   contact.givenName = QStringLiteral("Ada");
   contact.familyName = QStringLiteral("Lovelace");
   contact.emails.append({QStringLiteral("ada@example.com"), QStringLiteral("Work"), QStringLiteral("work")});
-  const auto command = contacts::mailCommand(contact);
+  const auto command = contacts::mailCommand(contact.primaryEmail());
   QVERIFY(command.ok());
   QCOMPARE(command.argv.size(), 2);
   QCOMPARE(command.argv.at(0), QStringLiteral("xdg-email"));
   QCOMPARE(command.argv.at(1), QStringLiteral("ada@example.com"));
-  contacts::Contact nameless;
-  QVERIFY(!contacts::mailCommand(nameless).ok());
+  QVERIFY(!contacts::mailCommand(QString()).ok());
+  QVERIFY(!contacts::mailCommand(QStringLiteral("ada@example.com\nBcc: x@example.com")).ok());
+  // HEY reads everything after mailto: as the address, so a compose has no arguments.
+  QCOMPARE(contacts::composeCommand().argv, QStringList{QStringLiteral("xdg-email")});
+  QVERIFY(contacts::mailHandlerTakesAttachments(QStringLiteral("org.mozilla.Thunderbird.desktop")));
+  QVERIFY(!contacts::mailHandlerTakesAttachments(QStringLiteral("HEY.desktop")));
+  QCOMPARE(contacts::attachCommand(QStringLiteral("/tmp/Ada.vcf")).argv,
+           (QStringList{QStringLiteral("xdg-email"), QStringLiteral("--attach"), QStringLiteral("/tmp/Ada.vcf")}));
 }
 
 void GoogleTests::browserPrefersOmarchy() {
@@ -865,10 +877,10 @@ void GoogleTests::storeRoundTrip() {
   QCOMPARE(info.permissions() & (QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ReadGroup |
                                  QFileDevice::WriteGroup | QFileDevice::ReadOther | QFileDevice::WriteOther),
            QFileDevice::ReadOwner | QFileDevice::WriteOwner);
-  const auto paths = contacts::AppPaths::forEnv(QStringLiteral("/home/duff"), QStringLiteral("/xdg/config"), QString());
+  const auto paths = contacts::AppPaths::forEnv(QStringLiteral("/home/ada"), QStringLiteral("/xdg/config"), QString());
   QCOMPARE(paths.configFile, QStringLiteral("/xdg/config/contacts/config.json"));
-  QCOMPARE(paths.cacheFile, QStringLiteral("/home/duff/.local/share/contacts/contacts.json"));
-  QCOMPARE(paths.photoDir, QStringLiteral("/home/duff/.cache/contacts/photos"));
+  QCOMPARE(paths.cacheFile, QStringLiteral("/home/ada/.local/share/contacts/contacts.json"));
+  QCOMPARE(paths.photoDir, QStringLiteral("/home/ada/.cache/contacts/photos"));
 }
 
 contacts::Contact sampleContact(QString id, QString given, QString family, QString email, QString phone,
@@ -1147,39 +1159,47 @@ void LayoutTests::companyWithoutAPersonalName() {
     }
     return nullptr;
   };
-  auto* addPhone = button(QStringLiteral("Add phone"));
-  auto* addAddress = button(QStringLiteral("Add address"));
-  auto* more = button(QStringLiteral("More"));
+  auto* addPhone = button(QStringLiteral("+ Add phone"));
+  auto* addAddress = button(QStringLiteral("+ Add address"));
+  auto* more = button(QStringLiteral("More fields"));
   QVERIFY(addPhone != nullptr && addPhone->isVisible());
   QVERIFY(addAddress != nullptr && addAddress->isVisible());
   QVERIFY(more != nullptr && more->isVisible());
+  QCOMPARE(addPhone->accessibleName(), QStringLiteral("Add phone"));
   auto* photo = editor->findChild<QLabel*>(QStringLiteral("photo"));
   auto* given = editor->findChild<QLineEdit*>(QStringLiteral("given"));
-  QVERIFY(photo != nullptr && given != nullptr);
-  QVERIFY(photo->alignment() & Qt::AlignLeft);
-  QCOMPARE(photo->mapTo(editor, QPoint(0, 0)).x(), given->mapTo(editor, QPoint(0, 0)).x());
+  auto* family = editor->findChild<QLineEdit*>(QStringLiteral("family"));
+  auto* jobTitle = editor->findChild<QLineEdit*>(QStringLiteral("title-field"));
+  QVERIFY(photo != nullptr && given != nullptr && family != nullptr && jobTitle != nullptr);
+  const auto at = [&](QWidget* widget) { return widget->mapTo(editor, QPoint(0, 0)); };
+  // The photo sits beside the names, and first and last name share a row.
+  QVERIFY(at(photo).x() < at(given).x());
+  QVERIFY(at(photo).y() <= at(given).y());
+  QCOMPARE(at(given).y(), at(family).y());
+  QVERIFY(at(given).x() < at(family).x());
+  QVERIFY(jobTitle->isVisible());
   auto* notes = editor->findChild<QPlainTextEdit*>(QStringLiteral("notes"));
   QVERIFY(notes != nullptr && notes->isVisible());
-  QVERIFY(addPhone->mapTo(editor, QPoint(0, 0)).y() < addAddress->mapTo(editor, QPoint(0, 0)).y());
-  QVERIFY(addAddress->mapTo(editor, QPoint(0, 0)).y() < notes->mapTo(editor, QPoint(0, 0)).y());
-  QVERIFY(notes->mapTo(editor, QPoint(0, 0)).y() < more->mapTo(editor, QPoint(0, 0)).y());
-  QVERIFY(button(QStringLiteral("Add instant message")) == nullptr);
-  QVERIFY(button(QStringLiteral("Add SIP address")) == nullptr);
+  QVERIFY(at(addPhone).y() < at(addAddress).y());
+  QVERIFY(at(addAddress).y() < at(notes).y());
+  QVERIFY(at(notes).y() < at(more).y());
+  QVERIFY(button(QStringLiteral("+ Add instant message")) == nullptr);
+  QVERIFY(button(QStringLiteral("+ Add SIP address")) == nullptr);
+  auto* website = button(QStringLiteral("+ Add website"));
+  QVERIFY(website != nullptr && !website->isVisible());
   QTest::mouseClick(more, Qt::LeftButton);
   QApplication::processEvents();
-  const auto labelNamed = [&](const QString& text) -> QLabel* {
-    for (auto* label : editor->findChildren<QLabel*>()) {
-      if (label->text() == text) return label;
+  QCOMPARE(more->text(), QStringLiteral("Fewer fields"));
+  QVERIFY(website->isVisible());
+  QVERIFY(button(QStringLiteral("+ Add person")) != nullptr && button(QStringLiteral("+ Add person"))->isVisible());
+  for (const QString& heading : {QStringLiteral("Name details"), QStringLiteral("Work details"), QStringLiteral("Dates"),
+                                 QStringLiteral("Websites"), QStringLiteral("Related people"), QStringLiteral("Custom fields")}) {
+    QLabel* found = nullptr;
+    for (auto* label : editor->findChildren<QLabel*>(QStringLiteral("section"))) {
+      if (label->text() == heading) found = label;
     }
-    return nullptr;
-  };
-  for (const QString& heading : {QStringLiteral("Website"), QStringLiteral("Related person"), QStringLiteral("Another company"),
-                                 QStringLiteral("Significant date"), QStringLiteral("Custom field")}) {
-    QLabel* headingLabel = labelNamed(heading);
-    QVERIFY2(headingLabel != nullptr && !headingLabel->isVisible(), qPrintable(heading));
+    QVERIFY2(found != nullptr && found->isVisible(), qPrintable(heading));
   }
-  QVERIFY(button(QStringLiteral("Add website")) != nullptr && button(QStringLiteral("Add website"))->isVisible());
-  QVERIFY(button(QStringLiteral("Add related person")) != nullptr && button(QStringLiteral("Add related person"))->isVisible());
   for (auto* field : editor->findChildren<QLineEdit*>()) {
     QVERIFY(field->placeholderText() != QStringLiteral("PO box"));
   }
@@ -1192,6 +1212,29 @@ void LayoutTests::companyWithoutAPersonalName() {
     QVERIFY(text != QStringLiteral("Instant message"));
     QVERIFY(text != QStringLiteral("SIP address"));
   }
+  // Rows added later still take Tab in page order: the new email follows the first.
+  QTest::mouseClick(button(QStringLiteral("+ Add email")), Qt::LeftButton);
+  QApplication::processEvents();
+  QApplication::processEvents();
+  QLineEdit* firstEmail = nullptr;
+  QLineEdit* secondEmail = nullptr;
+  for (auto* field : editor->findChildren<QLineEdit*>()) {
+    if (field->accessibleName() != QLatin1String("email")) continue;
+    if (firstEmail == nullptr || at(field).y() < at(firstEmail).y()) {
+      secondEmail = firstEmail;
+      firstEmail = field;
+    } else {
+      secondEmail = field;
+    }
+  }
+  QVERIFY(firstEmail != nullptr && secondEmail != nullptr);
+  QVERIFY(at(firstEmail).y() < at(secondEmail).y());
+  QWidget* afterFirst = firstEmail->nextInFocusChain();
+  while (afterFirst != nullptr && afterFirst != secondEmail && !(afterFirst->focusPolicy() & Qt::TabFocus)) {
+    afterFirst = afterFirst->nextInFocusChain();
+  }
+  QVERIFY(afterFirst != nullptr);
+  QVERIFY2(at(afterFirst).y() <= at(secondEmail).y(), qPrintable(afterFirst->accessibleName()));
 
   contact.addresses[0].poBox = QStringLiteral("12");
   contacts::ContactEditor direct(contact, {}, nullptr);
@@ -1416,24 +1459,42 @@ void GuardTests::requestsStayOnHttp1() {
 }
 
 void GuardTests::secondLaunchRaisesTheFirst() {
-  const QString name = QDir::tempPath() + QStringLiteral("/contacts-test-%1.sock").arg(QCoreApplication::applicationPid());
-  contacts::InstanceLock first(name);
+  const QString name = QStringLiteral("contacts-test-%1").arg(QCoreApplication::applicationPid());
+  auto first = std::make_unique<contacts::InstanceLock>(name);
   int raises = 0;
-  QVERIFY(first.claim([&raises] { ++raises; }));
+  QString token = QStringLiteral("unset");
+  QVERIFY(first->claim([&](const QString& given) {
+    ++raises;
+    token = given;
+  }));
   contacts::InstanceLock second(name);
-  QVERIFY(!second.claim([] {}));
-  QCOMPARE(first.raises(), 1);
+  QVERIFY(!second.claim([](const QString&) {}, QStringLiteral("hyprland-token-1")));
+  QCOMPARE(first->raises(), 1);
   QCOMPARE(raises, 1);
+  QCOMPARE(token, QStringLiteral("hyprland-token-1"));
+  contacts::InstanceLock third(name);
+  QVERIFY(!third.claim([](const QString&) {}));
+  QCOMPARE(raises, 2);
+  QCOMPARE(token, QString());
+  // The name lives in the abstract namespace: no file to delete or leave
+  // stale, and the next launch owns it as soon as the first one exits.
+  QVERIFY(!QFile::exists(name));
+  QVERIFY(!QFile::exists(QDir::tempPath() + QLatin1Char('/') + name));
+  first.reset();
+  contacts::InstanceLock next(name);
+  QVERIFY(next.claim([](const QString&) {}));
+  QVERIFY(contacts::instanceSocketName().contains(QString::number(getuid())));
 }
 
 void ShortcutTests::typingSuspendsSingleKeys() {
-  QCOMPARE(contacts::routeKey(browser(contacts::Key::J, true)), contacts::Command::Ignore);
+  auto letter = browser(contacts::Key::Other, true);
+  letter.printable = true;
+  QCOMPARE(contacts::routeKey(letter), contacts::Command::Ignore);
   QCOMPARE(contacts::routeKey(browser(contacts::Key::Down, true)), contacts::Command::MoveDown);
   QCOMPARE(contacts::routeKey(browser(contacts::Key::N, true)), contacts::Command::Ignore);
   auto created = browser(contacts::Key::N, true);
   created.ctrl = true;
   QCOMPARE(contacts::routeKey(created), contacts::Command::NewContact);
-  QCOMPARE(contacts::routeKey(browser(contacts::Key::F1, true)), contacts::Command::Ignore);
 }
 
 void ShortcutTests::escapeClearsBeforeBack() {
@@ -1462,10 +1523,8 @@ void ShortcutTests::escapeClearsBeforeBack() {
 }
 
 void ShortcutTests::listKeys() {
-  QCOMPARE(contacts::routeKey(browser(contacts::Key::J)), contacts::Command::Ignore);
+  QCOMPARE(contacts::routeKey(browser(contacts::Key::Other)), contacts::Command::Ignore);
   QCOMPARE(contacts::routeKey(browser(contacts::Key::E)), contacts::Command::Ignore);
-  QCOMPARE(contacts::routeKey(browser(contacts::Key::R)), contacts::Command::Ignore);
-  QCOMPARE(contacts::routeKey(browser(contacts::Key::PageDown)), contacts::Command::Ignore);
   QCOMPARE(contacts::routeKey(browser(contacts::Key::Down)), contacts::Command::MoveDown);
   QCOMPARE(contacts::routeKey(browser(contacts::Key::Slash)), contacts::Command::FocusSearch);
   QCOMPARE(contacts::routeKey(browser(contacts::Key::Slash, true)), contacts::Command::Ignore);
@@ -1486,9 +1545,28 @@ void ShortcutTests::listKeys() {
   ctrlE.ctrl = true;
   QCOMPARE(contacts::routeKey(ctrlE), contacts::Command::EditContact);
   QCOMPARE(contacts::routeKey(browser(contacts::Key::Question)), contacts::Command::Help);
-  auto quit = browser(contacts::Key::Q);
+  auto quit = browser(contacts::Key::Other);
   quit.ctrl = true;
+  quit.printable = true;
   QCOMPARE(contacts::routeKey(quit), contacts::Command::Ignore);
+}
+
+void ShortcutTests::typingOutsideSearchSearches() {
+  auto letter = browser(contacts::Key::Other);
+  letter.printable = true;
+  QCOMPARE(contacts::routeKey(letter), contacts::Command::TypeToSearch);
+  letter.detailOpen = true;
+  QCOMPARE(contacts::routeKey(letter), contacts::Command::TypeToSearch);
+  auto slash = browser(contacts::Key::Slash);
+  slash.printable = true;
+  slash.detailOpen = true;
+  QCOMPARE(contacts::routeKey(slash), contacts::Command::FocusSearch);
+  auto question = browser(contacts::Key::Question);
+  question.printable = true;
+  QCOMPARE(contacts::routeKey(question), contacts::Command::Help);
+  letter.surface = contacts::Surface::Editor;
+  letter.textInput = true;
+  QCOMPARE(contacts::routeKey(letter), contacts::Command::Ignore);
 }
 
 void ShortcutTests::editorKeepsKeys() {
@@ -1557,4 +1635,196 @@ void ShortcutTests::helpListsEmail() {
   QVERIFY(sawKeybindings);
   QVERIFY(!sawSync);
   QVERIFY(!sawBareLetter);
+}
+
+void ThemeTests::followsOmarchyTextSize() {
+  const QString theme = QStringLiteral(
+      "[bar]\nsize-horizontal = 26\n\n[spacing]\nscale = 1.0\nscale-with-font = true\n\n"
+      "[font]\n# base-size is the rem root\nbase-size = 12\n# body = 12\n");
+  QCOMPARE(contacts::tomlValue(theme, QStringLiteral("font"), QStringLiteral("base-size")), QStringLiteral("12"));
+  QVERIFY(!contacts::tomlValue(theme, QStringLiteral("font"), QStringLiteral("body")));
+  QVERIFY(!contacts::tomlValue(theme, QStringLiteral("bar"), QStringLiteral("base-size")));
+
+  const auto stock = contacts::parseShellMetrics(theme, QString());
+  QCOMPARE(stock.basePx, 12);
+  QCOMPARE(stock.text(16), 16);
+  QCOMPARE(stock.space(28), 28);
+
+  // `omarchy display text size 15` writes this over the theme.
+  const auto larger = contacts::parseShellMetrics(theme, QStringLiteral("[font]\nbase-size = 15  # set from the menu\n"));
+  QCOMPARE(larger.basePx, 15);
+  QCOMPARE(larger.text(12), 15);
+  QCOMPARE(larger.text(16), 20);
+  QCOMPARE(larger.space(28), 35);
+
+  const auto fixedSpacing = contacts::parseShellMetrics(theme, QStringLiteral("[font]\nbase-size = 15\n[spacing]\nscale-with-font = false\n"));
+  QCOMPARE(fixedSpacing.space(28), 28);
+  QCOMPARE(contacts::parseShellMetrics(QString(), QStringLiteral("[font]\nbase-size = 2\n")).basePx, 9);
+  QCOMPARE(contacts::parseShellMetrics(QString(), QStringLiteral("[font]\nbase-size = big\n")).basePx, 12);
+
+  const auto palette = contacts::parseColorsToml(QLatin1String(kSemantic), QStringLiteral("Matte Black"));
+  QVERIFY(palette.has_value());
+  const QString css = contacts::stylesheetFor(*palette, larger, QStringLiteral("Iosevka"));
+  QVERIFY(css.contains(QStringLiteral("font-size: 15px")));
+  QVERIFY(css.contains(QStringLiteral("font-size: 20px")));
+  QVERIFY(css.contains(QStringLiteral("\"Iosevka\", monospace")));
+  QVERIFY(!css.contains(QStringLiteral("@@")));
+
+  QTemporaryDir home;
+  QVERIFY(home.isValid());
+  const auto paths = contacts::ThemePaths::forHome(home.path());
+  writeFile(paths.stateShell, theme);
+  QCOMPARE(contacts::loadShellMetrics(paths).basePx, 12);
+  writeFile(paths.userShell, QStringLiteral("[font]\nbase-size = 14\n"));
+  QCOMPARE(contacts::loadShellMetrics(paths).basePx, 14);
+}
+
+void GoogleTests::sharesThroughOmarchy() {
+  const auto omarchy = contacts::shareCommand(QStringLiteral("/run/user/1000/contacts/Ada Lovelace.vcf"), true, true);
+  QVERIFY(omarchy.ok());
+  QCOMPARE(omarchy.argv, (QStringList{QStringLiteral("omarchy"), QStringLiteral("share"), QStringLiteral("file"),
+                                      QStringLiteral("/run/user/1000/contacts/Ada Lovelace.vcf")}));
+  const auto direct = contacts::shareCommand(QStringLiteral("/tmp/a.vcf"), false, true);
+  QCOMPARE(direct.argv.first(), QStringLiteral("localsend"));
+  QVERIFY(!contacts::shareCommand(QStringLiteral("/tmp/a.vcf"), false, false).ok());
+
+  QCOMPARE(contacts::hyprlandFocusArgs(42, true),
+           (QStringList{QStringLiteral("dispatch"), QStringLiteral("hl.dsp.focus({ window = \"pid:42\" })")}));
+  QCOMPARE(contacts::hyprlandFocusArgs(42, false),
+           (QStringList{QStringLiteral("dispatch"), QStringLiteral("focuswindow"), QStringLiteral("pid:42")}));
+
+  QCOMPARE(contacts::cardFileName(QStringLiteral("Ada Lovelace")), QStringLiteral("Ada Lovelace.vcf"));
+  QCOMPARE(contacts::cardFileName(QStringLiteral("../AC/DC")), QStringLiteral("ACDC.vcf"));
+  QCOMPARE(contacts::cardFileName(QStringLiteral("  ")), QStringLiteral("Contact.vcf"));
+
+  QTemporaryDir dir;
+  QVERIFY(dir.isValid());
+  const QString path = dir.filePath(QStringLiteral("Ada Lovelace.vcf"));
+  std::unique_ptr<QMimeData> data(contacts::fileClipboard(path, QStringLiteral("Ada Lovelace")));
+  QCOMPARE(data->urls(), QList<QUrl>{QUrl::fromLocalFile(path)});
+  QCOMPARE(data->text(), QStringLiteral("Ada Lovelace"));
+  QVERIFY(data->data(QStringLiteral("x-special/gnome-copied-files")).startsWith("copy\nfile://"));
+}
+
+void GoogleTests::writesVCards() {
+  contacts::Contact ada = person(QStringLiteral("people/ada"), QStringLiteral("Ada"), QStringLiteral("Lovelace"),
+                                 QStringLiteral("ada@example.com"), QStringLiteral("+44 20 7946 0000"), QStringLiteral("Analytical; Engines"));
+  ada.title = QStringLiteral("Programmer");
+  ada.birthday.month = 12;
+  ada.birthday.day = 10;
+  ada.notes = QStringLiteral("First line\nSecond, with a comma");
+  ada.urls.append({QStringLiteral("https://example.com/a,b"), QStringLiteral("Blog"), QStringLiteral("Blog")});
+  contacts::PostalAddress home;
+  home.type = QStringLiteral("home");
+  home.street = QStringLiteral("12 St James's Square");
+  home.city = QStringLiteral("London");
+  home.postalCode = QStringLiteral("SW1Y 4LB");
+  ada.addresses.append(home);
+
+  const QByteArray card = contacts::contactVCard(ada);
+  QVERIFY(card.startsWith("BEGIN:VCARD\r\nVERSION:3.0\r\n"));
+  QVERIFY(card.endsWith("END:VCARD\r\n"));
+  QVERIFY(card.contains("\r\nN:Lovelace;Ada;;;\r\n"));
+  QVERIFY(card.contains("\r\nFN:Ada Lovelace\r\n"));
+  QVERIFY(card.contains("\r\nORG:Analytical\\; Engines;\r\n"));
+  QVERIFY(card.contains("\r\nTITLE:Programmer\r\n"));
+  QVERIFY(card.contains("\r\nEMAIL;TYPE=INTERNET,WORK:ada@example.com\r\n"));
+  QVERIFY(card.contains("\r\nTEL;TYPE=CELL:+44 20 7946 0000\r\n"));
+  QVERIFY(card.contains("\r\nADR;TYPE=HOME:;;12 St James's Square;London;;SW1Y 4LB;\r\n"));
+  QVERIFY(card.contains("\r\nBDAY:--12-10\r\n"));
+  QVERIFY(card.contains("\r\nURL:https://example.com/a,b\r\n"));
+  QVERIFY(card.contains("\r\nNOTE:First line\\nSecond\\, with a comma\r\n"));
+  QVERIFY(!card.contains("PHOTO"));
+
+  QImage image(64, 64, QImage::Format_RGB32);
+  image.fill(Qt::darkCyan);
+  const QByteArray pictured = contacts::contactVCard(ada, contacts::photoUploadBytes(image));
+  QVERIFY(pictured.contains("\r\nPHOTO;ENCODING=b;TYPE=JPEG:"));
+  // Long lines fold at 75 bytes with a leading space, and unfold to the same bytes.
+  for (const QByteArray& line : pictured.split('\n')) QVERIFY2(line.size() <= 76, line.constData());
+  QByteArray unfolded = pictured;
+  unfolded.replace("\r\n ", "");
+  QVERIFY(unfolded.contains("PHOTO;ENCODING=b;TYPE=JPEG:" + contacts::photoUploadBytes(image).toBase64() + "\r\n"));
+
+  contacts::Contact accented;
+  accented.givenName = QString(40, QChar(0x00E9));
+  for (const QByteArray& line : contacts::contactVCard(accented).split('\n')) {
+    QVERIFY(line.size() <= 76);
+    QVERIFY(QString::fromUtf8(line).toUtf8() == line);
+  }
+}
+
+void LayoutTests::editorTracksChanges() {
+  contacts::Contact cara = sampleContact(QStringLiteral("people/cara"), QStringLiteral("Cara"), QStringLiteral("Two"),
+                                         QStringLiteral("cara@example.com"), {}, QStringLiteral("Note"));
+  cara.emails[0].label.clear();
+  cara.events.append({QStringLiteral("anniversary"), QStringLiteral("Anniversary"), {2001, 6, 2, {}}});
+  cara.relations.append({QStringLiteral("Sam"), QString(), QStringLiteral("spouse")});
+  contacts::PostalAddress freeform;
+  freeform.formatted = QStringLiteral("1 Main St\nAustin TX");
+  cara.addresses.append(freeform);
+
+  contacts::ContactEditor editor(cara, {}, nullptr);
+  QVERIFY2(!editor.hasChanges(), "An untouched contact must not ask to discard anything");
+  const auto same = editor.validatedContact();
+  QVERIFY(same.has_value());
+  QCOMPARE(same->events.at(0).type, QStringLiteral("anniversary"));
+  QCOMPARE(same->relations.at(0).type, QStringLiteral("spouse"));
+  QCOMPARE(same->addresses.size(), 1);
+  QCOMPARE(same->addresses.at(0).formatted, freeform.formatted);
+
+  auto* given = editor.findChild<QLineEdit*>(QStringLiteral("given"));
+  QVERIFY(given != nullptr);
+  given->setText(QStringLiteral("Carla"));
+  QVERIFY(editor.hasChanges());
+  given->setText(QStringLiteral("Cara"));
+  QVERIFY(!editor.hasChanges());
+
+  // A contact read back from the cache, with a custom field and Windows line
+  // endings and a no-break space in its notes, is still unchanged.
+  cara.customs.append({QStringLiteral("blue"), QStringLiteral("Favorite color"), QString()});
+  cara.notes = QStringLiteral("Line one\r\nLine\u00a0two");
+  const auto cached = contacts::readCacheJson(contacts::writeCacheJson({cara}, QString()));
+  QCOMPARE(cached.contacts.size(), 1);
+  contacts::ContactEditor reloaded(cached.contacts.at(0), {}, nullptr);
+  QVERIFY2(!reloaded.hasChanges(), "A cached contact must not ask to discard anything");
+  QCOMPARE(reloaded.validatedContact()->notes, cara.notes);
+
+  // Clearing every part of an address removes it, even when Google sent formatted text.
+  contacts::Contact office = cara;
+  contacts::PostalAddress parts;
+  parts.street = QStringLiteral("1 Main St");
+  parts.city = QStringLiteral("Austin");
+  parts.formatted = QStringLiteral("1 Main St\nAustin");
+  office.addresses = {parts, freeform};
+  contacts::ContactEditor clearing(office, {}, nullptr);
+  for (auto* field : clearing.findChildren<QLineEdit*>()) {
+    if (field->text() == QStringLiteral("1 Main St") || field->text() == QStringLiteral("Austin") ||
+        field->text() == freeform.formatted.simplified()) {
+      field->clear();
+    }
+  }
+  QVERIFY(clearing.hasChanges());
+  QVERIFY(clearing.validatedContact()->addresses.isEmpty());
+
+  // An address Google keeps as one line goes back to Google as that line.
+  contacts::Contact oneLine;
+  oneLine.givenName = QStringLiteral("Dan");
+  oneLine.addresses = {freeform};
+  QVERIFY(contacts::personJson(oneLine).contains("\"formattedValue\":\"1 Main St\\nAustin TX\""));
+
+  contacts::ContactEditor blank(contacts::Contact{}, {}, nullptr);
+  QVERIFY(!blank.hasChanges());
+  QVERIFY(!blank.removePhoto());
+  const auto sections = [](QWidget* root) {
+    QStringList titles;
+    for (auto* label : root->findChildren<QLabel*>(QStringLiteral("section"))) titles.append(label->text());
+    return titles;
+  };
+  const QStringList titles = sections(&blank);
+  for (const QString& title : {QStringLiteral("Email"), QStringLiteral("Phone"), QStringLiteral("Address"), QStringLiteral("Notes"),
+                               QStringLiteral("Name details"), QStringLiteral("Work details"), QStringLiteral("Dates"),
+                               QStringLiteral("Websites"), QStringLiteral("Related people"), QStringLiteral("Custom fields")}) {
+    QVERIFY2(titles.contains(title), qPrintable(title));
+  }
 }

@@ -2,6 +2,7 @@
 
 #include "contact.h"
 #include "dialogs.h"
+#include "google.h"
 #include "oauth.h"
 #include "search.h"
 #include "secrets.h"
@@ -11,9 +12,9 @@
 
 #include <QMainWindow>
 
+#include <functional>
 #include <memory>
 
-class QBoxLayout;
 class QFileSystemWatcher;
 class QFrame;
 class QAction;
@@ -26,6 +27,7 @@ class QStandardItemModel;
 class QTcpServer;
 class QTimer;
 class QVBoxLayout;
+class QHBoxLayout;
 
 namespace contacts {
 
@@ -41,7 +43,11 @@ class MainWindow : public QMainWindow {
   ~MainWindow() override;
 
   void setContacts(QList<Contact> contacts);
-  void present();
+  // Brings the window forward for a second launch. `activationToken` is the
+  // XDG activation token that launch was started with, when it had one.
+  void present(const QString& activationToken = {});
+
+  // For tests.
   int detailPaneHeight() const;
   bool detailShows(const QString& text) const;
   bool detailIsOnScreen() const;
@@ -55,15 +61,20 @@ class MainWindow : public QMainWindow {
   bool eventFilter(QObject* watched, QEvent* event) override;
 
  private:
+  using GoogleWork = std::function<QString(GoogleSession& google)>;
+  using GoogleDone = std::function<void(const QString& error)>;
+
   void buildUi();
   void loadLocal();
-  void applyPalette(const Palette& palette);
+  void applyStyle();
   void scheduleThemeReload();
   void reloadTheme();
+  void watchThemeFiles();
   void refilter();
   void renderDetail();
   void updateChrome();
   void toast(const QString& text, bool error = false);
+  void placeToast();
   void handleCommand(Command command);
   void moveSelection(int delta, bool wrap);
   void moveField(int delta, bool wrap);
@@ -71,27 +82,27 @@ class MainWindow : public QMainWindow {
   void activateField();
   void copyCurrentField();
   void sendSelectedEmail();
-  void sendMailTo(const QString& address);
   const Contact* selected() const;
   void editSelected();
   void newContact();
   void showEditor(const Contact& contact, EditorFocus focus, bool isNew);
+  void requestCloseEditor();
   void closeEditor();
   void commitEditor();
   void copyWholeContact();
-  void changeSelectedPhoto(bool remove);
+  void shareSelected();
+  QString writeCard(const Contact& contact);
   void deleteSelected();
-  void copyEmail();
-  void copyPhone();
-  void sendMail();
   void openAccount();
   void openSelected();
   void closeDetail();
+  bool signedIn() const;
+  void runGoogle(GoogleWork work, GoogleDone done);
   void runSync(bool forceFull, bool announce = true);
   void runSave(const Contact& contact, bool isNew, const QByteArray& photoBytes = {}, bool removePhoto = false);
-  void runPhoto(const Contact& contact, const QByteArray& photoBytes, bool removePhoto);
   void runDelete(const QString& id);
   void startOAuth();
+  void finishOAuth(const QString& code);
   void saveCache();
   void saveConfig();
   void saveTokens(const OAuthTokens& tokens);
@@ -99,12 +110,15 @@ class MainWindow : public QMainWindow {
   void setBusy(bool busy);
 
   Palette palette_;
-  bool havePalette_ = false;
+  ShellMetrics metrics_;
+  QString fontFamily_;
+  bool styled_ = false;
   ThemePaths themePaths_;
   AppPaths paths_;
   AppConfig config_;
   OAuthTokens tokens_;
   QString syncToken_;
+  QString syncError_;
   ContactIndex index_;
   std::unique_ptr<SecretStore> secrets_;
   bool busy_ = false;
@@ -120,6 +134,10 @@ class MainWindow : public QMainWindow {
   bool windowActive_ = false;
   qint64 lastSyncAt_ = 0;
 
+  QVBoxLayout* rootLayout_ = nullptr;
+  QHBoxLayout* headerLayout_ = nullptr;
+  QVBoxLayout* listLayout_ = nullptr;
+  QVBoxLayout* detailLayout_ = nullptr;
   QLineEdit* search_ = nullptr;
   QListView* list_ = nullptr;
   QListView* fieldList_ = nullptr;
@@ -129,21 +147,13 @@ class MainWindow : public QMainWindow {
   FieldDelegate* fieldDelegate_ = nullptr;
   QStandardItemModel* fieldModel_ = nullptr;
   PhotoStore* photos_ = nullptr;
-  QLabel* portrait_ = nullptr;
-  QLabel* detailName_ = nullptr;
   QWidget* listPane_ = nullptr;
-  QWidget* headerPane_ = nullptr;
   QWidget* detailPane_ = nullptr;
-  QBoxLayout* splitLayout_ = nullptr;
-  QFrame* rule_ = nullptr;
-  QVBoxLayout* detailLayout_ = nullptr;
-  QVBoxLayout* headerLayout_ = nullptr;
   QLabel* emptyLabel_ = nullptr;
   QLabel* countLabel_ = nullptr;
   QLabel* statusLabel_ = nullptr;
   QLabel* toastLabel_ = nullptr;
   QFrame* toastFrame_ = nullptr;
-  QPushButton* backButton_ = nullptr;
   QPushButton* menuButton_ = nullptr;
   QMenu* menu_ = nullptr;
   QAction* newAction_ = nullptr;
@@ -154,7 +164,6 @@ class MainWindow : public QMainWindow {
   QTimer* focusSyncTimer_ = nullptr;
   QTcpServer* oauthServer_ = nullptr;
   QTimer* oauthTimer_ = nullptr;
-  QByteArray oauthBuffer_;
   QString oauthVerifier_;
   QString oauthState_;
   QString oauthRedirect_;

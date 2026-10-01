@@ -105,6 +105,12 @@ QString DateValue::display() const {
   return text.trimmed();
 }
 
+QString DateValue::isoText() const {
+  if (month < 1 || month > 12 || day < 1 || day > 31) return text.trimmed();
+  const QString monthDay = QStringLiteral("%1-%2").arg(month, 2, 10, QLatin1Char('0')).arg(day, 2, 10, QLatin1Char('0'));
+  return year > 0 ? QStringLiteral("%1-%2").arg(year, 4, 10, QLatin1Char('0')).arg(monthDay) : monthDay;
+}
+
 bool PostalAddress::isEmpty() const {
   return street.trimmed().isEmpty() && extended.trimmed().isEmpty() && poBox.trimmed().isEmpty() && city.trimmed().isEmpty() &&
          region.trimmed().isEmpty() && postalCode.trimmed().isEmpty() && country.trimmed().isEmpty() && formatted.trimmed().isEmpty();
@@ -254,15 +260,10 @@ QString Contact::searchText() const {
 }
 
 bool Contact::hasLessCommonFields() const {
-  if (!prefix.trimmed().isEmpty() || !middleName.trimmed().isEmpty() || !suffix.trimmed().isEmpty() ||
-      !nickname.trimmed().isEmpty() || !title.trimmed().isEmpty() || !department.trimmed().isEmpty() ||
-      !occupation.trimmed().isEmpty() || !birthday.isEmpty()) {
-    return true;
-  }
-  if (!otherOrganizations.isEmpty() || !urls.isEmpty() || !relations.isEmpty() || !events.isEmpty() || !customs.isEmpty()) {
-    return true;
-  }
-  return false;
+  const bool text = !prefix.trimmed().isEmpty() || !middleName.trimmed().isEmpty() || !suffix.trimmed().isEmpty() ||
+                    !nickname.trimmed().isEmpty() || !department.trimmed().isEmpty() || !occupation.trimmed().isEmpty();
+  return text || !birthday.isEmpty() || !otherOrganizations.isEmpty() || !urls.isEmpty() || !relations.isEmpty() ||
+         !events.isEmpty() || !customs.isEmpty();
 }
 
 Draft Draft::fromContact(const Contact& contact) {

@@ -5,24 +5,9 @@ PKGCONFIG += libsecret-1
 TARGET = contacts-tests
 TEMPLATE = app
 INCLUDEPATH += ../src
-SOURCES += \
-    main.cpp \
-    tests.cpp \
-    ../src/theme.cpp \
-    ../src/contact.cpp \
-    ../src/search.cpp \
-    ../src/oauth.cpp \
-    ../src/google.cpp \
-    ../src/store.cpp \
-    ../src/shortcuts.cpp \
-    ../src/mail.cpp \
-    ../src/mainwindow.cpp \
-    ../src/dialogs.cpp \
-    ../src/photos.cpp \
-    ../src/blockingnam.cpp \
-    ../src/instance.cpp \
-    ../src/secrets.cpp \
-    ../src/cli.cpp \
-    cli_tests.cpp
-HEADERS += tests.h ../src/mainwindow.h ../src/photos.h
 QMAKE_CXXFLAGS += -Wall -Wextra -Wpedantic
+
+include(../contacts.pri)
+
+SOURCES += main.cpp tests.cpp cli_tests.cpp
+HEADERS += tests.h

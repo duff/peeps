@@ -2,8 +2,11 @@
 
 #include "contact.h"
 #include "http.h"
+#include "oauth.h"
 
+#include <QDateTime>
 #include <QString>
+
 #include <functional>
 #include <optional>
 
@@ -58,5 +61,38 @@ WriteResult updateContactPhoto(HttpClient& http, QString& accessToken, const QSt
                                const RefreshFn& refresh);
 WriteResult deleteContactPhoto(HttpClient& http, QString& accessToken, const QString& resourceName, const RefreshFn& refresh);
 QString deleteContact(HttpClient& http, QString& accessToken, const QString& resourceName, const RefreshFn& refresh);
+
+// One set of tokens for a run of Google calls. prepare() refreshes an expiring
+// access token, and call() hands each request the token plus a refresh that
+// the request uses once after a 401.
+class GoogleSession {
+ public:
+  GoogleSession(HttpClient& http, OAuthClient client, OAuthTokens tokens)
+      : http_(http), client_(std::move(client)), tokens_(std::move(tokens)) {}
+
+  QString prepare(qint64 nowUnix);
+
+  template <typename Fn>
+  auto call(Fn&& fn) {
+    QString access = tokens_.accessToken;
+    const RefreshFn retry = [this, &access]() -> QString {
+      const QString error = refreshTokens(QDateTime::currentSecsSinceEpoch());
+      if (error.isEmpty()) access = tokens_.accessToken;
+      return error;
+    };
+    auto result = fn(http_, access, retry);
+    tokens_.accessToken = access;
+    return result;
+  }
+
+  const OAuthTokens& tokens() const { return tokens_; }
+
+ private:
+  QString refreshTokens(qint64 nowUnix);
+
+  HttpClient& http_;
+  OAuthClient client_;
+  OAuthTokens tokens_;
+};
 
 }  // namespace contacts

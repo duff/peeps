@@ -10,6 +10,10 @@
 
 namespace contacts {
 
+BlockingNam::BlockingNam() = default;
+
+BlockingNam::~BlockingNam() = default;
+
 HttpResponse BlockingNam::request(const QString& method, const QString& url,
                                   const QList<QPair<QString, QString>>& headers, const QByteArray& body) {
   HttpResponse response;
@@ -18,8 +22,10 @@ HttpResponse BlockingNam::request(const QString& method, const QString& url,
     response.error = QStringLiteral("Contacts is closing.");
     return response;
   }
-  QNetworkAccessManager network;
-  network.setTransferTimeout(30000);
+  if (!network_) {
+    network_ = std::make_unique<QNetworkAccessManager>();
+    network_->setTransferTimeout(30000);
+  }
   QNetworkRequest request{QUrl(url)};
   prepareNetworkRequest(request);
   for (const auto& header : headers) {
@@ -28,7 +34,7 @@ HttpResponse BlockingNam::request(const QString& method, const QString& url,
   QEventLoop loop;
   QTimer timer;
   timer.setSingleShot(true);
-  QNetworkReply* reply = network.sendCustomRequest(request, method.toUtf8(), body);
+  QNetworkReply* reply = network_->sendCustomRequest(request, method.toUtf8(), body);
   QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
   QObject::connect(&timer, &QTimer::timeout, &loop, &QEventLoop::quit);
   timer.start(60000);

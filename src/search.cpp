@@ -13,26 +13,26 @@ int scoreField(const QString& field, const QString& token, int prefix, int word,
   int best = 0;
   int from = 0;
   while ((from = field.indexOf(token, from)) >= 0) {
-    const bool boundary = from == 0 || field.at(from - 1) == QLatin1Char(' ') || field.at(from - 1) == QLatin1Char('@') ||
-                          field.at(from - 1) == QLatin1Char('.');
-    best = std::max(best, boundary ? word : substr);
+    const QChar before = field.at(from - 1);
+    if (before == QLatin1Char(' ') || before == QLatin1Char('@') || before == QLatin1Char('.')) return word;
+    best = substr;
     ++from;
   }
   return best;
 }
 
-QStringList tokensOf(const QString& text) {
-  return text.toCaseFolded().split(QRegularExpression(QStringLiteral("\\s+")), Qt::SkipEmptyParts);
-}
+bool bySortKey(const QString& a, const QString& b) { return a < b; }
 
 }  // namespace
 
 ContactIndex::Entry ContactIndex::makeEntry(Contact contact) {
   Entry entry;
-  entry.sortKey = contact.displayName().toCaseFolded();
-  entry.name = (contact.givenName + QLatin1Char(' ') + contact.familyName + QLatin1Char(' ') + contact.displayName())
-                   .toCaseFolded();
+  entry.display = contact.displayName();
+  entry.subtitle = contact.subtitle();
+  entry.sortKey = entry.display.toCaseFolded();
+  entry.name = (contact.givenName + QLatin1Char(' ') + contact.familyName + QLatin1Char(' ') + entry.display).toCaseFolded();
   QStringList emails;
+  emails.reserve(contact.emails.size());
   for (const auto& email : contact.emails) emails.append(email.value.toCaseFolded());
   entry.emails = emails.join(QLatin1Char(' '));
   entry.other = contact.searchText().toCaseFolded();
@@ -41,39 +41,45 @@ ContactIndex::Entry ContactIndex::makeEntry(Contact contact) {
   return entry;
 }
 
+void ContactIndex::reindex() {
+  positions_.clear();
+  positions_.reserve(entries_.size());
+  for (int i = 0; i < entries_.size(); ++i) positions_.insert(entries_.at(i).contact.resourceName, i);
+}
+
 void ContactIndex::replaceAll(QList<Contact> contacts) {
   entries_.clear();
   entries_.reserve(contacts.size());
   for (auto& contact : contacts) entries_.append(makeEntry(std::move(contact)));
-  std::sort(entries_.begin(), entries_.end(), [](const Entry& a, const Entry& b) { return a.sortKey < b.sortKey; });
+  std::stable_sort(entries_.begin(), entries_.end(),
+                   [](const Entry& a, const Entry& b) { return bySortKey(a.sortKey, b.sortKey); });
+  reindex();
 }
 
 void ContactIndex::upsert(Contact contact) {
-  const QString id = contact.resourceName;
+  const auto existing = positions_.constFind(contact.resourceName);
+  if (existing != positions_.cend()) entries_.removeAt(existing.value());
   Entry entry = makeEntry(std::move(contact));
-  entries_.erase(std::remove_if(entries_.begin(), entries_.end(),
-                                [&](const Entry& existing) { return existing.contact.resourceName == id; }),
-                 entries_.end());
-  const auto place = std::lower_bound(entries_.begin(), entries_.end(), entry,
-                                       [](const Entry& a, const Entry& b) { return a.sortKey < b.sortKey; });
+  const auto place = std::upper_bound(entries_.begin(), entries_.end(), entry,
+                                      [](const Entry& a, const Entry& b) { return bySortKey(a.sortKey, b.sortKey); });
   entries_.insert(place, std::move(entry));
+  reindex();
 }
 
 bool ContactIndex::remove(const QString& resourceName) {
-  const auto before = entries_.size();
-  entries_.erase(std::remove_if(entries_.begin(), entries_.end(),
-                                [&](const Entry& entry) { return entry.contact.resourceName == resourceName; }),
-                 entries_.end());
-  return entries_.size() != before;
+  const auto existing = positions_.constFind(resourceName);
+  if (existing == positions_.cend()) return false;
+  entries_.removeAt(existing.value());
+  reindex();
+  return true;
 }
 
 const Contact* ContactIndex::find(const QString& resourceName) const {
-  const auto it = std::find_if(entries_.cbegin(), entries_.cend(),
-                               [&](const Entry& entry) { return entry.contact.resourceName == resourceName; });
-  return it == entries_.cend() ? nullptr : &it->contact;
+  const auto it = positions_.constFind(resourceName);
+  return it == positions_.cend() ? nullptr : &entries_.at(it.value()).contact;
 }
 
-int ContactIndex::size() const { return entries_.size(); }
+int ContactIndex::size() const { return static_cast<int>(entries_.size()); }
 
 const Contact& ContactIndex::at(int index) const { return entries_.at(index).contact; }
 
@@ -84,18 +90,16 @@ QList<Contact> ContactIndex::all() const {
   return contacts;
 }
 
-int ContactIndex::scoreEntry(const Entry& entry, const QStringList& tokens) {
+int ContactIndex::scoreEntry(const Entry& entry, const QList<Token>& tokens) {
   int total = 0;
-  for (const QString& token : tokens) {
-    int best = scoreField(entry.name, token, 1000, 800, 400);
-    best = std::max(best, scoreField(entry.emails, token, 700, 600, 300));
-    best = std::max(best, scoreField(entry.other, token, 250, 200, 100));
-    const QString digits = digitsOnly(token);
-    const bool numeric = !digits.isEmpty() && digits.size() == token.size();
-    if (numeric && !entry.digits.isEmpty() && entry.digits.contains(digits)) {
-      best = std::max(best, entry.digits.startsWith(digits) ? 650 : 250);
+  for (const Token& token : tokens) {
+    int best = scoreField(entry.name, token.text, 1000, 800, 400);
+    if (best < 1000) best = std::max(best, scoreField(entry.emails, token.text, 700, 600, 300));
+    if (best < 250) best = std::max(best, scoreField(entry.other, token.text, 250, 200, 100));
+    if (!entry.digits.isEmpty() && token.digits.size() >= (token.numeric ? 1 : 3)) {
+      const int at = entry.digits.indexOf(token.digits);
+      if (at >= 0) best = std::max(best, token.numeric && at == 0 ? 650 : 250);
     }
-    if (!numeric && digits.size() >= 3 && entry.digits.contains(digits)) best = std::max(best, 250);
     if (best == 0) return 0;
     total += best;
   }
@@ -103,21 +107,24 @@ int ContactIndex::scoreEntry(const Entry& entry, const QStringList& tokens) {
 }
 
 QList<SearchHit> ContactIndex::query(const QString& text) const {
+  static const QRegularExpression whitespace(QStringLiteral("\\s+"));
+  QList<Token> tokens;
+  for (const QString& part : text.toCaseFolded().split(whitespace, Qt::SkipEmptyParts)) {
+    Token token{part, digitsOnly(part)};
+    token.numeric = !token.digits.isEmpty() && token.digits.size() == part.size();
+    tokens.append(token);
+  }
   QList<SearchHit> hits;
-  const QStringList tokens = tokensOf(text);
-  if (tokens.isEmpty()) {
-    hits.reserve(entries_.size());
-    for (int i = 0; i < entries_.size(); ++i) hits.append(SearchHit{i, 1, &entries_.at(i).contact});
-    return hits;
-  }
+  if (tokens.isEmpty()) hits.reserve(entries_.size());
   for (int i = 0; i < entries_.size(); ++i) {
-    const int score = scoreEntry(entries_.at(i), tokens);
-    if (score > 0) hits.append(SearchHit{i, score, &entries_.at(i).contact});
+    const Entry& entry = entries_.at(i);
+    const int score = tokens.isEmpty() ? 1 : scoreEntry(entry, tokens);
+    if (score > 0) hits.append(SearchHit{i, score, &entry.contact, entry.display, entry.subtitle});
   }
-  std::sort(hits.begin(), hits.end(), [](const SearchHit& a, const SearchHit& b) {
-    if (a.score != b.score) return a.score > b.score;
-    return a.contact->displayName() < b.contact->displayName();
-  });
+  // Entries are already in name order, so a stable sort keeps ties alphabetical.
+  if (!tokens.isEmpty()) {
+    std::stable_sort(hits.begin(), hits.end(), [](const SearchHit& a, const SearchHit& b) { return a.score > b.score; });
+  }
   return hits;
 }
 

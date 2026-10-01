@@ -1,8 +1,8 @@
 # Contacts
 
-A keyboard-first address book for Omarchy. It keeps your Google contacts on the desktop, paints itself from the current Omarchy theme, and answers search from a local cache so looking someone up does not wait on the network.
+A keyboard-first address book for Omarchy. It keeps your Google contacts on the desktop, paints itself from the current Omarchy theme and text size, and answers search from a local cache so looking someone up does not wait on the network.
 
-With no arguments, `contacts` opens the window. A command stays in the terminal, which is how a person or an agent lists, searches, and changes the same contacts.
+With no arguments, `contacts` opens the window. A command stays in the terminal, which is how a person or an agent lists, searches, exports, and changes the same contacts.
 
 ## Is this for you?
 
@@ -10,7 +10,7 @@ It fits if you want these things:
 
 - Google is where the contacts live, and the window is just a fast way to use them. The same book shows up on an iPhone, a Mac, or an Android phone that uses Google Contacts, so a change here or there stays in sync.
 - Search, copy, and mail should work from the keyboard, including while the search field is focused.
-- The window should follow `colors.toml` when you change Omarchy themes, instead of shipping its own look.
+- The window should follow Omarchy: `colors.toml` when you change themes, the text size from the Omarchy menu, and the monospace font from `omarchy font set`.
 - Mail should open in whatever owns `mailto:` on the machine. On a stock Omarchy desktop that is the HEY app.
 - An agent should be able to inspect and edit the book from the shell, with JSON on a pipe, without a private API.
 
@@ -26,44 +26,74 @@ make test
 make install
 ```
 
-`make install` puts `contacts` on `~/.local/bin` and adds a launcher. The tests use Qt Test and the offscreen platform.
+`make install` puts `contacts` in `~/.local/bin` and adds a launcher. The tests use Qt Test and the offscreen platform.
 
-To open it the way other Omarchy apps open, bind it in `~/.config/hypr/bindings.lua`. The `focus` pattern matches the window class, so a second press raises the window you already have:
+Launching Contacts again brings the open window forward instead of opening a second one, from the app launcher or the terminal alike. Its window class (the Wayland app id) is `org.omelia.Contacts`, which is also the name of its launcher entry. To give it a key the way other Omarchy apps have one, bind it in `~/.config/hypr/bindings.lua`:
 
 ```lua
-o.bind("SUPER + SHIFT + ALT + C", "Contacts", { launch = "contacts", focus = "^contacts$" })
+o.bind("SUPER + SHIFT + ALT + C", "Contacts", { launch = "contacts", focus = "^org\\.omelia\\.Contacts$" })
 ```
+
+### Packaging
+
+`PREFIX` and `DESTDIR` work the usual way:
+
+```bash
+make PREFIX=/usr
+make install PREFIX=/usr DESTDIR="$pkgdir"
+```
+
+A package can carry a published Google OAuth client, so people only sign in. Set `CONTACTS_GOOGLE_CLIENT_ID`, and `CONTACTS_GOOGLE_CLIENT_SECRET` if the client has one, when you build. Without them, each person brings their own client id, as described under [Google](#google). A Desktop client id is not a secret: Google treats an installed app as unable to keep one.
 
 ## The window
 
-Type to filter. Up and Down move through the matches, including while the search field still has focus. Enter opens the contact. Enter on a field copies it. Ctrl+Enter sends mail to the selected address through `xdg-email`, which follows the desktop mail handler.
+Type to search. Up and Down move through the matches, including while the search field still has focus. Typing anywhere outside a field starts a new search. Enter opens the contact. Enter on a field copies it. Ctrl+Enter sends mail to the selected address through `xdg-email`, which follows the desktop mail handler.
 
-Esc or Backspace returns to the list, or clears the search if that is where you are. `?` opens the shortcut list. Ctrl+N starts a contact, Ctrl+E edits the one you are on, and Ctrl+S saves it. New, Sync, Keybindings, and Account are in the Menu.
+Esc or Backspace returns to the list, or clears the search if that is where you are. `?` opens the keybindings. Ctrl+N starts a contact and Ctrl+E edits the one you are on. New, Sync, Keybindings, and Google account are in the Menu.
 
 | Keys | Action |
 | --- | --- |
-| Type | Filter from the search field |
-| Up / Down | Move through matches |
+| Type | Search names, email, phone, and notes |
+| Up / Down | Move through matches or fields |
 | `/` | Focus search |
 | Enter | Open the contact, or copy the selected field |
 | Super+C | Copy the selected field. Omarchy delivers this as Ctrl+C |
 | Ctrl+Enter | Email the selected address |
 | Esc or Backspace | Back to the list, or clear the search |
-| `?` | Shortcut help |
+| `?` | Keybindings |
 | Ctrl+N / Ctrl+E | New contact, edit the selected contact |
 | Ctrl+S | Save the open contact |
 
 Copying a field names it. A birthday says "Copied birthday". A work address says "Copied work email".
 
+### Editing
+
+The editor groups fields the way people look for them. The photo sits beside first name, last name, company, and job title. Email, phone, address, and notes follow, each under its own heading with a `+ Add` line beneath. Nickname, birthday, websites, related people, other companies, and custom fields wait behind More fields, which opens by itself when a contact already has one of them.
+
+Tab moves through the page in reading order, including rows you just added. Enter or Ctrl+S saves. Esc cancels, and asks first if anything changed. Dates are typed as `1815-12-10`, or `12-10` without a year.
+
+### Sharing a contact
+
+Share this contact is the last group of rows on a contact, next to Copy, Edit, and Delete. It writes a vCard, the format phones and mail apps import, with the photo inside it.
+
+| Choice | What happens |
+| --- | --- |
+| Send with LocalSend | `omarchy share file`, the same LocalSend share as Super+Ctrl+S |
+| Email as a vCard | Thunderbird and similar clients get the card attached. With HEY or other webmail, a new message opens and the card is on the clipboard: paste to attach it |
+| Copy as text | Name, email, phone, and address as plain text |
+| Save vCard… | A `.vcf` file wherever you choose, Downloads by default |
+
 ## Command line
 
 `contacts help` lists every command, and `contacts <command> --help` shows that command's flags. A terminal prints text. A pipe prints JSON. `--json` and `--text` force either one.
 
-List, search, and show read the cache only. Add, update, delete, and sync talk to Google, then write the cache again. Omitted fields on an update stay as they are. Repeatable flags such as `--email` replace that whole list. `--data` accepts the same JSON object that `contacts show --json` prints, which is the way to set an address, a date, or anything a flag does not cover.
+List, search, show, and export read the cache only. Add, update, delete, and sync talk to Google, then write the cache again. Omitted fields on an update stay as they are. Repeatable flags such as `--email` replace that whole list. `--data` accepts the same JSON object that `contacts show --json` prints, which is the way to set an address, a date, or anything a flag does not cover.
 
 ```bash
 contacts search lovelace
 contacts show ada@example.com --json
+contacts export ada@example.com > ada.vcf
+contacts export > everyone.vcf
 contacts add --given Ada --family Lovelace --email home=ada@example.com
 contacts update people/c1 --notes "Met in 1843"
 contacts delete people/c1 --yes
@@ -79,7 +109,9 @@ contacts search ada --jq '.contacts[] | {id, name, score}'
 
 ## Google
 
-Contacts signs in with a Desktop OAuth client and the People API scope `https://www.googleapis.com/auth/contacts`. The sign-in redirect is `http://127.0.0.1` on a free port. A Desktop client accepts that loopback address, so you do not register a port or a public URL.
+Contacts signs in with a Desktop OAuth client and the People API scope `https://www.googleapis.com/auth/contacts`. The sign-in redirect is `http://127.0.0.1` on a free port. A Desktop client accepts that loopback address, so you do not register a port or a public URL. The client secret is optional. Contacts uses PKCE.
+
+The name on Google's consent screen comes from the Google Cloud project, not from this app. To change it, edit the app name under Google Auth Platform → Branding.
 
 Use a published app, not a testing one. A consent screen left in Testing only allows listed test users, and Google expires those refresh tokens after seven days. That is a poor fit for an address book you open every day.
 
@@ -87,12 +119,12 @@ Use a published app, not a testing one. A consent screen left in Testing only al
 2. Open the OAuth consent screen (Google Auth Platform, Audience and Branding). Choose External unless this is only for a Workspace organization, in which case Internal is enough.
 3. Set the app name and a support email. Add the scope `https://www.googleapis.com/auth/contacts`.
 4. Publish the app so its status is In production.
-5. Under Credentials, create an OAuth client ID of type **Desktop app**. Copy the client id. The client secret is optional. Contacts uses PKCE.
-6. Launch Contacts, open Menu → Account, paste the client id, and choose Connect. Sign in in the browser. The page that comes back says you can close the tab.
+5. Under Credentials, create an OAuth client ID of type **Desktop app**. Copy the client id.
+6. Launch Contacts, open Menu → Google account, paste the client id, and choose Connect. Sign in in the browser. The page that comes back says you can close the tab.
 
-The Contacts scope is sensitive. Until Google verifies the app, the consent screen warns that Google has not verified it. For your own account, continue past that warning. Verification, which wants a homepage, a privacy policy, and a review, is how you remove the warning for everyone else. Publishing is what leaves Testing. Verification is a separate step.
+The Contacts scope is sensitive. Until Google verifies the app, the consent screen warns that Google has not verified it. For your own account, continue past that warning. Verification, which wants a homepage, a privacy policy, and a review, is how you remove the warning for everyone else, and it is what a build with a built-in client (see [Packaging](#packaging)) needs before strangers use it. Publishing is what leaves Testing. Verification is a separate step.
 
-The refresh token stays in the login keyring under `org.omelia.contacts`. Disconnect from Menu → Account clears it.
+The refresh token stays in the login keyring under `org.omelia.contacts`. Disconnect from Menu → Google account clears it.
 
 ## Where the data lives
 
@@ -101,10 +133,13 @@ The refresh token stays in the login keyring under `org.omelia.contacts`. Discon
 | `~/.local/share/contacts/contacts.json` | The cache search reads |
 | `~/.config/contacts/config.json` | The OAuth client id |
 | `~/.cache/contacts/photos` | Cached photos |
+| `$XDG_RUNTIME_DIR/contacts` | vCards made for sharing, cleared at logout |
 | Login keyring | The Google refresh token |
 
 `contacts sync` downloads changes since the last sync. `contacts sync --full` downloads the whole book.
 
-## Theme
+## Theme and text size
 
-On startup, and whenever the theme files change, Contacts reads `~/.local/state/omarchy/current/theme/colors.toml`. If that directory is missing, it tries the legacy `~/.config/omarchy/current` path. A broken or missing palette falls back to Tokyo Night as a whole. The window uses square controls, 12px text, and quiet borders from that palette.
+On startup, and whenever the files change, Contacts reads `~/.local/state/omarchy/current/theme/colors.toml`. If that directory is missing, it tries the legacy `~/.config/omarchy/current` path. A broken or missing palette falls back to Tokyo Night as a whole.
+
+Sizes follow the Omarchy shell. The theme's `shell.toml` sets the base text size, and `~/.config/omarchy/shell.toml`, which the text size in the Omarchy menu writes, overrides it. Text, rows, padding, and photos scale from that base the way the bar does, and change while the window is open. The font is the one fontconfig gives `monospace`, which `omarchy font set` changes. Controls stay square, with quiet borders from the palette.

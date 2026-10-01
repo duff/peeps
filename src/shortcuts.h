@@ -5,34 +5,7 @@
 
 namespace contacts {
 
-enum class Key {
-  Up,
-  Down,
-  Home,
-  End,
-  PageUp,
-  PageDown,
-  Escape,
-  Return,
-  Delete,
-  Backspace,
-  Slash,
-  Question,
-  F1,
-  J,
-  K,
-  N,
-  E,
-  M,
-  Y,
-  P,
-  R,
-  S,
-  Q,
-  C,
-  Comma,
-  Other
-};
+enum class Key { Up, Down, Home, End, Escape, Return, Delete, Backspace, Slash, Question, N, E, S, C, Other };
 
 enum class Surface { Browser, Editor, ConfirmDelete, Help, Account };
 
@@ -42,28 +15,19 @@ enum class Command {
   MoveDown,
   MoveHome,
   MoveEnd,
-  PageUp,
-  PageDown,
   FocusSearch,
   ClearSearch,
+  TypeToSearch,
   Back,
   OpenContact,
   ActivateField,
   CopyField,
-  CopyContact,
   SendEmail,
   NewContact,
   EditContact,
-  DeleteContact,
-  PrimaryAction,
-  CopyEmail,
-  CopyPhone,
-  Sync,
   Help,
   Save,
-  Cancel,
-  Quit,
-  Account
+  Cancel
 };
 
 struct KeyEvent {
@@ -71,6 +35,8 @@ struct KeyEvent {
   bool ctrl = false;
   bool shift = false;
   bool alt = false;
+  // The key types a visible character, such as a letter or a digit.
+  bool printable = false;
   bool textInput = false;
   bool multiline = false;
   bool searchEmpty = true;
@@ -81,6 +47,7 @@ struct KeyEvent {
 Command routeKey(const KeyEvent& event);
 
 struct BindingHelp {
+  QString group;
   QString keys;
   QString action;
 };

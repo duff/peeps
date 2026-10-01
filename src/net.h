@@ -1,5 +1,6 @@
 #pragma once
 
+#include "version.h"
 #include "worker.h"
 
 #include <QNetworkRequest>
@@ -13,7 +14,7 @@ namespace contacts {
 // HTTP/1.1 does not use that code.
 inline void prepareNetworkRequest(QNetworkRequest& request) {
   if (backgroundStopped()) return;
-  request.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("Contacts/0.1"));
+  request.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("Contacts/") + QLatin1String(kVersion));
   request.setAttribute(QNetworkRequest::Http2AllowedAttribute, false);
   request.setAttribute(QNetworkRequest::Http2DirectAttribute, false);
   request.setAttribute(QNetworkRequest::Http2CleartextAllowedAttribute, false);

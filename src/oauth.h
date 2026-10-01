@@ -3,6 +3,7 @@
 #include "http.h"
 
 #include <QString>
+#include <QStringList>
 
 namespace contacts {
 
@@ -10,6 +11,8 @@ struct OAuthTokens {
   QString accessToken;
   QString refreshToken;
   qint64 expiryUnix = 0;
+
+  bool operator==(const OAuthTokens& other) const = default;
 };
 
 struct OAuthClient {
@@ -47,11 +50,5 @@ TokenResult exchangeCode(HttpClient& http, const OAuthClient& client, const QStr
                          const QString& verifier, qint64 nowUnix);
 TokenResult refreshAccess(HttpClient& http, const OAuthClient& client, const OAuthTokens& current, qint64 nowUnix);
 TokenResult ensureAccess(HttpClient& http, const OAuthClient& client, OAuthTokens& tokens, qint64 nowUnix);
-
-struct BrowserCommand {
-  QStringList argv;
-};
-
-BrowserCommand browserCommand(const QString& url, bool haveOmarchy);
 
 }  // namespace contacts

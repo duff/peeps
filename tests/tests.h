@@ -18,6 +18,7 @@ class ThemeTests : public QObject {
   void legacyOnlyWhenStateIsAbsent();
   void missingHomeFallsBackWhole();
   void stylesheetUsesTheGivenPalette();
+  void followsOmarchyTextSize();
 };
 
 class SearchTests : public QObject {
@@ -58,6 +59,8 @@ class GoogleTests : public QObject {
   void createReadsResource();
   void mailUsesDesktopHandler();
   void browserPrefersOmarchy();
+  void sharesThroughOmarchy();
+  void writesVCards();
   void storeRoundTrip();
 };
 
@@ -70,6 +73,7 @@ class LayoutTests : public QObject {
   void notesWrapInsteadOfEllipsis();
   void blankPhoneTypeStaysBlank();
   void copyNamesTheField();
+  void editorTracksChanges();
 };
 
 class GuardTests : public QObject {
@@ -89,6 +93,7 @@ class ShortcutTests : public QObject {
   void accountKeepsQuestionMarks();
   void deleteConfirmIgnoresEnter();
   void helpListsEmail();
+  void typingOutsideSearchSearches();
 };
 
 class CliTests : public QObject {
@@ -103,4 +108,5 @@ class CliTests : public QObject {
   void jsonDataRoundTrip();
   void syncRefreshesTheCache();
   void liveCacheAndGoogle();
+  void exportPrintsVCards();
 };

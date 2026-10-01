@@ -17,13 +17,17 @@ struct AppPaths {
                          const QString& xdgCacheHome = {});
 };
 
-// Move a leftover omacontacts directory to the Contacts path when the new one is absent.
-void migrateLegacyPaths(const AppPaths& paths);
-
 struct AppConfig {
   QString clientId;
   QString clientSecret;
 };
+
+// A packaged build can carry a published OAuth client so people only sign in.
+// Build with CONTACTS_GOOGLE_CLIENT_ID (and CONTACTS_GOOGLE_CLIENT_SECRET) set.
+// Desktop client ids are not secret: Google says an installed app cannot keep one.
+AppConfig builtInClient();
+// The client id saved in Account, or the built-in one when none is saved.
+AppConfig effectiveClient(const AppConfig& saved);
 
 struct CacheSnapshot {
   QList<Contact> contacts;

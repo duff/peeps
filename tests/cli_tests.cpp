@@ -103,9 +103,10 @@ void CliTests::helpAndCommands() {
   const auto commands = run({QStringLiteral("commands"), QStringLiteral("--json")}, session, true);
   QCOMPARE(commands.code, contacts::kCliOk);
   const QJsonArray listed = objectOf(commands).value(QStringLiteral("commands")).toArray();
-  QCOMPARE(listed.size(), 7);
+  QCOMPARE(listed.size(), 8);
   QCOMPARE(listed.at(0).toObject().value(QStringLiteral("name")).toString(), QStringLiteral("list"));
-  QCOMPARE(listed.at(6).toObject().value(QStringLiteral("name")).toString(), QStringLiteral("sync"));
+  QCOMPARE(listed.at(3).toObject().value(QStringLiteral("name")).toString(), QStringLiteral("export"));
+  QCOMPARE(listed.at(7).toObject().value(QStringLiteral("name")).toString(), QStringLiteral("sync"));
 }
 
 void CliTests::usageAndVersion() {
@@ -457,4 +458,23 @@ void CliTests::liveCacheAndGoogle() {
   QVERIFY(http.calls > callsBeforePhoto);
   QVERIFY(http.sent.contains("photoBytes"));
   QCOMPARE(objectOf(pictured).value(QStringLiteral("photo_url")).toString(), QStringLiteral("https://example.test/g.jpg"));
+}
+
+void CliTests::exportPrintsVCards() {
+  contacts::CliSession session;
+  session.contacts = {sample(QStringLiteral("people/b"), QStringLiteral("Bea"), QStringLiteral("Ng"), QStringLiteral("bea@example.com")),
+                      sample(QStringLiteral("people/a"), QStringLiteral("Ada"), QStringLiteral("Lovelace"), QStringLiteral("ada@example.com"))};
+  const auto all = run({QStringLiteral("export")}, session);
+  QCOMPARE(all.code, contacts::kCliOk);
+  QCOMPARE(all.out.count(QStringLiteral("BEGIN:VCARD")), 2);
+  QVERIFY(all.out.indexOf(QStringLiteral("FN:Ada Lovelace")) < all.out.indexOf(QStringLiteral("FN:Bea Ng")));
+
+  const auto one = run({QStringLiteral("export"), QStringLiteral("bea@example.com")}, session, true);
+  QCOMPARE(one.code, contacts::kCliOk);
+  QCOMPARE(one.out.count(QStringLiteral("BEGIN:VCARD")), 1);
+  QVERIFY(one.out.contains(QStringLiteral("EMAIL;TYPE=INTERNET,WORK:bea@example.com\r\n")));
+
+  QCOMPARE(run({QStringLiteral("export"), QStringLiteral("nobody")}, session).code, contacts::kCliNotFound);
+  QCOMPARE(run({QStringLiteral("export"), QStringLiteral("--json")}, session).code, contacts::kCliUsage);
+  QVERIFY(run({QStringLiteral("help"), QStringLiteral("export")}, session).out.contains(QStringLiteral("vCard")));
 }

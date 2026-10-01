@@ -225,17 +225,18 @@ AppPaths AppPaths::forEnv(const QString& home, const QString& xdgConfigHome, con
   return paths;
 }
 
-void migrateLegacyPaths(const AppPaths& paths) {
-  const auto adopt = [](const QString& currentDir) {
-    const QString legacy = QDir(currentDir + QStringLiteral("/..")).absoluteFilePath(QStringLiteral("omacontacts"));
-    if (QFileInfo::exists(currentDir) || !QFileInfo::exists(legacy)) return;
-    QDir().mkpath(QFileInfo(currentDir).absolutePath());
-    QDir().rename(legacy, currentDir);
-  };
-  adopt(QFileInfo(paths.configFile).absolutePath());
-  adopt(QFileInfo(paths.cacheFile).absolutePath());
-  adopt(QFileInfo(paths.photoDir).absolutePath());
+AppConfig builtInClient() {
+#ifdef CONTACTS_GOOGLE_CLIENT_ID
+#ifndef CONTACTS_GOOGLE_CLIENT_SECRET
+#define CONTACTS_GOOGLE_CLIENT_SECRET ""
+#endif
+  return {QStringLiteral(CONTACTS_GOOGLE_CLIENT_ID), QStringLiteral(CONTACTS_GOOGLE_CLIENT_SECRET)};
+#else
+  return {};
+#endif
 }
+
+AppConfig effectiveClient(const AppConfig& saved) { return saved.clientId.isEmpty() ? builtInClient() : saved; }
 
 QByteArray writeConfigJson(const AppConfig& config) {
   QJsonObject object;

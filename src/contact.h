@@ -23,7 +23,10 @@ struct DateValue {
 
   bool operator==(const DateValue& other) const = default;
   bool isEmpty() const;
+  // "December 10, 1815" for reading.
   QString display() const;
+  // "1815-12-10", or "12-10" without a year, for typing and for JSON.
+  QString isoText() const;
 };
 
 struct PostalAddress {
@@ -122,6 +125,7 @@ struct Contact {
   QString primaryPhone() const;
   QString subtitle() const;
   QString searchText() const;
+  // Fields the editor keeps behind More fields until a contact has one.
   bool hasLessCommonFields() const;
 
   bool operator==(const Contact& other) const = default;
