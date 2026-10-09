@@ -1,6 +1,2 @@
 build/
-.qmake.stash
-moc_*
-*.o
-*.moc
 .cache/

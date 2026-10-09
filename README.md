@@ -18,7 +18,7 @@ It is one Google account, not a CRM. Lookups and the contact you are reading com
 
 ## Install
 
-Qt 6 (widgets and network), libsecret, and a C++20 compiler.
+CMake, Qt 6 (widgets and network), libsecret, and a C++20 compiler.
 
 ```bash
 make
@@ -42,6 +42,8 @@ o.bind("SUPER + SHIFT + ALT + C", "Contacts", { launch = "contacts", focus = "^o
 make PREFIX=/usr
 make install PREFIX=/usr DESTDIR="$pkgdir"
 ```
+
+The Makefile wraps CMake, so a package can also call `cmake` with `CMAKE_INSTALL_PREFIX`, and `-DBUILD_TESTING=OFF` to skip the tests.
 
 A package can carry a published Google OAuth client, so people only sign in. Set `CONTACTS_GOOGLE_CLIENT_ID`, and `CONTACTS_GOOGLE_CLIENT_SECRET` if the client has one, when you build. Without them, each person brings their own client id, as described under [Google](#google). A Desktop client id is not a secret: Google treats an installed app as unable to keep one.
 
