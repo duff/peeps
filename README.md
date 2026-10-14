@@ -28,10 +28,11 @@ make install
 
 `make install` puts `peeps` in `~/.local/bin` and adds a launcher. The tests use Qt Test and the offscreen platform.
 
-Launching Peeps again brings the open window forward instead of opening a second one, from the app launcher or the terminal alike. Its window class (the Wayland app id) is `org.omelia.Peeps`, which is also the name of its launcher entry. To give it a key the way other Omarchy apps have one, bind it in `~/.config/hypr/bindings.lua`:
+Launching Peeps again brings the open window forward instead of opening a second one, from the app launcher or the terminal alike. Its window class (the Wayland app id) is `org.omelia.Peeps`, which is also the name of its launcher entry. To give it a key the way other Omarchy apps have one, bind it in `~/.config/hypr/bindings.lua`. Omarchy gives Super+Shift+P to Google Photos, so release it first, or pick another key:
 
 ```lua
-o.bind("SUPER + SHIFT + ALT + C", "Peeps", { launch = "peeps", focus = "^org\\.omelia\\.Peeps$" })
+hl.unbind("SUPER + SHIFT + P")
+o.bind("SUPER + SHIFT + P", "Peeps", { launch = "peeps", focus = "^org\\.omelia\\.Peeps$" })
 ```
 
 ### Packaging
