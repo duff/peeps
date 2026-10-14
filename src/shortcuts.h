@@ -5,7 +5,7 @@
 
 namespace contacts {
 
-enum class Key { Up, Down, Home, End, Escape, Return, Delete, Backspace, Slash, Question, N, E, S, C, Other };
+enum class Key { Up, Down, Home, End, Escape, Return, Delete, Backspace, Slash, Question, N, E, S, C, Plus, Equal, Minus, Zero, Other };
 
 enum class Surface { Browser, Editor, ConfirmDelete, Help, Account };
 
@@ -26,6 +26,9 @@ enum class Command {
   NewContact,
   EditContact,
   Help,
+  TextLarger,
+  TextSmaller,
+  TextReset,
   Save,
   Cancel
 };

@@ -5,6 +5,13 @@ namespace contacts {
 Command routeKey(const KeyEvent& event) {
   if (event.alt) return Command::Ignore;
 
+  // Peeps' text size, on top of Omarchy's, in the list and in a contact.
+  if (event.ctrl && event.surface == Surface::Browser) {
+    if (event.key == Key::Plus || event.key == Key::Equal) return Command::TextLarger;
+    if (event.key == Key::Minus) return Command::TextSmaller;
+    if (event.key == Key::Zero) return Command::TextReset;
+  }
+
   if (event.surface == Surface::Editor) {
     if (event.key == Key::Escape) return Command::Cancel;
     if (event.ctrl && (event.key == Key::S || event.key == Key::Return)) return Command::Save;
@@ -99,6 +106,8 @@ QList<BindingHelp> bindingHelp() {
       {edit, QStringLiteral("Ctrl+S"), QStringLiteral("Save the open contact")},
       {edit, QStringLiteral("Esc"), QStringLiteral("Cancel, and ask first when something changed")},
       {edit, QStringLiteral("Tab"), QStringLiteral("Next field, in the order they appear")},
+      {QStringLiteral("Text"), QStringLiteral("Ctrl+=  Ctrl+-"), QStringLiteral("Larger or smaller text than Omarchy's")},
+      {QStringLiteral("Text"), QStringLiteral("Ctrl+0"), QStringLiteral("Back to Omarchy's text size")},
       {QStringLiteral("Help"), QStringLiteral("?"), QStringLiteral("Show keybindings")},
   };
 }

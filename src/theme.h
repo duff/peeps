@@ -47,6 +47,10 @@ struct ThemePaths {
 // Sizes from Omarchy's shell.toml. Every size in the window is written for the
 // shell's 12px base and goes through text() or space(), so the window follows
 // the text size chosen in the Omarchy menu.
+// Peeps' own text size, in pixels on top of Omarchy's.
+inline constexpr int kMinTextSizeOffset = -4;
+inline constexpr int kMaxTextSizeOffset = 8;
+
 struct ShellMetrics {
   int basePx = 12;
   double spacingScale = 1.0;
@@ -58,9 +62,10 @@ struct ShellMetrics {
 
 // A value under [section] in a small TOML file, without quotes or comments.
 std::optional<QString> tomlValue(const QString& text, const QString& section, const QString& key);
-// The user's shell.toml wins key by key over the theme's.
-ShellMetrics parseShellMetrics(const QString& themeToml, const QString& userToml);
-ShellMetrics loadShellMetrics(const ThemePaths& paths);
+// The user's shell.toml wins key by key over the theme's. textSizeOffset is
+// Peeps' own nudge on top of Omarchy's base size.
+ShellMetrics parseShellMetrics(const QString& themeToml, const QString& userToml, int textSizeOffset = 0);
+ShellMetrics loadShellMetrics(const ThemePaths& paths, int textSizeOffset = 0);
 
 // The window publishes its metrics here so dialogs size themselves the same way.
 const ShellMetrics& activeMetrics();

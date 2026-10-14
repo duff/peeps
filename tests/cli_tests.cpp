@@ -396,7 +396,8 @@ void CliTests::liveCacheAndGoogle() {
   QVERIFY(dir.isValid());
   const QString root = dir.path();
   contacts::CliLaunch launch;
-  launch.paths = contacts::AppPaths::forEnv(root, root + QStringLiteral("/data"), root + QStringLiteral("/cache"));
+  launch.paths = contacts::AppPaths::forEnv(root, root + QStringLiteral("/config"), root + QStringLiteral("/data"),
+                                            root + QStringLiteral("/cache"));
   launch.client = {};
   launch.stdoutIsTty = false;
   MemorySecrets secrets;

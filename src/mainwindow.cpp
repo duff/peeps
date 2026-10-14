@@ -334,6 +334,14 @@ Key mapKey(int key) {
       return Key::S;
     case Qt::Key_C:
       return Key::C;
+    case Qt::Key_Plus:
+      return Key::Plus;
+    case Qt::Key_Equal:
+      return Key::Equal;
+    case Qt::Key_Minus:
+      return Key::Minus;
+    case Qt::Key_0:
+      return Key::Zero;
     default:
       return Key::Other;
   }
@@ -392,7 +400,8 @@ MainWindow::MainWindow() : secrets_(makeSecretStore()) {
   resize(980, 680);
   setMinimumSize(480, 560);
   themePaths_ = ThemePaths::forHome(QDir::homePath());
-  paths_ = AppPaths::forEnv(QDir::homePath(), qEnvironmentVariable("XDG_DATA_HOME"), qEnvironmentVariable("XDG_CACHE_HOME"));
+  paths_ = AppPaths::forEnv(QDir::homePath(), qEnvironmentVariable("XDG_CONFIG_HOME"), qEnvironmentVariable("XDG_DATA_HOME"),
+                            qEnvironmentVariable("XDG_CACHE_HOME"));
   fontFamily_ = monospaceFamily();
   photos_ = new PhotoStore(paths_.photoDir, this);
   connect(photos_, &PhotoStore::updated, this, [this](const QString& id) {
@@ -545,6 +554,7 @@ void MainWindow::buildUi() {
 }
 
 void MainWindow::loadLocal() {
+  if (auto bytes = readFile(paths_.settingsFile)) settings_ = readSettingsJson(*bytes);
   QString error;
   if (auto secret = secrets_->load(error)) {
     if (auto tokens = readTokensJson(secret->toUtf8())) tokens_ = *tokens;
@@ -704,7 +714,7 @@ void MainWindow::reloadTheme() {
     const QFileInfo info(themePaths_.stateColors);
     if (info.exists() && info.size() < 40) palette = palette_;
   }
-  const ShellMetrics metrics = loadShellMetrics(themePaths_);
+  const ShellMetrics metrics = loadShellMetrics(themePaths_, settings_.textSizeOffset);
   if (styled_ && palette_.sameColors(palette) && palette_.name == palette.name && metrics_ == metrics) return;
   palette_ = palette;
   metrics_ = metrics;
@@ -938,6 +948,15 @@ void MainWindow::handleCommand(Command command) {
       break;
     case Command::Help:
       showHelpDialog(this);
+      break;
+    case Command::TextLarger:
+      setTextSizeOffset(settings_.textSizeOffset + 1);
+      break;
+    case Command::TextSmaller:
+      setTextSizeOffset(settings_.textSizeOffset - 1);
+      break;
+    case Command::TextReset:
+      setTextSizeOffset(0);
       break;
     case Command::TypeToSearch:
     case Command::Ignore:
@@ -1249,6 +1268,17 @@ void MainWindow::setBusy(bool busy) {
 void MainWindow::saveCache() {
   QString error;
   if (!writePrivateFile(paths_.cacheFile, writeCacheJson(index_.all(), syncToken_), error)) toast(error, true);
+}
+
+void MainWindow::setTextSizeOffset(int offset) {
+  offset = std::clamp(offset, kMinTextSizeOffset, kMaxTextSizeOffset);
+  if (offset != settings_.textSizeOffset) {
+    settings_.textSizeOffset = offset;
+    QString error;
+    if (!writePrivateFile(paths_.settingsFile, writeSettingsJson(settings_), error)) toast(error, true);
+    reloadTheme();
+  }
+  toast(QStringLiteral("Text size %1 px").arg(metrics_.basePx));
 }
 
 void MainWindow::saveTokens(const OAuthTokens& tokens) {

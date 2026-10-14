@@ -158,7 +158,7 @@ std::optional<QString> tomlValue(const QString& text, const QString& section, co
   return std::nullopt;
 }
 
-ShellMetrics parseShellMetrics(const QString& themeToml, const QString& userToml) {
+ShellMetrics parseShellMetrics(const QString& themeToml, const QString& userToml, int textSizeOffset) {
   const auto value = [&](const char* section, const char* key) {
     if (auto user = tomlValue(userToml, QLatin1String(section), QLatin1String(key))) return user;
     return tomlValue(themeToml, QLatin1String(section), QLatin1String(key));
@@ -170,15 +170,16 @@ ShellMetrics parseShellMetrics(const QString& themeToml, const QString& userToml
   };
   ShellMetrics metrics;
   // The shell floors base-size at 1px. Below 9px the window stops being usable.
-  metrics.basePx = std::clamp(static_cast<int>(std::lround(number("font", "base-size", 12))), 9, 32);
+  const int omarchy = static_cast<int>(std::lround(number("font", "base-size", 12)));
+  metrics.basePx = std::clamp(omarchy + std::clamp(textSizeOffset, kMinTextSizeOffset, kMaxTextSizeOffset), 9, 32);
   const bool followFont = value("spacing", "scale-with-font").value_or(QStringLiteral("true")) != QLatin1String("false");
   metrics.spacingScale = std::clamp(number("spacing", "scale", 1.0), 0.5, 3.0) * (followFont ? metrics.basePx / 12.0 : 1.0);
   return metrics;
 }
 
-ShellMetrics loadShellMetrics(const ThemePaths& paths) {
+ShellMetrics loadShellMetrics(const ThemePaths& paths, int textSizeOffset) {
   const QString theme = QDir(paths.stateDir).exists() ? paths.stateShell : paths.legacyShell;
-  return parseShellMetrics(readText(theme), readText(paths.userShell));
+  return parseShellMetrics(readText(theme), readText(paths.userShell), textSizeOffset);
 }
 
 namespace {

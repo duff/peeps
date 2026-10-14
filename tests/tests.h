@@ -87,6 +87,7 @@ class ShortcutTests : public QObject {
   Q_OBJECT
  private slots:
   void typingSuspendsSingleKeys();
+  void textSizeKeys();
   void escapeClearsBeforeBack();
   void listKeys();
   void editorKeepsKeys();

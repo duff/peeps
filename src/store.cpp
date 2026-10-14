@@ -213,10 +213,13 @@ Contact contactFromObject(const QJsonObject& object) {
 
 }  // namespace
 
-AppPaths AppPaths::forEnv(const QString& home, const QString& xdgDataHome, const QString& xdgCacheHome) {
+AppPaths AppPaths::forEnv(const QString& home, const QString& xdgConfigHome, const QString& xdgDataHome,
+                           const QString& xdgCacheHome) {
   AppPaths paths;
+  const QString configRoot = xdgConfigHome.isEmpty() ? home + QStringLiteral("/.config") : xdgConfigHome;
   const QString dataRoot = xdgDataHome.isEmpty() ? home + QStringLiteral("/.local/share") : xdgDataHome;
   const QString cacheRoot = xdgCacheHome.isEmpty() ? home + QStringLiteral("/.cache") : xdgCacheHome;
+  paths.settingsFile = configRoot + QStringLiteral("/peeps/settings.json");
   paths.cacheFile = dataRoot + QStringLiteral("/peeps/contacts.json");
   paths.photoDir = cacheRoot + QStringLiteral("/peeps/photos");
   return paths;
@@ -231,6 +234,18 @@ OAuthClient builtInClient() {
 #else
   return {};
 #endif
+}
+
+QByteArray writeSettingsJson(const AppSettings& settings) {
+  QJsonObject object;
+  object.insert(QStringLiteral("text_size_offset"), settings.textSizeOffset);
+  return QJsonDocument(object).toJson(QJsonDocument::Compact);
+}
+
+AppSettings readSettingsJson(const QByteArray& json) {
+  AppSettings settings;
+  settings.textSizeOffset = QJsonDocument::fromJson(json).object().value(QLatin1String("text_size_offset")).toInt();
+  return settings;
 }
 
 QByteArray writeCacheJson(const QList<Contact>& contacts, const QString& syncToken) {

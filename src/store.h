@@ -9,16 +9,24 @@
 namespace contacts {
 
 struct AppPaths {
+  QString settingsFile;
   QString cacheFile;
   QString photoDir;
 
-  static AppPaths forEnv(const QString& home, const QString& xdgDataHome, const QString& xdgCacheHome = {});
+  static AppPaths forEnv(const QString& home, const QString& xdgConfigHome, const QString& xdgDataHome,
+                         const QString& xdgCacheHome = {});
 };
 
 // The Google client Peeps signs in with, built in from PEEPS_GOOGLE_CLIENT_ID (and
 // PEEPS_GOOGLE_CLIENT_SECRET). Empty when the build has none, and then nobody can connect.
 // Desktop client ids are not secret: Google says an installed app cannot keep one.
 OAuthClient builtInClient();
+
+// Choices that belong to Peeps rather than to Omarchy.
+struct AppSettings {
+  // Added to Omarchy's text size. Ctrl+= and Ctrl+- change it.
+  int textSizeOffset = 0;
+};
 
 struct CacheSnapshot {
   QList<Contact> contacts;
@@ -27,6 +35,8 @@ struct CacheSnapshot {
   bool ok() const { return error.isEmpty(); }
 };
 
+QByteArray writeSettingsJson(const AppSettings& settings);
+AppSettings readSettingsJson(const QByteArray& json);
 QByteArray writeCacheJson(const QList<Contact>& contacts, const QString& syncToken);
 CacheSnapshot readCacheJson(const QByteArray& json);
 QByteArray writeTokensJson(const OAuthTokens& tokens);

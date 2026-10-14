@@ -65,6 +65,8 @@ Esc or Backspace returns to the list, or clears the search if that is where you 
 | `?` | Keybindings |
 | Ctrl+N / Ctrl+E | New contact, edit the selected contact |
 | Ctrl+S | Save the open contact |
+| Ctrl+= / Ctrl+- | Larger or smaller text than Omarchy's |
+| Ctrl+0 | Back to Omarchy's text size |
 
 Copying a field names it. A birthday says "Copied birthday". A work address says "Copied work email".
 
@@ -142,6 +144,7 @@ The refresh token stays in the login keyring under `org.omelia.peeps`. Disconnec
 | Path | What |
 | --- | --- |
 | `~/.local/share/peeps/contacts.json` | The cache search reads |
+| `~/.config/peeps/settings.json` | Peeps' own text size |
 | `~/.cache/peeps/photos` | Cached photos |
 | `$XDG_RUNTIME_DIR/peeps` | vCards made for sharing, cleared at logout |
 | Login keyring | The Google refresh token |
@@ -152,4 +155,4 @@ The refresh token stays in the login keyring under `org.omelia.peeps`. Disconnec
 
 On startup, and whenever the files change, Peeps reads `~/.local/state/omarchy/current/theme/colors.toml`. If that directory is missing, it tries the legacy `~/.config/omarchy/current` path. A broken or missing palette falls back to Tokyo Night as a whole.
 
-Sizes follow the Omarchy shell. The theme's `shell.toml` sets the base text size, and `~/.config/omarchy/shell.toml`, which the text size in the Omarchy menu writes, overrides it. Text, rows, padding, and photos scale from that base the way the bar does, and change while the window is open. The font is the one fontconfig gives `monospace`, which `omarchy font set` changes. Controls stay square, with quiet borders from the palette.
+Sizes follow the Omarchy shell. The theme's `shell.toml` sets the base text size, and `~/.config/omarchy/shell.toml`, which the text size in the Omarchy menu writes, overrides it. Text, rows, padding, and photos scale from that base the way the bar does, and change while the window is open. Ctrl+= and Ctrl+- make Peeps' text a pixel larger or smaller than Omarchy's, up to 8 larger or 4 smaller, and Ctrl+0 goes back to Omarchy's size. Peeps remembers that difference, not a fixed size, so it still follows the Omarchy menu. The font is the one fontconfig gives `monospace`, which `omarchy font set` changes. Controls stay square, with quiet borders from the palette.

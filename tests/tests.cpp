@@ -857,6 +857,9 @@ void GoogleTests::storeRoundTrip() {
   QCOMPARE(cache.contacts.at(0), contact);
   QVERIFY(!contacts::readCacheJson("{").ok());
 
+  QCOMPARE(contacts::readSettingsJson(contacts::writeSettingsJson({3})).textSizeOffset, 3);
+  QCOMPARE(contacts::readSettingsJson("{").textSizeOffset, 0);
+
   const auto stored =
       contacts::readTokensJson(contacts::writeTokensJson({QStringLiteral("access"), QStringLiteral("refresh"), 50}));
   QVERIFY(stored.has_value());
@@ -872,12 +875,10 @@ void GoogleTests::storeRoundTrip() {
   QCOMPARE(info.permissions() & (QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ReadGroup |
                                  QFileDevice::WriteGroup | QFileDevice::ReadOther | QFileDevice::WriteOther),
            QFileDevice::ReadOwner | QFileDevice::WriteOwner);
-  const auto paths = contacts::AppPaths::forEnv(QStringLiteral("/home/ada"), QString());
+  const auto paths = contacts::AppPaths::forEnv(QStringLiteral("/home/ada"), QStringLiteral("/xdg/config"), QString());
+  QCOMPARE(paths.settingsFile, QStringLiteral("/xdg/config/peeps/settings.json"));
   QCOMPARE(paths.cacheFile, QStringLiteral("/home/ada/.local/share/peeps/contacts.json"));
   QCOMPARE(paths.photoDir, QStringLiteral("/home/ada/.cache/peeps/photos"));
-  const auto xdg = contacts::AppPaths::forEnv(QStringLiteral("/home/ada"), QStringLiteral("/xdg/data"), QStringLiteral("/xdg/cache"));
-  QCOMPARE(xdg.cacheFile, QStringLiteral("/xdg/data/peeps/contacts.json"));
-  QCOMPARE(xdg.photoDir, QStringLiteral("/xdg/cache/peeps/photos"));
 }
 
 contacts::Contact sampleContact(QString id, QString given, QString family, QString email, QString phone,
@@ -1494,6 +1495,29 @@ void ShortcutTests::typingSuspendsSingleKeys() {
   QCOMPARE(contacts::routeKey(created), contacts::Command::NewContact);
 }
 
+void ShortcutTests::textSizeKeys() {
+  auto larger = browser(contacts::Key::Equal, true);
+  larger.ctrl = true;
+  QCOMPARE(contacts::routeKey(larger), contacts::Command::TextLarger);
+  auto plus = browser(contacts::Key::Plus);
+  plus.ctrl = true;
+  plus.shift = true;
+  QCOMPARE(contacts::routeKey(plus), contacts::Command::TextLarger);
+  auto smaller = browser(contacts::Key::Minus);
+  smaller.ctrl = true;
+  smaller.detailOpen = true;
+  QCOMPARE(contacts::routeKey(smaller), contacts::Command::TextSmaller);
+  auto reset = browser(contacts::Key::Zero, true);
+  reset.ctrl = true;
+  QCOMPARE(contacts::routeKey(reset), contacts::Command::TextReset);
+  // Without Control, the keys type into the search.
+  auto typed = browser(contacts::Key::Minus);
+  typed.printable = true;
+  QCOMPARE(contacts::routeKey(typed), contacts::Command::TypeToSearch);
+  reset.surface = contacts::Surface::Editor;
+  QCOMPARE(contacts::routeKey(reset), contacts::Command::Ignore);
+}
+
 void ShortcutTests::escapeClearsBeforeBack() {
   auto event = browser(contacts::Key::Escape, true);
   event.searchEmpty = false;
@@ -1658,6 +1682,12 @@ void ThemeTests::followsOmarchyTextSize() {
   QCOMPARE(fixedSpacing.space(28), 28);
   QCOMPARE(contacts::parseShellMetrics(QString(), QStringLiteral("[font]\nbase-size = 2\n")).basePx, 9);
   QCOMPARE(contacts::parseShellMetrics(QString(), QStringLiteral("[font]\nbase-size = big\n")).basePx, 12);
+
+  // Peeps' own offset rides on Omarchy's size, within limits.
+  QCOMPARE(contacts::parseShellMetrics(theme, QStringLiteral("[font]\nbase-size = 15\n"), 3).basePx, 18);
+  QCOMPARE(contacts::parseShellMetrics(theme, QString(), -2).text(12), 10);
+  QCOMPARE(contacts::parseShellMetrics(theme, QString(), 99).basePx, 20);
+  QCOMPARE(contacts::parseShellMetrics(theme, QStringLiteral("[font]\nbase-size = 30\n"), 8).basePx, 32);
 
   const auto palette = contacts::parseColorsToml(QLatin1String(kSemantic), QStringLiteral("Matte Black"));
   QVERIFY(palette.has_value());

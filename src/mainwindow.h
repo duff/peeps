@@ -105,6 +105,7 @@ class MainWindow : public QMainWindow {
   void finishOAuth(const QString& code);
   void saveCache();
   void saveTokens(const OAuthTokens& tokens);
+  void setTextSizeOffset(int offset);
   void applyView();
   void setBusy(bool busy);
 
@@ -115,6 +116,7 @@ class MainWindow : public QMainWindow {
   ThemePaths themePaths_;
   AppPaths paths_;
   OAuthClient client_ = builtInClient();
+  AppSettings settings_;
   OAuthTokens tokens_;
   QString syncToken_;
   QString syncError_;
