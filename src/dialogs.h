@@ -80,13 +80,9 @@ bool confirmDialog(QWidget* parent, const QString& title, const QString& body, c
 
 void showHelpDialog(QWidget* parent);
 
-enum class AccountAction { Save, Connect, Disconnect };
+enum class AccountAction { Connect, Disconnect };
 
-struct AccountResult {
-  AccountAction action = AccountAction::Save;
-  AppConfig config;
-};
-
-std::optional<AccountResult> accountDialog(QWidget* parent, const AppConfig& config, bool connected);
+// hasClient is false when the build carries no Google client to sign in with.
+std::optional<AccountAction> accountDialog(QWidget* parent, bool hasClient, bool connected);
 
 }  // namespace contacts

@@ -306,95 +306,54 @@ class HelpBox : public Panel {
 
 class AccountBox : public Panel {
  public:
-  AccountBox(QWidget* parent, const AppConfig& config, bool connected)
-      : Panel(parent, Surface::Account), result_{AccountAction::Save, config} {
-    const bool builtIn = !builtInClient().clientId.isEmpty();
+  AccountBox(QWidget* parent, bool hasClient, bool connected) : Panel(parent, Surface::Account) {
     root_->addWidget(labelNamed(QStringLiteral("Google account"), QStringLiteral("title")));
-    auto* status = labelNamed(connected ? QStringLiteral("Connected. Peeps syncs with this Google account.")
-                                        : QStringLiteral("Not connected."),
-                              QStringLiteral("secondary"));
+    const QString state = connected   ? QStringLiteral("Connected. Peeps syncs with this Google account.")
+                          : hasClient ? QStringLiteral("Not connected.")
+                                      : QStringLiteral("This build of Peeps has no Google client, so it cannot connect. "
+                                                       "The setup guide shows how to build it with one.");
+    auto* status = labelNamed(state, QStringLiteral("secondary"));
     status->setWordWrap(true);
     root_->addWidget(status);
-
-    auto* clientPane = new QWidget;
-    auto* client = new QVBoxLayout(clientPane);
-    client->setContentsMargins(0, 0, 0, 0);
-    client->setSpacing(metrics().space(10));
-    auto* help = labelNamed(
-        QStringLiteral("Peeps signs in with an OAuth client from your own Google Cloud project: a Desktop app "
-                       "client, the People API enabled, and the consent screen published. Paste its client id here."),
-        QStringLiteral("secondary"));
-    help->setWordWrap(true);
-    client->addWidget(help);
-    auto* guide = kindButton(QStringLiteral("Open the setup guide"), QStringLiteral("link"));
-    client->addWidget(guide, 0, Qt::AlignLeft);
-    clientId_ = lineEdit(config.clientId, builtIn ? QStringLiteral("Built-in client") : QStringLiteral("123-abc.apps.googleusercontent.com"));
-    secret_ = lineEdit(config.clientSecret, QStringLiteral("Optional"));
-    secret_->setEchoMode(QLineEdit::Password);
-    client->addWidget(labeled(QStringLiteral("Client id"), clientId_));
-    client->addWidget(labeled(QStringLiteral("Client secret"), secret_));
-    connect(guide, &QPushButton::clicked, this, [] {
-      runDetached(browserCommand(QString::fromLatin1(kSetupGuide), haveProgram(QStringLiteral("omarchy"))));
-    });
-
-    if (builtIn) {
-      // A packaged build already has a client. Most people never open this.
-      auto* own = kindButton(QStringLiteral("Use your own Google Cloud client"), QStringLiteral("link"));
-      root_->addWidget(own, 0, Qt::AlignLeft);
-      clientPane->setVisible(!config.clientId.isEmpty());
-      own->setVisible(config.clientId.isEmpty());
-      connect(own, &QPushButton::clicked, this, [own, clientPane, this] {
-        own->hide();
-        clientPane->show();
-        clientId_->setFocus();
+    if (!hasClient) {
+      auto* guide = kindButton(QStringLiteral("Open the setup guide"), QStringLiteral("link"));
+      root_->addWidget(guide, 0, Qt::AlignLeft);
+      connect(guide, &QPushButton::clicked, this, [] {
+        runDetached(browserCommand(QString::fromLatin1(kSetupGuide), haveProgram(QStringLiteral("omarchy"))));
       });
     }
-    root_->addWidget(clientPane);
 
-    error_ = labelNamed(QString(), QStringLiteral("danger"));
-    error_->setWordWrap(true);
-    root_->addWidget(error_);
     auto* footer = new QHBoxLayout;
     if (connected) {
       auto* disconnect = kindButton(QStringLiteral("Disconnect"), QStringLiteral("danger"));
       footer->addWidget(disconnect);
-      connect(disconnect, &QPushButton::clicked, this, [this] { finish(AccountAction::Disconnect, false); });
+      connect(disconnect, &QPushButton::clicked, this, [this] { finish(AccountAction::Disconnect); });
     }
     footer->addStretch(1);
-    auto* cancel = kindButton(QStringLiteral("Cancel"), QStringLiteral("outline"));
-    auto* save = kindButton(QStringLiteral("Save"), QStringLiteral("outline"));
-    auto* connectButton = kindButton(connected ? QStringLiteral("Reconnect") : QStringLiteral("Connect"), QStringLiteral("primary"));
-    connectButton->setDefault(true);
+    auto* cancel = kindButton(hasClient ? QStringLiteral("Cancel") : QStringLiteral("Close"), QStringLiteral("outline"));
     footer->addWidget(cancel);
-    footer->addWidget(save);
-    footer->addWidget(connectButton);
-    root_->addLayout(footer);
     connect(cancel, &QPushButton::clicked, this, &QDialog::reject);
-    connect(save, &QPushButton::clicked, this, [this] { finish(AccountAction::Save, true); });
-    connect(connectButton, &QPushButton::clicked, this, [this] { finish(AccountAction::Connect, true); });
-    if (clientPane->isVisibleTo(this)) clientId_->setFocus();
-    else connectButton->setFocus();
+    QPushButton* focus = cancel;
+    if (hasClient) {
+      auto* connectButton = kindButton(connected ? QStringLiteral("Reconnect") : QStringLiteral("Connect"), QStringLiteral("primary"));
+      footer->addWidget(connectButton);
+      connect(connectButton, &QPushButton::clicked, this, [this] { finish(AccountAction::Connect); });
+      focus = connectButton;
+    }
+    focus->setDefault(true);
+    root_->addLayout(footer);
+    focus->setFocus();
   }
 
-  AccountResult result() const { return result_; }
+  AccountAction action() const { return action_; }
 
  private:
-  void finish(AccountAction action, bool needClient) {
-    result_.config.clientId = clientId_->text().trimmed();
-    result_.config.clientSecret = secret_->text().trimmed();
-    if (needClient && effectiveClient(result_.config).clientId.isEmpty()) {
-      error_->setText(QStringLiteral("Enter the Google client id."));
-      clientId_->setFocus();
-      return;
-    }
-    result_.action = action;
+  void finish(AccountAction action) {
+    action_ = action;
     accept();
   }
 
-  AccountResult result_;
-  QLineEdit* clientId_ = nullptr;
-  QLineEdit* secret_ = nullptr;
-  QLabel* error_ = nullptr;
+  AccountAction action_ = AccountAction::Connect;
 };
 
 struct ValueRow {
@@ -1241,10 +1200,10 @@ void showHelpDialog(QWidget* parent) {
   dialog.exec();
 }
 
-std::optional<AccountResult> accountDialog(QWidget* parent, const AppConfig& config, bool connected) {
-  AccountBox dialog(parent, config, connected);
+std::optional<AccountAction> accountDialog(QWidget* parent, bool hasClient, bool connected) {
+  AccountBox dialog(parent, hasClient, connected);
   if (dialog.exec() != QDialog::Accepted) return std::nullopt;
-  return dialog.result();
+  return dialog.action();
 }
 
 }  // namespace contacts

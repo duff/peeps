@@ -104,7 +104,6 @@ class MainWindow : public QMainWindow {
   void startOAuth();
   void finishOAuth(const QString& code);
   void saveCache();
-  void saveConfig();
   void saveTokens(const OAuthTokens& tokens);
   void applyView();
   void setBusy(bool busy);
@@ -115,7 +114,7 @@ class MainWindow : public QMainWindow {
   bool styled_ = false;
   ThemePaths themePaths_;
   AppPaths paths_;
-  AppConfig config_;
+  OAuthClient client_ = builtInClient();
   OAuthTokens tokens_;
   QString syncToken_;
   QString syncError_;

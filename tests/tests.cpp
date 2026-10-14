@@ -857,11 +857,6 @@ void GoogleTests::storeRoundTrip() {
   QCOMPARE(cache.contacts.at(0), contact);
   QVERIFY(!contacts::readCacheJson("{").ok());
 
-  const auto config =
-      contacts::readConfigJson(contacts::writeConfigJson({QStringLiteral("id"), QStringLiteral("secret")}));
-  QVERIFY(config.has_value());
-  QCOMPARE(config->clientSecret, QStringLiteral("secret"));
-
   const auto stored =
       contacts::readTokensJson(contacts::writeTokensJson({QStringLiteral("access"), QStringLiteral("refresh"), 50}));
   QVERIFY(stored.has_value());
@@ -877,10 +872,12 @@ void GoogleTests::storeRoundTrip() {
   QCOMPARE(info.permissions() & (QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ReadGroup |
                                  QFileDevice::WriteGroup | QFileDevice::ReadOther | QFileDevice::WriteOther),
            QFileDevice::ReadOwner | QFileDevice::WriteOwner);
-  const auto paths = contacts::AppPaths::forEnv(QStringLiteral("/home/ada"), QStringLiteral("/xdg/config"), QString());
-  QCOMPARE(paths.configFile, QStringLiteral("/xdg/config/peeps/config.json"));
+  const auto paths = contacts::AppPaths::forEnv(QStringLiteral("/home/ada"), QString());
   QCOMPARE(paths.cacheFile, QStringLiteral("/home/ada/.local/share/peeps/contacts.json"));
   QCOMPARE(paths.photoDir, QStringLiteral("/home/ada/.cache/peeps/photos"));
+  const auto xdg = contacts::AppPaths::forEnv(QStringLiteral("/home/ada"), QStringLiteral("/xdg/data"), QStringLiteral("/xdg/cache"));
+  QCOMPARE(xdg.cacheFile, QStringLiteral("/xdg/data/peeps/contacts.json"));
+  QCOMPARE(xdg.photoDir, QStringLiteral("/xdg/cache/peeps/photos"));
 }
 
 contacts::Contact sampleContact(QString id, QString given, QString family, QString email, QString phone,

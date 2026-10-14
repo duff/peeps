@@ -31,8 +31,8 @@ int main(int argc, char** argv) {
     QCoreApplication app(argc, argv);
     describeApp();
     contacts::CliLaunch launch;
-    launch.paths = contacts::AppPaths::forEnv(QDir::homePath(), qEnvironmentVariable("XDG_CONFIG_HOME"),
-                                              qEnvironmentVariable("XDG_DATA_HOME"), qEnvironmentVariable("XDG_CACHE_HOME"));
+    launch.paths = contacts::AppPaths::forEnv(QDir::homePath(), qEnvironmentVariable("XDG_DATA_HOME"),
+                                              qEnvironmentVariable("XDG_CACHE_HOME"));
     launch.stdoutIsTty = isatty(STDOUT_FILENO) == 1;
     const contacts::CliResult result = contacts::runContactsCommand(args, launch);
     QTextStream(stdout) << result.out;

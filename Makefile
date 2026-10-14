@@ -1,6 +1,12 @@
 .PHONY: all test clean install
 
 PREFIX ?= $(HOME)/.local
+
+# A local.mk, which git ignores, can set PEEPS_GOOGLE_CLIENT_ID and
+# PEEPS_GOOGLE_CLIENT_SECRET so your own builds carry your Google client.
+-include local.mk
+export PEEPS_GOOGLE_CLIENT_ID PEEPS_GOOGLE_CLIENT_SECRET
+
 CONFIGURE = cmake -S . -B build -DCMAKE_INSTALL_PREFIX="$(PREFIX)"
 BUILD = cmake --build build --parallel $(shell nproc)
 

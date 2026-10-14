@@ -45,7 +45,7 @@ make install PREFIX=/usr DESTDIR="$pkgdir"
 
 The Makefile wraps CMake, so a package can also call `cmake` with `CMAKE_INSTALL_PREFIX`, and `-DBUILD_TESTING=OFF` to skip the tests.
 
-A package can carry a published Google OAuth client, so people only sign in. Set `PEEPS_GOOGLE_CLIENT_ID`, and `PEEPS_GOOGLE_CLIENT_SECRET` if the client has one, when you build. Without them, each person brings their own client id, as described under [Google](#google). A Desktop client id is not a secret: Google treats an installed app as unable to keep one.
+Peeps signs in through a Google OAuth client that is built into the app, so people only choose Connect. Set `PEEPS_GOOGLE_CLIENT_ID`, and `PEEPS_GOOGLE_CLIENT_SECRET` if the client has one, when you build. A build without them cannot connect to Google. A Desktop client id is not a secret: Google treats an installed app as unable to keep one.
 
 ## The window
 
@@ -111,7 +111,9 @@ peeps search ada --jq '.contacts[] | {id, name, score}'
 
 ## Google
 
-Peeps signs in with a Desktop OAuth client and the People API scope `https://www.googleapis.com/auth/contacts`. The sign-in redirect is `http://127.0.0.1` on a free port. A Desktop client accepts that loopback address, so you do not register a port or a public URL. The client secret is optional. Peeps uses PKCE.
+Peeps signs in with a Desktop OAuth client, built in when Peeps is compiled, and the People API scope `https://www.googleapis.com/auth/contacts`. The sign-in redirect is `http://127.0.0.1` on a free port. A Desktop client accepts that loopback address, so you do not register a port or a public URL. The client secret is optional. Peeps uses PKCE.
+
+A packaged build already carries a client, so you only open Menu → Google account and choose Connect. To build Peeps with a client of your own, follow the steps below.
 
 The name on Google's consent screen comes from the Google Cloud project, not from this app. To change it, edit the app name under Google Auth Platform → Branding.
 
@@ -121,8 +123,15 @@ Use a published app, not a testing one. A consent screen left in Testing only al
 2. Open the OAuth consent screen (Google Auth Platform, Audience and Branding). Choose External unless this is only for a Workspace organization, in which case Internal is enough.
 3. Set the app name and a support email. Add the scope `https://www.googleapis.com/auth/contacts`.
 4. Publish the app so its status is In production.
-5. Under Credentials, create an OAuth client ID of type **Desktop app**. Copy the client id.
-6. Launch Peeps, open Menu → Google account, paste the client id, and choose Connect. Sign in in the browser. The page that comes back says you can close the tab.
+5. Under Clients, create an OAuth client of type **Desktop app**. Copy the client id and secret.
+6. Put them in `local.mk` at the top of the repo, which git ignores, or set the same variables in the environment when you build:
+
+   ```make
+   PEEPS_GOOGLE_CLIENT_ID = 123-abc.apps.googleusercontent.com
+   PEEPS_GOOGLE_CLIENT_SECRET = GOCSPX-…
+   ```
+
+7. Run `make install`, launch Peeps, open Menu → Google account, and choose Connect. Sign in in the browser. The page that comes back says you can close the tab.
 
 The Contacts scope is sensitive. Until Google verifies the app, the consent screen warns that Google has not verified it. For your own account, continue past that warning. Verification, which wants a homepage, a privacy policy, and a review, is how you remove the warning for everyone else, and it is what a build with a built-in client (see [Packaging](#packaging)) needs before strangers use it. Publishing is what leaves Testing. Verification is a separate step.
 
@@ -133,7 +142,6 @@ The refresh token stays in the login keyring under `org.omelia.peeps`. Disconnec
 | Path | What |
 | --- | --- |
 | `~/.local/share/peeps/contacts.json` | The cache search reads |
-| `~/.config/peeps/config.json` | The OAuth client id |
 | `~/.cache/peeps/photos` | Cached photos |
 | `$XDG_RUNTIME_DIR/peeps` | vCards made for sharing, cleared at logout |
 | Login keyring | The Google refresh token |

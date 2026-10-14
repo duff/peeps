@@ -43,6 +43,7 @@ struct CliSession {
 
 struct CliLaunch {
   AppPaths paths;
+  OAuthClient client = builtInClient();
   SecretStore* secrets = nullptr;
   HttpClient* http = nullptr;
   bool stdoutIsTty = false;

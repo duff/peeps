@@ -213,19 +213,16 @@ Contact contactFromObject(const QJsonObject& object) {
 
 }  // namespace
 
-AppPaths AppPaths::forEnv(const QString& home, const QString& xdgConfigHome, const QString& xdgDataHome,
-                           const QString& xdgCacheHome) {
+AppPaths AppPaths::forEnv(const QString& home, const QString& xdgDataHome, const QString& xdgCacheHome) {
   AppPaths paths;
-  const QString configRoot = xdgConfigHome.isEmpty() ? home + QStringLiteral("/.config") : xdgConfigHome;
   const QString dataRoot = xdgDataHome.isEmpty() ? home + QStringLiteral("/.local/share") : xdgDataHome;
   const QString cacheRoot = xdgCacheHome.isEmpty() ? home + QStringLiteral("/.cache") : xdgCacheHome;
-  paths.configFile = configRoot + QStringLiteral("/peeps/config.json");
   paths.cacheFile = dataRoot + QStringLiteral("/peeps/contacts.json");
   paths.photoDir = cacheRoot + QStringLiteral("/peeps/photos");
   return paths;
 }
 
-AppConfig builtInClient() {
+OAuthClient builtInClient() {
 #ifdef PEEPS_GOOGLE_CLIENT_ID
 #ifndef PEEPS_GOOGLE_CLIENT_SECRET
 #define PEEPS_GOOGLE_CLIENT_SECRET ""
@@ -234,24 +231,6 @@ AppConfig builtInClient() {
 #else
   return {};
 #endif
-}
-
-AppConfig effectiveClient(const AppConfig& saved) { return saved.clientId.isEmpty() ? builtInClient() : saved; }
-
-QByteArray writeConfigJson(const AppConfig& config) {
-  QJsonObject object;
-  object.insert(QStringLiteral("client_id"), config.clientId);
-  object.insert(QStringLiteral("client_secret"), config.clientSecret);
-  return QJsonDocument(object).toJson(QJsonDocument::Compact);
-}
-
-std::optional<AppConfig> readConfigJson(const QByteArray& json) {
-  const QJsonDocument document = QJsonDocument::fromJson(json);
-  if (!document.isObject()) return std::nullopt;
-  AppConfig config;
-  config.clientId = document.object().value(QLatin1String("client_id")).toString();
-  config.clientSecret = document.object().value(QLatin1String("client_secret")).toString();
-  return config;
 }
 
 QByteArray writeCacheJson(const QList<Contact>& contacts, const QString& syncToken) {

@@ -9,25 +9,16 @@
 namespace contacts {
 
 struct AppPaths {
-  QString configFile;
   QString cacheFile;
   QString photoDir;
 
-  static AppPaths forEnv(const QString& home, const QString& xdgConfigHome, const QString& xdgDataHome,
-                         const QString& xdgCacheHome = {});
+  static AppPaths forEnv(const QString& home, const QString& xdgDataHome, const QString& xdgCacheHome = {});
 };
 
-struct AppConfig {
-  QString clientId;
-  QString clientSecret;
-};
-
-// A packaged build can carry a published OAuth client so people only sign in.
-// Build with PEEPS_GOOGLE_CLIENT_ID (and PEEPS_GOOGLE_CLIENT_SECRET) set.
+// The Google client Peeps signs in with, built in from PEEPS_GOOGLE_CLIENT_ID (and
+// PEEPS_GOOGLE_CLIENT_SECRET). Empty when the build has none, and then nobody can connect.
 // Desktop client ids are not secret: Google says an installed app cannot keep one.
-AppConfig builtInClient();
-// The client id saved in Account, or the built-in one when none is saved.
-AppConfig effectiveClient(const AppConfig& saved);
+OAuthClient builtInClient();
 
 struct CacheSnapshot {
   QList<Contact> contacts;
@@ -36,8 +27,6 @@ struct CacheSnapshot {
   bool ok() const { return error.isEmpty(); }
 };
 
-QByteArray writeConfigJson(const AppConfig& config);
-std::optional<AppConfig> readConfigJson(const QByteArray& json);
 QByteArray writeCacheJson(const QList<Contact>& contacts, const QString& syncToken);
 CacheSnapshot readCacheJson(const QByteArray& json);
 QByteArray writeTokensJson(const OAuthTokens& tokens);

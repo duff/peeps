@@ -392,8 +392,7 @@ MainWindow::MainWindow() : secrets_(makeSecretStore()) {
   resize(980, 680);
   setMinimumSize(480, 560);
   themePaths_ = ThemePaths::forHome(QDir::homePath());
-  paths_ = AppPaths::forEnv(QDir::homePath(), qEnvironmentVariable("XDG_CONFIG_HOME"), qEnvironmentVariable("XDG_DATA_HOME"),
-                            qEnvironmentVariable("XDG_CACHE_HOME"));
+  paths_ = AppPaths::forEnv(QDir::homePath(), qEnvironmentVariable("XDG_DATA_HOME"), qEnvironmentVariable("XDG_CACHE_HOME"));
   fontFamily_ = monospaceFamily();
   photos_ = new PhotoStore(paths_.photoDir, this);
   connect(photos_, &PhotoStore::updated, this, [this](const QString& id) {
@@ -546,9 +545,6 @@ void MainWindow::buildUi() {
 }
 
 void MainWindow::loadLocal() {
-  if (auto bytes = readFile(paths_.configFile)) {
-    if (auto config = readConfigJson(*bytes)) config_ = *config;
-  }
   QString error;
   if (auto secret = secrets_->load(error)) {
     if (auto tokens = readTokensJson(secret->toUtf8())) tokens_ = *tokens;
@@ -1223,33 +1219,26 @@ void MainWindow::deleteSelected() {
 }
 
 void MainWindow::openAccount() {
-  const bool connected = signedIn();
-  auto result = accountDialog(this, config_, connected);
-  if (!result) return;
-  config_ = result->config;
-  saveConfig();
-  if (result->action == AccountAction::Connect) {
+  const auto action = accountDialog(this, !client_.clientId.isEmpty(), signedIn());
+  if (!action) return;
+  if (*action == AccountAction::Connect) {
     startOAuth();
     return;
   }
-  if (result->action == AccountAction::Disconnect) {
-    if (!confirmDialog(this, QStringLiteral("Disconnect Google?"),
-                       QStringLiteral("Peeps forgets the local copy. People stay in the Google account."),
-                       QStringLiteral("Disconnect"))) {
-      return;
-    }
-    QString error;
-    if (!secrets_->clear(error)) toast(error, true);
-    tokens_ = {};
-    syncToken_.clear();
-    syncError_.clear();
-    index_.replaceAll({});
-    saveCache();
-    refilter();
-    toast(QStringLiteral("Disconnected"));
+  if (!confirmDialog(this, QStringLiteral("Disconnect Google?"),
+                     QStringLiteral("Peeps forgets the local copy. People stay in the Google account."),
+                     QStringLiteral("Disconnect"))) {
     return;
   }
-  toast(QStringLiteral("Account saved"));
+  QString error;
+  if (!secrets_->clear(error)) toast(error, true);
+  tokens_ = {};
+  syncToken_.clear();
+  syncError_.clear();
+  index_.replaceAll({});
+  saveCache();
+  refilter();
+  toast(QStringLiteral("Disconnected"));
 }
 
 void MainWindow::setBusy(bool busy) {
@@ -1260,11 +1249,6 @@ void MainWindow::setBusy(bool busy) {
 void MainWindow::saveCache() {
   QString error;
   if (!writePrivateFile(paths_.cacheFile, writeCacheJson(index_.all(), syncToken_), error)) toast(error, true);
-}
-
-void MainWindow::saveConfig() {
-  QString error;
-  if (!writePrivateFile(paths_.configFile, writeConfigJson(config_), error)) toast(error, true);
 }
 
 void MainWindow::saveTokens(const OAuthTokens& tokens) {
@@ -1364,11 +1348,10 @@ void MainWindow::changeEvent(QEvent* event) {
   focusSyncTimer_->start();
 }
 
-bool MainWindow::signedIn() const { return !tokens_.refreshToken.isEmpty() && !effectiveClient(config_).clientId.isEmpty(); }
+bool MainWindow::signedIn() const { return !tokens_.refreshToken.isEmpty() && !client_.clientId.isEmpty(); }
 
 void MainWindow::runGoogle(GoogleWork work, GoogleDone done) {
-  const AppConfig client = effectiveClient(config_);
-  const OAuthClient oauth{client.clientId, client.clientSecret};
+  const OAuthClient oauth = client_;
   const OAuthTokens tokens = tokens_;
   runInBackground([this, oauth, tokens, work = std::move(work), done = std::move(done)] {
     BlockingNam http;
@@ -1538,9 +1521,8 @@ void MainWindow::runDelete(const QString& id) {
 }
 
 void MainWindow::startOAuth() {
-  const AppConfig client = effectiveClient(config_);
-  if (client.clientId.isEmpty()) {
-    toast(QStringLiteral("Enter a Google client id first."), true);
+  if (client_.clientId.isEmpty()) {
+    toast(QStringLiteral("This build of Peeps has no Google client."), true);
     return;
   }
   if (oauthServer_) {
@@ -1555,7 +1537,7 @@ void MainWindow::startOAuth() {
   oauthVerifier_ = randomUrlToken(32);
   oauthState_ = randomUrlToken(16);
   oauthRedirect_ = QStringLiteral("http://127.0.0.1:%1").arg(oauthServer_->serverPort());
-  const QString url = buildAuthUrl({client.clientId, client.clientSecret}, oauthRedirect_, oauthState_,
+  const QString url = buildAuthUrl(client_, oauthRedirect_, oauthState_,
                                    pkceChallengeS256(oauthVerifier_));
   connect(oauthServer_, &QTcpServer::newConnection, this, [this, server = oauthServer_] {
     while (QTcpSocket* socket = server->nextPendingConnection()) {
@@ -1610,8 +1592,7 @@ void MainWindow::startOAuth() {
 
 void MainWindow::finishOAuth(const QString& code) {
   setBusy(true);
-  const AppConfig config = effectiveClient(config_);
-  const OAuthClient client{config.clientId, config.clientSecret};
+  const OAuthClient client = client_;
   const QString redirect = oauthRedirect_;
   const QString verifier = oauthVerifier_;
   runInBackground([this, client, code, redirect, verifier] {

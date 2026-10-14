@@ -26,6 +26,7 @@ Ideas from the October 2026 review, roughly in order of value. None of these are
 - [ ] **License.** Add a LICENSE file.
 - [ ] **Screenshots.** Put a few in the README.
 - [x] **App id.** The window class and desktop file are now `org.omelia.Peeps`.
-- [ ] **Google client.** Decide between people bringing their own Google client and shipping a verified one. A shipped client needs Google's verification: a homepage, a privacy policy, and a review.
-- [ ] **Google branding.** Rename the app on Google's consent screen (Google Auth Platform → Branding), which should say Peeps.
+- [x] **Google client.** Peeps ships its own client, built in with `PEEPS_GOOGLE_CLIENT_ID`. The account screen no longer asks for one.
+- [ ] **Verification.** Verify omelia.org in Search Console and publish the branding, then submit data access with a demo video and a reason for the contacts scope.
+- [x] **Google branding.** The consent screen's app name is Peeps, with https://omelia.org/peeps and its privacy policy.
 - [ ] **Label boxes.** Show a down-arrow on the email, phone, and address label boxes so they read as choices.

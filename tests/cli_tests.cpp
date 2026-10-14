@@ -396,8 +396,8 @@ void CliTests::liveCacheAndGoogle() {
   QVERIFY(dir.isValid());
   const QString root = dir.path();
   contacts::CliLaunch launch;
-  launch.paths = contacts::AppPaths::forEnv(root, root + QStringLiteral("/config"), root + QStringLiteral("/data"),
-                                            root + QStringLiteral("/cache"));
+  launch.paths = contacts::AppPaths::forEnv(root, root + QStringLiteral("/data"), root + QStringLiteral("/cache"));
+  launch.client = {};
   launch.stdoutIsTty = false;
   MemorySecrets secrets;
   launch.secrets = &secrets;
@@ -410,9 +410,7 @@ void CliTests::liveCacheAndGoogle() {
   QCOMPARE(secrets.loads, 0);
   QCOMPARE(http.calls, 0);
 
-  QString error;
-  QVERIFY(contacts::writePrivateFile(launch.paths.configFile,
-                                     contacts::writeConfigJson({QStringLiteral("id"), QStringLiteral("secret")}), error));
+  launch.client = {QStringLiteral("id"), QStringLiteral("secret")};
   secrets.secret = QString::fromUtf8(
       contacts::writeTokensJson({QStringLiteral("access"), QStringLiteral("refresh"), QDateTime::currentSecsSinceEpoch() + 3600}));
   http.body = QByteArrayLiteral(

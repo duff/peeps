@@ -1601,11 +1601,6 @@ CliResult runContactsCommand(const QStringList& args, const CliLaunch& launch) {
       ownedHttp = std::make_unique<BlockingNam>();
       http = ownedHttp.get();
     }
-    AppConfig config;
-    if (const auto bytes = readFile(launch.paths.configFile)) {
-      if (const auto read = readConfigJson(*bytes)) config = *read;
-    }
-    config = effectiveClient(config);
     QString secretError;
     const auto secret = secrets->load(secretError);
     OAuthTokens tokens;
@@ -1614,11 +1609,11 @@ CliResult runContactsCommand(const QStringList& args, const CliLaunch& launch) {
     }
     if (!secretError.isEmpty() && !secret) {
       session.authError = secretError;
-    } else if (config.clientId.isEmpty() || tokens.refreshToken.isEmpty()) {
+    } else if (launch.client.clientId.isEmpty() || tokens.refreshToken.isEmpty()) {
       session.signedIn = false;
     } else {
       loaded = tokens;
-      google.emplace(*http, OAuthClient{config.clientId, config.clientSecret}, tokens);
+      google.emplace(*http, launch.client, tokens);
       const QString ready = google->prepare(QDateTime::currentSecsSinceEpoch());
       if (!ready.isEmpty()) {
         session.authError = ready;
