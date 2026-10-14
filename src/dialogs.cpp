@@ -31,7 +31,7 @@
 namespace contacts {
 namespace {
 
-constexpr char kSetupGuide[] = "https://github.com/duff/contacts#google";
+constexpr char kSetupGuide[] = "https://github.com/duff/peeps#google";
 
 const ShellMetrics& metrics() { return activeMetrics(); }
 
