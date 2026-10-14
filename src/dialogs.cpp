@@ -310,7 +310,7 @@ class AccountBox : public Panel {
       : Panel(parent, Surface::Account), result_{AccountAction::Save, config} {
     const bool builtIn = !builtInClient().clientId.isEmpty();
     root_->addWidget(labelNamed(QStringLiteral("Google account"), QStringLiteral("title")));
-    auto* status = labelNamed(connected ? QStringLiteral("Connected. Contacts syncs with this Google account.")
+    auto* status = labelNamed(connected ? QStringLiteral("Connected. Peeps syncs with this Google account.")
                                         : QStringLiteral("Not connected."),
                               QStringLiteral("secondary"));
     status->setWordWrap(true);
@@ -321,7 +321,7 @@ class AccountBox : public Panel {
     client->setContentsMargins(0, 0, 0, 0);
     client->setSpacing(metrics().space(10));
     auto* help = labelNamed(
-        QStringLiteral("Contacts signs in with an OAuth client from your own Google Cloud project: a Desktop app "
+        QStringLiteral("Peeps signs in with an OAuth client from your own Google Cloud project: a Desktop app "
                        "client, the People API enabled, and the consent screen published. Paste its client id here."),
         QStringLiteral("secondary"));
     help->setWordWrap(true);

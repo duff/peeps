@@ -1,8 +1,8 @@
-# Contacts
+# Peeps
 
 A keyboard-first address book for Omarchy. It keeps your Google contacts on the desktop, paints itself from the current Omarchy theme and text size, and answers search from a local cache so looking someone up does not wait on the network.
 
-With no arguments, `contacts` opens the window. A command stays in the terminal, which is how a person or an agent lists, searches, exports, and changes the same contacts.
+With no arguments, `peeps` opens the window. A command stays in the terminal, which is how a person or an agent lists, searches, exports, and changes the same contacts.
 
 ## Is this for you?
 
@@ -26,12 +26,12 @@ make test
 make install
 ```
 
-`make install` puts `contacts` in `~/.local/bin` and adds a launcher. The tests use Qt Test and the offscreen platform.
+`make install` puts `peeps` in `~/.local/bin` and adds a launcher. The tests use Qt Test and the offscreen platform.
 
-Launching Contacts again brings the open window forward instead of opening a second one, from the app launcher or the terminal alike. Its window class (the Wayland app id) is `org.omelia.Contacts`, which is also the name of its launcher entry. To give it a key the way other Omarchy apps have one, bind it in `~/.config/hypr/bindings.lua`:
+Launching Peeps again brings the open window forward instead of opening a second one, from the app launcher or the terminal alike. Its window class (the Wayland app id) is `org.omelia.Peeps`, which is also the name of its launcher entry. To give it a key the way other Omarchy apps have one, bind it in `~/.config/hypr/bindings.lua`:
 
 ```lua
-o.bind("SUPER + SHIFT + ALT + C", "Contacts", { launch = "contacts", focus = "^org\\.omelia\\.Contacts$" })
+o.bind("SUPER + SHIFT + ALT + C", "Peeps", { launch = "peeps", focus = "^org\\.omelia\\.Peeps$" })
 ```
 
 ### Packaging
@@ -45,7 +45,7 @@ make install PREFIX=/usr DESTDIR="$pkgdir"
 
 The Makefile wraps CMake, so a package can also call `cmake` with `CMAKE_INSTALL_PREFIX`, and `-DBUILD_TESTING=OFF` to skip the tests.
 
-A package can carry a published Google OAuth client, so people only sign in. Set `CONTACTS_GOOGLE_CLIENT_ID`, and `CONTACTS_GOOGLE_CLIENT_SECRET` if the client has one, when you build. Without them, each person brings their own client id, as described under [Google](#google). A Desktop client id is not a secret: Google treats an installed app as unable to keep one.
+A package can carry a published Google OAuth client, so people only sign in. Set `PEEPS_GOOGLE_CLIENT_ID`, and `PEEPS_GOOGLE_CLIENT_SECRET` if the client has one, when you build. Without them, each person brings their own client id, as described under [Google](#google). A Desktop client id is not a secret: Google treats an installed app as unable to keep one.
 
 ## The window
 
@@ -87,31 +87,31 @@ Share this contact sits with Edit and Delete at the end of a contact. It writes 
 
 ## Command line
 
-`contacts help` lists every command, and `contacts <command> --help` shows that command's flags. A terminal prints text. A pipe prints JSON. `--json` and `--text` force either one.
+`peeps help` lists every command, and `peeps <command> --help` shows that command's flags. A terminal prints text. A pipe prints JSON. `--json` and `--text` force either one.
 
-List, search, show, and export read the cache only. Add, update, delete, and sync talk to Google, then write the cache again. Omitted fields on an update stay as they are. Repeatable flags such as `--email` replace that whole list. `--data` accepts the same JSON object that `contacts show --json` prints, which is the way to set an address, a date, or anything a flag does not cover.
+List, search, show, and export read the cache only. Add, update, delete, and sync talk to Google, then write the cache again. Omitted fields on an update stay as they are. Repeatable flags such as `--email` replace that whole list. `--data` accepts the same JSON object that `peeps show --json` prints, which is the way to set an address, a date, or anything a flag does not cover.
 
 ```bash
-contacts search lovelace
-contacts show ada@example.com --json
-contacts export ada@example.com > ada.vcf
-contacts export > everyone.vcf
-contacts add --given Ada --family Lovelace --email home=ada@example.com
-contacts update people/c1 --notes "Met in 1843"
-contacts delete people/c1 --yes
-contacts sync
+peeps search lovelace
+peeps show ada@example.com --json
+peeps export ada@example.com > ada.vcf
+peeps export > everyone.vcf
+peeps add --given Ada --family Lovelace --email home=ada@example.com
+peeps update people/c1 --notes "Met in 1843"
+peeps delete people/c1 --yes
+peeps sync
 ```
 
-An id is a Google resource name (`people/c123`), a unique name, or a unique email. Exit codes are 0 for success, 1 when the command fails, 2 for usage, 3 when nobody is signed in, and 4 when nothing matches. `contacts commands --json` prints the catalog.
+An id is a Google resource name (`people/c123`), a unique name, or a unique email. Exit codes are 0 for success, 1 when the command fails, 2 for usage, 3 when nobody is signed in, and 4 when nothing matches. `peeps commands --json` prints the catalog.
 
 ```bash
-contacts list --json | jq '.contacts[] | {name, email}'
-contacts search ada --jq '.contacts[] | {id, name, score}'
+peeps list --json | jq '.contacts[] | {name, email}'
+peeps search ada --jq '.contacts[] | {id, name, score}'
 ```
 
 ## Google
 
-Contacts signs in with a Desktop OAuth client and the People API scope `https://www.googleapis.com/auth/contacts`. The sign-in redirect is `http://127.0.0.1` on a free port. A Desktop client accepts that loopback address, so you do not register a port or a public URL. The client secret is optional. Contacts uses PKCE.
+Peeps signs in with a Desktop OAuth client and the People API scope `https://www.googleapis.com/auth/contacts`. The sign-in redirect is `http://127.0.0.1` on a free port. A Desktop client accepts that loopback address, so you do not register a port or a public URL. The client secret is optional. Peeps uses PKCE.
 
 The name on Google's consent screen comes from the Google Cloud project, not from this app. To change it, edit the app name under Google Auth Platform → Branding.
 
@@ -122,26 +122,26 @@ Use a published app, not a testing one. A consent screen left in Testing only al
 3. Set the app name and a support email. Add the scope `https://www.googleapis.com/auth/contacts`.
 4. Publish the app so its status is In production.
 5. Under Credentials, create an OAuth client ID of type **Desktop app**. Copy the client id.
-6. Launch Contacts, open Menu → Google account, paste the client id, and choose Connect. Sign in in the browser. The page that comes back says you can close the tab.
+6. Launch Peeps, open Menu → Google account, paste the client id, and choose Connect. Sign in in the browser. The page that comes back says you can close the tab.
 
 The Contacts scope is sensitive. Until Google verifies the app, the consent screen warns that Google has not verified it. For your own account, continue past that warning. Verification, which wants a homepage, a privacy policy, and a review, is how you remove the warning for everyone else, and it is what a build with a built-in client (see [Packaging](#packaging)) needs before strangers use it. Publishing is what leaves Testing. Verification is a separate step.
 
-The refresh token stays in the login keyring under `org.omelia.contacts`. Disconnect from Menu → Google account clears it.
+The refresh token stays in the login keyring under `org.omelia.peeps`. Disconnect from Menu → Google account clears it.
 
 ## Where the data lives
 
 | Path | What |
 | --- | --- |
-| `~/.local/share/contacts/contacts.json` | The cache search reads |
-| `~/.config/contacts/config.json` | The OAuth client id |
-| `~/.cache/contacts/photos` | Cached photos |
-| `$XDG_RUNTIME_DIR/contacts` | vCards made for sharing, cleared at logout |
+| `~/.local/share/peeps/contacts.json` | The cache search reads |
+| `~/.config/peeps/config.json` | The OAuth client id |
+| `~/.cache/peeps/photos` | Cached photos |
+| `$XDG_RUNTIME_DIR/peeps` | vCards made for sharing, cleared at logout |
 | Login keyring | The Google refresh token |
 
-`contacts sync` downloads changes since the last sync. `contacts sync --full` downloads the whole book.
+`peeps sync` downloads changes since the last sync. `peeps sync --full` downloads the whole book.
 
 ## Theme and text size
 
-On startup, and whenever the files change, Contacts reads `~/.local/state/omarchy/current/theme/colors.toml`. If that directory is missing, it tries the legacy `~/.config/omarchy/current` path. A broken or missing palette falls back to Tokyo Night as a whole.
+On startup, and whenever the files change, Peeps reads `~/.local/state/omarchy/current/theme/colors.toml`. If that directory is missing, it tries the legacy `~/.config/omarchy/current` path. A broken or missing palette falls back to Tokyo Night as a whole.
 
 Sizes follow the Omarchy shell. The theme's `shell.toml` sets the base text size, and `~/.config/omarchy/shell.toml`, which the text size in the Omarchy menu writes, overrides it. Text, rows, padding, and photos scale from that base the way the bar does, and change while the window is open. The font is the one fontconfig gives `monospace`, which `omarchy font set` changes. Controls stay square, with quiet borders from the palette.

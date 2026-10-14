@@ -46,21 +46,21 @@ CliResult finish(int code, QString out = {}, QString err = {}) {
 
 QString overview() {
   return QStringLiteral(
-      "contacts — look up and change Google contacts\n"
+      "peeps — look up and change Google contacts\n"
       "\n"
       "List, search, show, and export read the local cache, so they stay fast.\n"
       "Add, update, delete, and sync talk to Google, then refresh that cache.\n"
       "\n"
-      "  contacts list [--limit N]\n"
-      "  contacts search QUERY [--limit N]\n"
-      "  contacts show ID\n"
-      "  contacts export [ID...]\n"
-      "  contacts add FLAGS\n"
-      "  contacts update ID FLAGS\n"
-      "  contacts delete ID --yes\n"
-      "  contacts sync [--full]\n"
-      "  contacts commands\n"
-      "  contacts help [COMMAND]\n"
+      "  peeps list [--limit N]\n"
+      "  peeps search QUERY [--limit N]\n"
+      "  peeps show ID\n"
+      "  peeps export [ID...]\n"
+      "  peeps add FLAGS\n"
+      "  peeps update ID FLAGS\n"
+      "  peeps delete ID --yes\n"
+      "  peeps sync [--full]\n"
+      "  peeps commands\n"
+      "  peeps help [COMMAND]\n"
       "\n"
       "ID is a resource name (people/c123), a unique name, or a unique email.\n"
       "A terminal prints text. A pipe prints JSON. --json and --text choose.\n"
@@ -71,11 +71,11 @@ QString overview() {
       "  3  not signed in\n"
       "  4  no contact matched\n"
       "\n"
-      "  contacts search lovelace\n"
-      "  contacts show ada@example.com --json\n"
-      "  contacts add --given Ada --family Lovelace --email home=ada@example.com\n"
-      "  contacts update people/c1 --notes \"Met in 1843\"\n"
-      "  contacts delete people/c1 --yes\n");
+      "  peeps search lovelace\n"
+      "  peeps show ada@example.com --json\n"
+      "  peeps add --given Ada --family Lovelace --email home=ada@example.com\n"
+      "  peeps update people/c1 --notes \"Met in 1843\"\n"
+      "  peeps delete people/c1 --yes\n");
 }
 
 QString fieldHelp() {
@@ -117,7 +117,7 @@ QString commandHelp(const QString& command) {
     return QStringLiteral(
         "List contacts from the local cache, in name order.\n"
         "\n"
-        "  contacts list [--limit N] [--json]\n"
+        "  peeps list [--limit N] [--json]\n"
         "\n"
         "JSON is {\"total\", \"count\", \"contacts\":[{\"id\", \"name\", \"email\",\n"
         "\"phone\", \"organization\"}]}.\n");
@@ -127,13 +127,13 @@ QString commandHelp(const QString& command) {
         "Find contacts in the local cache. Every word must match.\n"
         "A name match ranks above email, phone, and notes.\n"
         "\n"
-        "  contacts search QUERY [--limit N] [--json]\n");
+        "  peeps search QUERY [--limit N] [--json]\n");
   }
   if (command == QLatin1String("show")) {
     return QStringLiteral(
         "Print one contact from the local cache.\n"
         "\n"
-        "  contacts show ID [--json]\n"
+        "  peeps show ID [--json]\n"
         "\n"
         "JSON is the object --data accepts, plus id, name, etag, and photo_url.\n");
   }
@@ -142,21 +142,21 @@ QString commandHelp(const QString& command) {
         "Print contacts from the local cache as vCard 3.0, which Google, iOS,\n"
         "Android, and most mail apps import. With no ID, every contact.\n"
         "\n"
-        "  contacts export [ID...]\n"
-        "  contacts export ada@example.com > ada.vcf\n");
+        "  peeps export [ID...]\n"
+        "  peeps export ada@example.com > ada.vcf\n");
   }
   if (command == QLatin1String("add")) {
     return QStringLiteral("Create a contact on Google, then store it in the local cache.\n"
                           "A name or a company is required.\n"
                           "\n"
-                          "  contacts add FLAGS\n"
+                          "  peeps add FLAGS\n"
                           "\n") +
            fieldHelp();
   }
   if (command == QLatin1String("update")) {
     return QStringLiteral("Change a contact on Google, then store it in the local cache.\n"
                           "\n"
-                          "  contacts update ID FLAGS\n"
+                          "  peeps update ID FLAGS\n"
                           "\n") +
            fieldHelp();
   }
@@ -165,13 +165,13 @@ QString commandHelp(const QString& command) {
         "Delete a contact on Google, then remove it from the local cache.\n"
         "This is permanent. --yes is required.\n"
         "\n"
-        "  contacts delete ID --yes\n");
+        "  peeps delete ID --yes\n");
   }
   if (command == QLatin1String("sync")) {
     return QStringLiteral(
         "Refresh the local cache from Google.\n"
         "\n"
-        "  contacts sync [--full]\n"
+        "  peeps sync [--full]\n"
         "\n"
         "Without --full, only changes since the last sync are downloaded.\n");
   }
@@ -1055,10 +1055,10 @@ bool persist(CliSession& session, QString& error) {
 
 CliResult signedOut(const CliSession& session) {
   if (!session.authError.isEmpty()) return finish(kCliFailed, {}, session.authError);
-  return finish(kCliSignedOut, {}, QStringLiteral("Not signed in. Open Contacts and connect a Google account."));
+  return finish(kCliSignedOut, {}, QStringLiteral("Not signed in. Open Peeps and connect a Google account."));
 }
 
-QString cacheMiss(const QString& detail) { return QStringLiteral("Google saved the change, but the local cache could not be written. %1 Run contacts sync.").arg(detail); }
+QString cacheMiss(const QString& detail) { return QStringLiteral("Google saved the change, but the local cache could not be written. %1 Run peeps sync.").arg(detail); }
 
 Contact mergedWrite(const Contact& submitted, const Contact& saved) {
   Contact merged = submitted;
@@ -1156,7 +1156,7 @@ Parsed parseArgs(const QStringList& args) {
   for (const QString& arg : args) {
     if (arg == QLatin1String("--version")) {
       parsed.stop = true;
-      parsed.early = finish(kCliOk, QStringLiteral("contacts ") + QLatin1String(kVersion));
+      parsed.early = finish(kCliOk, QStringLiteral("peeps ") + QLatin1String(kVersion));
       return parsed;
     }
   }
@@ -1300,12 +1300,12 @@ Parsed parseArgs(const QStringList& args) {
   }
   if (parsed.command == QLatin1String("version")) {
     parsed.stop = true;
-    parsed.early = finish(kCliOk, QStringLiteral("contacts ") + QLatin1String(kVersion));
+    parsed.early = finish(kCliOk, QStringLiteral("peeps ") + QLatin1String(kVersion));
     return parsed;
   }
   if (!parsed.command.isEmpty() && !isCommand(parsed.command)) {
     parsed.stop = true;
-    parsed.early = finish(kCliUsage, {}, QStringLiteral("Unknown command \"%1\". Run contacts help.").arg(parsed.command));
+    parsed.early = finish(kCliUsage, {}, QStringLiteral("Unknown command \"%1\". Run peeps help.").arg(parsed.command));
     return parsed;
   }
   if (parsed.command.isEmpty() && parsed.help) {
@@ -1315,7 +1315,7 @@ Parsed parseArgs(const QStringList& args) {
   }
   if (parsed.command.isEmpty()) {
     parsed.stop = true;
-    parsed.early = finish(kCliUsage, {}, QStringLiteral("Pass a command. Run contacts help."));
+    parsed.early = finish(kCliUsage, {}, QStringLiteral("Pass a command. Run peeps help."));
     return parsed;
   }
   if (parsed.help || parsed.command == QLatin1String("help")) {
@@ -1328,7 +1328,7 @@ Parsed parseArgs(const QStringList& args) {
     }
     if (!topic.isEmpty() && !isCommand(topic)) {
       parsed.stop = true;
-      parsed.early = finish(kCliUsage, {}, QStringLiteral("Unknown command \"%1\". Run contacts help.").arg(topic));
+      parsed.early = finish(kCliUsage, {}, QStringLiteral("Unknown command \"%1\". Run peeps help.").arg(topic));
       return parsed;
     }
     parsed.stop = true;
@@ -1380,7 +1380,7 @@ CliResult execute(Parsed parsed, CliSession& session, bool stdoutIsTty) {
   };
 
   if (command == QLatin1String("list")) {
-    if (!parsed.positionals.isEmpty()) return usage(QStringLiteral("list takes no query. Use contacts search."));
+    if (!parsed.positionals.isEmpty()) return usage(QStringLiteral("list takes no query. Use peeps search."));
     return finish(kCliOk, renderHits(hitsFor(QString()), parsed.limit, json, QString()));
   }
   if (command == QLatin1String("search")) {
@@ -1420,7 +1420,7 @@ CliResult execute(Parsed parsed, CliSession& session, bool stdoutIsTty) {
   if (command == QLatin1String("sync")) {
     if (!parsed.positionals.isEmpty()) return usage(QStringLiteral("sync takes no arguments."));
     if (!session.signedIn) return signedOut(session);
-    if (!session.syncPeople) return finish(kCliFailed, {}, QStringLiteral("Contacts has no Google connection."));
+    if (!session.syncPeople) return finish(kCliFailed, {}, QStringLiteral("Peeps has no Google connection."));
     bool full = parsed.full || session.syncToken.isEmpty();
     PeopleResult fetched = session.syncPeople(full);
     if (fetched.error == QLatin1String("sync-token-expired") && !full) {
@@ -1453,7 +1453,7 @@ CliResult execute(Parsed parsed, CliSession& session, bool stdoutIsTty) {
                        .arg(found.contact.displayName(), found.contact.resourceName));
     }
     if (!session.signedIn) return signedOut(session);
-    if (!session.remove) return finish(kCliFailed, {}, QStringLiteral("Contacts has no Google connection."));
+    if (!session.remove) return finish(kCliFailed, {}, QStringLiteral("Peeps has no Google connection."));
     const QString removed = session.remove(found.contact.resourceName);
     if (!removed.isEmpty()) return finish(kCliFailed, {}, removed);
     session.contacts.erase(std::remove_if(session.contacts.begin(), session.contacts.end(),
@@ -1480,7 +1480,7 @@ CliResult execute(Parsed parsed, CliSession& session, bool stdoutIsTty) {
   } else if (command == QLatin1String("add")) {
     if (!parsed.positionals.isEmpty()) return usage(QStringLiteral("add takes flags, not a name. Use --given and --family."));
   } else {
-    return usage(QStringLiteral("Unknown command \"%1\". Run contacts help.").arg(command));
+    return usage(QStringLiteral("Unknown command \"%1\". Run peeps help.").arg(command));
   }
 
   if (!parsed.patch.dataPath.isEmpty()) {
@@ -1521,12 +1521,12 @@ CliResult execute(Parsed parsed, CliSession& session, bool stdoutIsTty) {
   Contact saved = edited;
   if (command == QLatin1String("add") || !sameFields(edited, normalized)) {
     if (command == QLatin1String("add")) {
-      if (!session.create) return finish(kCliFailed, {}, QStringLiteral("Contacts has no Google connection."));
+      if (!session.create) return finish(kCliFailed, {}, QStringLiteral("Peeps has no Google connection."));
       const WriteResult result = session.create(edited);
       if (!result.ok()) return finish(kCliFailed, {}, result.error);
       saved = mergedWrite(edited, result.contact);
     } else {
-      if (!session.update) return finish(kCliFailed, {}, QStringLiteral("Contacts has no Google connection."));
+      if (!session.update) return finish(kCliFailed, {}, QStringLiteral("Peeps has no Google connection."));
       const WriteResult result = session.update(edited);
       if (!result.ok()) return finish(kCliFailed, {}, result.error);
       saved = mergedWrite(edited, result.contact);
@@ -1534,7 +1534,7 @@ CliResult execute(Parsed parsed, CliSession& session, bool stdoutIsTty) {
   }
   QString photoError;
   if (!photo.isEmpty() || parsed.patch.removePhoto) {
-    if (!session.photo) return finish(kCliFailed, {}, QStringLiteral("Contacts has no Google connection."));
+    if (!session.photo) return finish(kCliFailed, {}, QStringLiteral("Peeps has no Google connection."));
     const WriteResult pictured = session.photo(saved.resourceName, photo, parsed.patch.removePhoto);
     if (!pictured.ok()) photoError = pictured.error;
     else {

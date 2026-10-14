@@ -346,7 +346,7 @@ bool printable(const QKeyEvent* key) {
 
 // The page the browser shows after Google sends it back, in the window's theme.
 QString oauthPage(const Palette& palette, const QString& family, const QString& heading, const QString& detail) {
-  return QStringLiteral("<!doctype html><meta charset=\"utf-8\"><title>Contacts</title>"
+  return QStringLiteral("<!doctype html><meta charset=\"utf-8\"><title>Peeps</title>"
                         "<body style=\"margin:48px;font-family:'%1',monospace;background:%2;color:%3\">"
                         "<p style=\"color:%4;font-weight:700\">%5</p><p>%6</p>")
       .arg(family.toHtmlEscaped(), palette.background.name(), palette.foreground.name(), palette.bright.name(),
@@ -387,7 +387,7 @@ qint64 nowUnix() { return QDateTime::currentSecsSinceEpoch(); }
 }  // namespace
 
 MainWindow::MainWindow() : secrets_(makeSecretStore()) {
-  setWindowTitle(QStringLiteral("Contacts"));
+  setWindowTitle(QStringLiteral("Peeps"));
   setWindowFlags(Qt::Window | Qt::FramelessWindowHint);
   resize(980, 680);
   setMinimumSize(480, 560);
@@ -410,7 +410,7 @@ MainWindow::MainWindow() : secrets_(makeSecretStore()) {
   reloadTheme();
   refilter();
   qApp->installEventFilter(this);
-  if (!qEnvironmentVariableIsSet("CONTACTS_NO_SYNC") && signedIn()) {
+  if (!qEnvironmentVariableIsSet("PEEPS_NO_SYNC") && signedIn()) {
     QTimer::singleShot(0, this, [this] { runSync(false, false); });
   }
 }
@@ -424,7 +424,7 @@ void MainWindow::buildUi() {
   rootLayout_ = new QVBoxLayout(central);
 
   headerLayout_ = new QHBoxLayout;
-  auto* title = new QLabel(QStringLiteral("Contacts"));
+  auto* title = new QLabel(QStringLiteral("Peeps"));
   title->setObjectName(QStringLiteral("title"));
   headerLayout_->addWidget(title);
   headerLayout_->addStretch(1);
@@ -1145,7 +1145,7 @@ void MainWindow::copyWholeContact() {
 QString MainWindow::writeCard(const Contact& contact) {
   // The runtime directory is private to this login and clears at logout.
   QString dir = QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation);
-  dir = dir.isEmpty() ? QFileInfo(paths_.photoDir).absolutePath() + QStringLiteral("/cards") : dir + QStringLiteral("/contacts");
+  dir = dir.isEmpty() ? QFileInfo(paths_.photoDir).absolutePath() + QStringLiteral("/cards") : dir + QStringLiteral("/peeps");
   const QString path = dir + QLatin1Char('/') + cardFileName(contact.displayName());
   const QByteArray jpeg = photoUploadBytes(photos_->originalImage(contact.resourceName, contact.photoUrl));
   QString error;
@@ -1234,7 +1234,7 @@ void MainWindow::openAccount() {
   }
   if (result->action == AccountAction::Disconnect) {
     if (!confirmDialog(this, QStringLiteral("Disconnect Google?"),
-                       QStringLiteral("Contacts forgets the local copy. People stay in the Google account."),
+                       QStringLiteral("Peeps forgets the local copy. People stay in the Google account."),
                        QStringLiteral("Disconnect"))) {
       return;
     }
@@ -1359,7 +1359,7 @@ void MainWindow::changeEvent(QEvent* event) {
     focusSyncTimer_->stop();
     return;
   }
-  if (qEnvironmentVariableIsSet("CONTACTS_NO_SYNC")) return;
+  if (qEnvironmentVariableIsSet("PEEPS_NO_SYNC")) return;
   if (lastSyncAt_ == 0 || nowUnix() - lastSyncAt_ >= 60) runSync(false, false);
   focusSyncTimer_->start();
 }
@@ -1389,7 +1389,7 @@ void MainWindow::runGoogle(GoogleWork work, GoogleDone done) {
 }
 
 void MainWindow::runSync(bool forceFull, bool announce) {
-  if (!announce && qEnvironmentVariableIsSet("CONTACTS_NO_SYNC")) return;
+  if (!announce && qEnvironmentVariableIsSet("PEEPS_NO_SYNC")) return;
   if (busy_) return;
   if (!signedIn()) {
     if (announce) toast(QStringLiteral("Connect a Google account first."), true);
@@ -1577,8 +1577,8 @@ void MainWindow::startOAuth() {
         if (!query.ok()) failure = query.error;
         else if (query.state != oauthState_) failure = QStringLiteral("The sign-in response did not match this window.");
         const QByteArray html = oauthPage(palette_, fontFamily_,
-                                          failure.isEmpty() ? QStringLiteral("Contacts is signed in.")
-                                                            : QStringLiteral("Contacts could not sign in."),
+                                          failure.isEmpty() ? QStringLiteral("Peeps is signed in.")
+                                                            : QStringLiteral("Peeps could not sign in."),
                                           failure.isEmpty() ? QStringLiteral("You can close this tab.") : failure)
                                     .toUtf8();
         socket->write("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: " +

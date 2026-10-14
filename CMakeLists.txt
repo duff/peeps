@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(contacts LANGUAGES CXX)
+project(peeps LANGUAGES CXX)
 
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
@@ -18,7 +18,7 @@ pkg_check_modules(LIBSECRET REQUIRED IMPORTED_TARGET libsecret-1)
 add_compile_options(-Wall -Wextra -Wpedantic)
 
 # Sources shared by the app and the tests.
-qt_add_library(contacts_core STATIC
+qt_add_library(peeps_core STATIC
   src/blockingnam.cpp src/blockingnam.h
   src/cli.cpp src/cli.h
   src/contact.cpp src/contact.h
@@ -40,36 +40,36 @@ qt_add_library(contacts_core STATIC
   src/version.h
   src/worker.h
 )
-target_include_directories(contacts_core PUBLIC src)
-target_link_libraries(contacts_core
+target_include_directories(peeps_core PUBLIC src)
+target_link_libraries(peeps_core
   PUBLIC Qt6::Widgets Qt6::Network
   PRIVATE PkgConfig::LIBSECRET
 )
 
 # A packaged build can ship a published Google OAuth client so people only
 # sign in. Leave these unset and each person brings their own client id.
-foreach(name CONTACTS_GOOGLE_CLIENT_ID CONTACTS_GOOGLE_CLIENT_SECRET)
+foreach(name PEEPS_GOOGLE_CLIENT_ID PEEPS_GOOGLE_CLIENT_SECRET)
   if(NOT "$ENV{${name}}" STREQUAL "")
-    target_compile_definitions(contacts_core PRIVATE "${name}=\"$ENV{${name}}\"")
+    target_compile_definitions(peeps_core PRIVATE "${name}=\"$ENV{${name}}\"")
   endif()
 endforeach()
 
-qt_add_executable(contacts src/main.cpp)
-target_link_libraries(contacts PRIVATE contacts_core)
+qt_add_executable(peeps src/main.cpp)
+target_link_libraries(peeps PRIVATE peeps_core)
 
-install(TARGETS contacts)
-install(FILES dist/org.omelia.Contacts.desktop
+install(TARGETS peeps)
+install(FILES dist/org.omelia.Peeps.desktop
   DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
-install(FILES dist/org.omelia.Contacts.svg
+install(FILES dist/org.omelia.Peeps.svg
   DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps)
 
 option(BUILD_TESTING "Build the tests" ON)
 if(BUILD_TESTING)
   enable_testing()
   find_package(Qt6 REQUIRED COMPONENTS Test)
-  qt_add_executable(contacts-tests
+  qt_add_executable(peeps-tests
     tests/main.cpp tests/tests.cpp tests/cli_tests.cpp tests/tests.h)
-  target_link_libraries(contacts-tests PRIVATE contacts_core Qt6::Test)
-  add_test(NAME contacts-tests COMMAND contacts-tests)
-  set_tests_properties(contacts-tests PROPERTIES ENVIRONMENT QT_QPA_PLATFORM=offscreen)
+  target_link_libraries(peeps-tests PRIVATE peeps_core Qt6::Test)
+  add_test(NAME peeps-tests COMMAND peeps-tests)
+  set_tests_properties(peeps-tests PROPERTIES ENVIRONMENT QT_QPA_PLATFORM=offscreen)
 endif()

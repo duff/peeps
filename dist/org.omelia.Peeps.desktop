@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Peeps
+GenericName=Address book
+Comment=A keyboard-first address book for Omarchy
+Exec=peeps
+Icon=org.omelia.Peeps
+Terminal=false
+Categories=Office;ContactManagement;
+Keywords=contacts;address;google;people;email;
+StartupWMClass=org.omelia.Peeps
+StartupNotify=true
+SingleMainWindow=true

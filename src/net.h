@@ -14,7 +14,7 @@ namespace contacts {
 // HTTP/1.1 does not use that code.
 inline void prepareNetworkRequest(QNetworkRequest& request) {
   if (backgroundStopped()) return;
-  request.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("Contacts/") + QLatin1String(kVersion));
+  request.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("Peeps/") + QLatin1String(kVersion));
   request.setAttribute(QNetworkRequest::Http2AllowedAttribute, false);
   request.setAttribute(QNetworkRequest::Http2DirectAttribute, false);
   request.setAttribute(QNetworkRequest::Http2CleartextAllowedAttribute, false);

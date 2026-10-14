@@ -91,7 +91,7 @@ void CliTests::helpAndCommands() {
   contacts::CliSession session;
   const auto help = run({QStringLiteral("help")}, session, true);
   QCOMPARE(help.code, contacts::kCliOk);
-  QVERIFY(help.out.contains(QStringLiteral("contacts search lovelace")));
+  QVERIFY(help.out.contains(QStringLiteral("peeps search lovelace")));
   QVERIFY(help.out.contains(QStringLiteral("0  success")));
   QVERIFY(help.err.isEmpty());
 
@@ -113,7 +113,7 @@ void CliTests::usageAndVersion() {
   contacts::CliSession session;
   const auto version = run({QStringLiteral("--version")}, session, true);
   QCOMPARE(version.code, contacts::kCliOk);
-  QCOMPARE(version.out, QStringLiteral("contacts 0.1.0\n"));
+  QCOMPARE(version.out, QStringLiteral("peeps 0.1.0\n"));
 
   const auto missing = run({QStringLiteral("--json")}, session, true);
   QCOMPARE(missing.code, contacts::kCliUsage);

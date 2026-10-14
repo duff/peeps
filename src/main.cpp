@@ -16,7 +16,7 @@
 namespace {
 
 void describeApp() {
-  QCoreApplication::setApplicationName(QStringLiteral("Contacts"));
+  QCoreApplication::setApplicationName(QStringLiteral("Peeps"));
   QCoreApplication::setOrganizationName(QStringLiteral("omelia"));
   QCoreApplication::setApplicationVersion(QString::fromLatin1(contacts::kVersion));
 }
@@ -44,7 +44,7 @@ int main(int argc, char** argv) {
   describeApp();
   // The Wayland app id, which Hyprland shows as the window class. It matches
   // the desktop file, so the launcher finds the window's name and icon.
-  QApplication::setDesktopFileName(QStringLiteral("org.omelia.Contacts"));
+  QApplication::setDesktopFileName(QStringLiteral("org.omelia.Peeps"));
   if (QStyle* fusion = QStyleFactory::create(QStringLiteral("Fusion"))) app.setStyle(fusion);
 
   const bool selfTest = QCoreApplication::arguments().contains(QStringLiteral("--self-test"));

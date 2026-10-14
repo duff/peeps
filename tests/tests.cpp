@@ -878,9 +878,9 @@ void GoogleTests::storeRoundTrip() {
                                  QFileDevice::WriteGroup | QFileDevice::ReadOther | QFileDevice::WriteOther),
            QFileDevice::ReadOwner | QFileDevice::WriteOwner);
   const auto paths = contacts::AppPaths::forEnv(QStringLiteral("/home/ada"), QStringLiteral("/xdg/config"), QString());
-  QCOMPARE(paths.configFile, QStringLiteral("/xdg/config/contacts/config.json"));
-  QCOMPARE(paths.cacheFile, QStringLiteral("/home/ada/.local/share/contacts/contacts.json"));
-  QCOMPARE(paths.photoDir, QStringLiteral("/home/ada/.cache/contacts/photos"));
+  QCOMPARE(paths.configFile, QStringLiteral("/xdg/config/peeps/config.json"));
+  QCOMPARE(paths.cacheFile, QStringLiteral("/home/ada/.local/share/peeps/contacts.json"));
+  QCOMPARE(paths.photoDir, QStringLiteral("/home/ada/.cache/peeps/photos"));
 }
 
 contacts::Contact sampleContact(QString id, QString given, QString family, QString email, QString phone,
@@ -904,7 +904,7 @@ void LayoutTests::enterReplacesTheListWithThatContact() {
   qputenv("XDG_DATA_HOME", dir.filePath(QStringLiteral("data")).toUtf8());
   qputenv("XDG_CACHE_HOME", dir.filePath(QStringLiteral("cache")).toUtf8());
   qputenv("XDG_CONFIG_HOME", dir.filePath(QStringLiteral("config")).toUtf8());
-  qputenv("CONTACTS_NO_SYNC", "1");
+  qputenv("PEEPS_NO_SYNC", "1");
 
   const QString caraOneNotes =
       QStringLiteral("Notes for Cara One that must stay on screen. The whole note is visible without scrolling the detail.");
@@ -989,7 +989,7 @@ void LayoutTests::editOpensOnTheSelectedField() {
   qputenv("XDG_DATA_HOME", dir.filePath(QStringLiteral("data")).toUtf8());
   qputenv("XDG_CACHE_HOME", dir.filePath(QStringLiteral("cache")).toUtf8());
   qputenv("XDG_CONFIG_HOME", dir.filePath(QStringLiteral("config")).toUtf8());
-  qputenv("CONTACTS_NO_SYNC", "1");
+  qputenv("PEEPS_NO_SYNC", "1");
 
   const QString notes = QStringLiteral("Keep this note.");
   auto cara = sampleContact(QStringLiteral("people/cara"), QStringLiteral("Cara"), QStringLiteral("Two"), {},
@@ -1077,7 +1077,7 @@ void LayoutTests::companyWithoutAPersonalName() {
   qputenv("XDG_DATA_HOME", dir.filePath(QStringLiteral("data")).toUtf8());
   qputenv("XDG_CACHE_HOME", dir.filePath(QStringLiteral("cache")).toUtf8());
   qputenv("XDG_CONFIG_HOME", dir.filePath(QStringLiteral("config")).toUtf8());
-  qputenv("CONTACTS_NO_SYNC", "1");
+  qputenv("PEEPS_NO_SYNC", "1");
 
   contacts::Contact contact;
   contact.resourceName = QStringLiteral("people/download");
@@ -1274,7 +1274,7 @@ void LayoutTests::notesWrapInsteadOfEllipsis() {
   qputenv("XDG_DATA_HOME", dir.filePath(QStringLiteral("data")).toUtf8());
   qputenv("XDG_CACHE_HOME", dir.filePath(QStringLiteral("cache")).toUtf8());
   qputenv("XDG_CONFIG_HOME", dir.filePath(QStringLiteral("config")).toUtf8());
-  qputenv("CONTACTS_NO_SYNC", "1");
+  qputenv("PEEPS_NO_SYNC", "1");
 
   contacts::Contact contact;
   contact.resourceName = QStringLiteral("people/notes");
@@ -1325,7 +1325,7 @@ void LayoutTests::copyNamesTheField() {
   qputenv("XDG_DATA_HOME", dir.filePath(QStringLiteral("data")).toUtf8());
   qputenv("XDG_CACHE_HOME", dir.filePath(QStringLiteral("cache")).toUtf8());
   qputenv("XDG_CONFIG_HOME", dir.filePath(QStringLiteral("config")).toUtf8());
-  qputenv("CONTACTS_NO_SYNC", "1");
+  qputenv("PEEPS_NO_SYNC", "1");
 
   contacts::Contact contact = sampleContact(QStringLiteral("people/ada"), QStringLiteral("Ada"), QStringLiteral("Lovelace"),
                                             QStringLiteral("ada@example.com"), QStringLiteral("+1 555 0100"), QString());
@@ -1398,7 +1398,7 @@ void LayoutTests::blankPhoneTypeStaysBlank() {
   qputenv("XDG_DATA_HOME", dir.filePath(QStringLiteral("data")).toUtf8());
   qputenv("XDG_CACHE_HOME", dir.filePath(QStringLiteral("cache")).toUtf8());
   qputenv("XDG_CONFIG_HOME", dir.filePath(QStringLiteral("config")).toUtf8());
-  qputenv("CONTACTS_NO_SYNC", "1");
+  qputenv("PEEPS_NO_SYNC", "1");
 
   contacts::Contact contact;
   contact.resourceName = QStringLiteral("people/phone");
@@ -1680,10 +1680,10 @@ void ThemeTests::followsOmarchyTextSize() {
 }
 
 void GoogleTests::sharesThroughOmarchy() {
-  const auto omarchy = contacts::shareCommand(QStringLiteral("/run/user/1000/contacts/Ada Lovelace.vcf"), true, true);
+  const auto omarchy = contacts::shareCommand(QStringLiteral("/run/user/1000/peeps/Ada Lovelace.vcf"), true, true);
   QVERIFY(omarchy.ok());
   QCOMPARE(omarchy.argv, (QStringList{QStringLiteral("omarchy"), QStringLiteral("share"), QStringLiteral("file"),
-                                      QStringLiteral("/run/user/1000/contacts/Ada Lovelace.vcf")}));
+                                      QStringLiteral("/run/user/1000/peeps/Ada Lovelace.vcf")}));
   const auto direct = contacts::shareCommand(QStringLiteral("/tmp/a.vcf"), false, true);
   QCOMPARE(direct.argv.first(), QStringLiteral("localsend"));
   QVERIFY(!contacts::shareCommand(QStringLiteral("/tmp/a.vcf"), false, false).ok());

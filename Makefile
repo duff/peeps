@@ -6,11 +6,11 @@ BUILD = cmake --build build --parallel $(shell nproc)
 
 all:
 	$(CONFIGURE)
-	$(BUILD) --target contacts
+	$(BUILD) --target peeps
 
 test:
 	$(CONFIGURE)
-	$(BUILD) --target contacts-tests
+	$(BUILD) --target peeps-tests
 	ctest --test-dir build --output-on-failure
 
 # DESTDIR stages a package. Without it, the launcher points at the installed
@@ -19,10 +19,11 @@ APPS = $(PREFIX)/share/applications
 
 install: all
 	DESTDIR="$(DESTDIR)" cmake --install build
-	sed -i 's|^Exec=.*|Exec=$(PREFIX)/bin/contacts|' "$(DESTDIR)$(APPS)/org.omelia.Contacts.desktop"
-	@# Builds before the org.omelia.Contacts app id installed a plain contacts.desktop.
-	-[ -n "$(DESTDIR)" ] || ! grep -qs '^Exec=$(PREFIX)/bin/contacts$$' "$(APPS)/contacts.desktop" || \
-		rm -f "$(APPS)/contacts.desktop" "$(PREFIX)/share/icons/hicolor/scalable/apps/contacts.svg"
+	sed -i 's|^Exec=.*|Exec=$(PREFIX)/bin/peeps|' "$(DESTDIR)$(APPS)/org.omelia.Peeps.desktop"
+	@# Builds before the rename to Peeps installed Contacts.
+	-[ -n "$(DESTDIR)" ] || ! grep -qs '^Exec=$(PREFIX)/bin/contacts$$' "$(APPS)/org.omelia.Contacts.desktop" || \
+		rm -f "$(APPS)/org.omelia.Contacts.desktop" "$(PREFIX)/share/icons/hicolor/scalable/apps/org.omelia.Contacts.svg" \
+			"$(PREFIX)/bin/contacts"
 	-[ -n "$(DESTDIR)" ] || update-desktop-database "$(APPS)" >/dev/null 2>&1 || true
 
 clean:

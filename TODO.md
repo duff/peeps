@@ -11,9 +11,9 @@ Ideas from the October 2026 review, roughly in order of value. None of these are
 
 ## Getting contacts in and out
 
-- [ ] **Import vCards.** `contacts import file.vcf` and a drop target in the window, so a card that arrives over LocalSend lands in Google in one step.
+- [ ] **Import vCards.** `peeps import file.vcf` and a drop target in the window, so a card that arrives over LocalSend lands in Google in one step.
 - [ ] **Launcher search.** An Omarchy shell plugin so Super+Space finds a contact and copies or emails it without opening the window.
-- [ ] **Birthdays.** An upcoming-birthdays view, or `contacts birthdays` feeding `omarchy reminder`.
+- [ ] **Birthdays.** An upcoming-birthdays view, or `peeps birthdays` feeding `omarchy reminder`.
 
 ## Google
 
@@ -25,7 +25,7 @@ Ideas from the October 2026 review, roughly in order of value. None of these are
 
 - [ ] **License.** Add a LICENSE file.
 - [ ] **Screenshots.** Put a few in the README.
-- [x] **App id.** The window class and desktop file are now `org.omelia.Contacts`.
+- [x] **App id.** The window class and desktop file are now `org.omelia.Peeps`.
 - [ ] **Google client.** Decide between people bringing their own Google client and shipping a verified one. A shipped client needs Google's verification: a homepage, a privacy policy, and a review.
-- [ ] **Google branding.** Rename the app on Google's consent screen (Google Auth Platform → Branding), which still says Omacontacts.
+- [ ] **Google branding.** Rename the app on Google's consent screen (Google Auth Platform → Branding), which should say Peeps.
 - [ ] **Label boxes.** Show a down-arrow on the email, phone, and address label boxes so they read as choices.

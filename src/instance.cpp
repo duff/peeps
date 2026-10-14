@@ -8,7 +8,7 @@
 
 namespace contacts {
 
-QString instanceSocketName() { return QStringLiteral("org.omelia.contacts-%1").arg(getuid()); }
+QString instanceSocketName() { return QStringLiteral("org.omelia.peeps-%1").arg(getuid()); }
 
 InstanceLock::InstanceLock(QString name) : name_(std::move(name)) {
   server_.setSocketOptions(QLocalServer::AbstractNamespaceOption);

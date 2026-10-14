@@ -23,7 +23,7 @@ struct AppConfig {
 };
 
 // A packaged build can carry a published OAuth client so people only sign in.
-// Build with CONTACTS_GOOGLE_CLIENT_ID (and CONTACTS_GOOGLE_CLIENT_SECRET) set.
+// Build with PEEPS_GOOGLE_CLIENT_ID (and PEEPS_GOOGLE_CLIENT_SECRET) set.
 // Desktop client ids are not secret: Google says an installed app cannot keep one.
 AppConfig builtInClient();
 // The client id saved in Account, or the built-in one when none is saved.

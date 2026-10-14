@@ -19,7 +19,7 @@ HttpResponse BlockingNam::request(const QString& method, const QString& url,
   HttpResponse response;
   response.url = url;
   if (backgroundStopped()) {
-    response.error = QStringLiteral("Contacts is closing.");
+    response.error = QStringLiteral("Peeps is closing.");
     return response;
   }
   if (!network_) {

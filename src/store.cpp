@@ -219,18 +219,18 @@ AppPaths AppPaths::forEnv(const QString& home, const QString& xdgConfigHome, con
   const QString configRoot = xdgConfigHome.isEmpty() ? home + QStringLiteral("/.config") : xdgConfigHome;
   const QString dataRoot = xdgDataHome.isEmpty() ? home + QStringLiteral("/.local/share") : xdgDataHome;
   const QString cacheRoot = xdgCacheHome.isEmpty() ? home + QStringLiteral("/.cache") : xdgCacheHome;
-  paths.configFile = configRoot + QStringLiteral("/contacts/config.json");
-  paths.cacheFile = dataRoot + QStringLiteral("/contacts/contacts.json");
-  paths.photoDir = cacheRoot + QStringLiteral("/contacts/photos");
+  paths.configFile = configRoot + QStringLiteral("/peeps/config.json");
+  paths.cacheFile = dataRoot + QStringLiteral("/peeps/contacts.json");
+  paths.photoDir = cacheRoot + QStringLiteral("/peeps/photos");
   return paths;
 }
 
 AppConfig builtInClient() {
-#ifdef CONTACTS_GOOGLE_CLIENT_ID
-#ifndef CONTACTS_GOOGLE_CLIENT_SECRET
-#define CONTACTS_GOOGLE_CLIENT_SECRET ""
+#ifdef PEEPS_GOOGLE_CLIENT_ID
+#ifndef PEEPS_GOOGLE_CLIENT_SECRET
+#define PEEPS_GOOGLE_CLIENT_SECRET ""
 #endif
-  return {QStringLiteral(CONTACTS_GOOGLE_CLIENT_ID), QStringLiteral(CONTACTS_GOOGLE_CLIENT_SECRET)};
+  return {QStringLiteral(PEEPS_GOOGLE_CLIENT_ID), QStringLiteral(PEEPS_GOOGLE_CLIENT_SECRET)};
 #else
   return {};
 #endif

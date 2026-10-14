@@ -10,7 +10,7 @@ namespace {
 
 const SecretSchema* tokenSchema() {
   static const SecretSchema* schema =
-      secret_schema_new("org.omelia.contacts", SECRET_SCHEMA_NONE, "account", SECRET_SCHEMA_ATTRIBUTE_STRING, nullptr);
+      secret_schema_new("org.omelia.peeps", SECRET_SCHEMA_NONE, "account", SECRET_SCHEMA_ATTRIBUTE_STRING, nullptr);
   return schema;
 }
 
@@ -34,7 +34,7 @@ class LibsecretStore final : public SecretStore {
     GError* gerror = nullptr;
     const QByteArray copy = secret.toUtf8();
     const gboolean stored =
-        secret_password_store_sync(tokenSchema(), SECRET_COLLECTION_DEFAULT, "Contacts Google", copy.constData(),
+        secret_password_store_sync(tokenSchema(), SECRET_COLLECTION_DEFAULT, "Peeps Google", copy.constData(),
                                    nullptr, &gerror, "account", "default", nullptr);
     if (gerror != nullptr) {
       error = QString::fromUtf8(gerror->message);
