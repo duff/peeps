@@ -160,6 +160,7 @@ class MainWindow : public QMainWindow {
   QLabel* statusLabel_ = nullptr;
   QLabel* toastLabel_ = nullptr;
   QFrame* toastFrame_ = nullptr;
+  QPushButton* titleButton_ = nullptr;
   QPushButton* menuButton_ = nullptr;
   QMenu* menu_ = nullptr;
   QAction* newAction_ = nullptr;

@@ -349,6 +349,9 @@ QPushButton:focus { border-color: @@FOCUS@@; }
 QPushButton[kind="primary"]:focus { border-color: @@ACCENT@@; background: @@HOVER@@; }
 QPushButton:pressed { background: @@PRESSED@@; }
 QPushButton:disabled { color: @@DISABLED@@; }
+QPushButton#title { color: @@BRIGHT@@; font-size: @@HEADING@@; font-weight: 700; border: none; padding: 0; background: transparent; text-align: left; }
+QPushButton#title:hover { color: @@ACCENT@@; background: transparent; }
+QPushButton#title:disabled { color: @@BRIGHT@@; }
 QLineEdit, QTextEdit, QPlainTextEdit, QComboBox { background: transparent; color: @@FG@@; border: 1px solid @@EDGE@@; border-radius: 0; padding: @@INPUTY@@ @@INPUTX@@; selection-background-color: @@SELECTION@@; selection-color: @@FG@@; font-size: @@BODY@@; }
 QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QComboBox:focus { border: 1px solid @@ACCENT@@; }
 QComboBox::drop-down { border: none; width: @@DROPDOWN@@; }

@@ -25,6 +25,7 @@
 #include <QListView>
 #include <QMenu>
 #include <QMimeData>
+#include <QMouseEvent>
 #include <QPainter>
 #include <QPlainTextEdit>
 #include <QPushButton>
@@ -479,9 +480,13 @@ void MainWindow::buildUi() {
   rootLayout_ = new QVBoxLayout(central);
 
   headerLayout_ = new QHBoxLayout;
-  auto* title = new QLabel(QStringLiteral("Peeps"));
-  title->setObjectName(QStringLiteral("title"));
-  headerLayout_->addWidget(title);
+  // The title doubles as the way back to the list once a contact is open.
+  titleButton_ = new QPushButton(QStringLiteral("Peeps"));
+  titleButton_->setObjectName(QStringLiteral("title"));
+  titleButton_->setFocusPolicy(Qt::NoFocus);
+  titleButton_->setAccessibleName(QStringLiteral("Back to the list"));
+  connect(titleButton_, &QPushButton::clicked, this, [this] { closeDetail(); });
+  headerLayout_->addWidget(titleButton_);
   headerLayout_->addStretch(1);
   menuButton_ = kindButton(QStringLiteral("Menu"), QStringLiteral("outline"));
   menu_ = new QMenu(menuButton_);
@@ -667,6 +672,14 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event) {
   if (watched == search_ && type == QEvent::FocusIn && detailOpen_ && !editing_) {
     closeDetail();
     return false;
+  }
+  // A mouse's back button leaves the contact, as it would in a browser.
+  if (type == QEvent::MouseButtonPress && static_cast<QMouseEvent*>(event)->button() == Qt::BackButton && detailOpen_ &&
+      !editing_ && !QApplication::activeModalWidget()) {
+    if (auto* widget = qobject_cast<QWidget*>(watched); widget != nullptr && widget->window() == this) {
+      closeDetail();
+      return true;
+    }
   }
   if (type == QEvent::WindowDeactivate && fieldDelegate_->controlHeld) {
     fieldDelegate_->controlHeld = false;
@@ -1440,6 +1453,11 @@ void MainWindow::applyView() {
   fieldList_->setVisible(detailOpen_ && !editing_);
   if (editor_ != nullptr) editor_->setVisible(editing_);
   search_->setVisible(!detailOpen_);
+  // The editor has its own Cancel, so the title leads back only from a contact.
+  const bool canGoBack = detailOpen_ && !editing_;
+  titleButton_->setText(canGoBack ? QStringLiteral("← Peeps") : QStringLiteral("Peeps"));
+  titleButton_->setEnabled(canGoBack);
+  titleButton_->setCursor(canGoBack ? Qt::PointingHandCursor : Qt::ArrowCursor);
   updateChrome();
 }
 

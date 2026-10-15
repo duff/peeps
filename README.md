@@ -55,6 +55,8 @@ Type to search. Up and Down move through the matches, including while the search
 
 Esc or Backspace returns to the list, or clears the search if that is where you are. `?` opens the keybindings. Ctrl+N starts a contact and Ctrl+E edits the one you are on. New, Sync, Keybindings, and Google account are in the Menu.
 
+The mouse works too. One click opens a contact, and one click on a field does what it says at the end of the row: copy, edit, share, or delete. While a contact is open, the title reads "← Peeps", and clicking it, or a mouse's back button, returns to the list.
+
 | Keys | Action |
 | --- | --- |
 | Type | Search names, email, phone, and notes |
