@@ -27,36 +27,22 @@ It fits if you want these things:
 
 It is one Google account, not a CRM. Lookups and the contact you are reading come from the cache. Creating, editing, deleting, and sync go to Google and then refresh that cache. A delete from the command line requires `--yes`.
 
-## Install
+## Agents
 
-CMake, Qt 6 (widgets and network), libsecret, and a C++20 compiler.
+Peeps comes with a skill for AI agents such as Claude Code, Codex, and pi. A skill is a page of instructions an agent reads when a request matches it. This one teaches the `peeps` command and how to use it with care.
 
-```bash
-make
-make test
-make install
-```
+`peeps skill install` links the skill into the skills folder of each agent set up on the machine (`~/.claude`, `~/.codex`, `~/.pi/agent`, and `~/.agents`), the same way Omarchy shares its own skills. Run it once after [installing](#install) a package. A build from source runs it for you. `peeps skill remove` takes the links away.
 
-`make install` puts `peeps` in `~/.local/bin`, adds a launcher, and links the [agent skill](#agents). The tests use Qt Test and the offscreen platform. `make screenshots` redraws the pictures in this README from a made-up address book, offscreen, without touching your own contacts.
+Then ask in plain words:
 
-A build from source needs a Google OAuth client of your own before it can connect. Setting one up takes a few minutes, and [Google](#google) has the steps. A packaged Peeps has its client built in, so there you only choose Connect.
+- "Add the person from this email signature."
+- "What's Maya Okafor's work number?"
+- "Who do I know at Northwind, and whose birthday is this month?"
+- "Put every phone number in the +1 format."
 
-Launching Peeps again brings the open window forward instead of opening a second one, from the app launcher or the terminal alike. Its window class (the Wayland app id) is `org.omelia.Peeps`.
+Every add, edit, or delete is confirmed first. Asking for a change is not agreeing to it: the agent looks the person up, says exactly what will change, including any label or other choice it would make, and changes nothing until you say yes. Looking people up needs no confirmation. The skill is instructions the agent follows, so for a hard guarantee, have your agent ask permission before it runs `peeps add`, `peeps update`, or `peeps delete`. In Claude Code, that is an `ask` rule in its permission settings.
 
-### Packaging
-
-`PREFIX` and `DESTDIR` work the usual way:
-
-```bash
-make PREFIX=/usr
-make install PREFIX=/usr DESTDIR="$pkgdir"
-```
-
-The Makefile wraps CMake, so a package can also call `cmake` with `CMAKE_INSTALL_PREFIX`, and `-DBUILD_TESTING=OFF` to skip the tests.
-
-The agent skill installs to `share/peeps/skills/peeps`. A package cannot reach anyone's home folder, so after installing, each person runs `peeps skill install` to link it for their agents.
-
-Peeps signs in through a Google OAuth client that is built into the app, so people only choose Connect. Set `PEEPS_GOOGLE_CLIENT_ID`, and `PEEPS_GOOGLE_CLIENT_SECRET` if the client has one, when you build. A build without them cannot connect to Google. A Desktop client id is not a secret: Google treats an installed app as unable to keep one.
+The agent also keeps what it reads to the people the request is about. What it reads goes into that conversation, and so to the agent's AI provider. Peeps itself still talks only to Google.
 
 ## The window
 
@@ -65,6 +51,8 @@ Type to search. Up and Down move through the matches, including while the search
 Esc or Backspace returns to the list, or clears the search if that is where you are. The footer counts the contacts, and says when Peeps last synced with Google if that was over an hour ago. `?` opens the keybindings. Ctrl+N starts a contact and Ctrl+E edits the one you are on. New, Sync, Keybindings, and Google account are in the Menu.
 
 The mouse works too. One click opens a contact. One click on a field copies it, and one click on Share, Edit, or Delete this contact does that. While a contact is open, the title reads "← Peeps", and clicking it, or a mouse's back button, returns to the list.
+
+Launching Peeps again brings the open window forward instead of opening a second one, from the app launcher or the terminal alike. Its window class (the Wayland app id) is `org.omelia.Peeps`.
 
 ![An open contact with a photo. The selected work email reads "Enter to copy" and "Ctrl+Enter to email"](docs/screenshots/contact.png)
 
@@ -103,23 +91,6 @@ Share this contact sits with Edit and Delete at the end of a contact. It writes 
 | Email as a vCard | Thunderbird and similar clients get the card attached. With HEY or other webmail, a new message opens and the card is on the clipboard: paste to attach it |
 | Copy as text | Name, email, phone, and address as plain text |
 | Save vCard… | A `.vcf` file wherever you choose, Downloads by default |
-
-## Agents
-
-Peeps comes with a skill for AI agents such as Claude Code, Codex, and pi. A skill is a page of instructions an agent reads when a request matches it. This one teaches the `peeps` command and how to use it with care.
-
-`make install` links the skill into the skills folder of each agent set up on the machine (`~/.claude`, `~/.codex`, `~/.pi/agent`, and `~/.agents`), the same way Omarchy shares its own skills. With a package, run `peeps skill install` once. `peeps skill remove` takes the links away.
-
-Then ask in plain words:
-
-- "Add the person from this email signature."
-- "What's Maya Okafor's work number?"
-- "Who do I know at Northwind, and whose birthday is this month?"
-- "Put every phone number in the +1 format."
-
-Every add, edit, or delete is confirmed first. Asking for a change is not agreeing to it: the agent looks the person up, says exactly what will change, including any label or other choice it would make, and changes nothing until you say yes. Looking people up needs no confirmation. The skill is instructions the agent follows, so for a hard guarantee, have your agent ask permission before it runs `peeps add`, `peeps update`, or `peeps delete`. In Claude Code, that is an `ask` rule in its permission settings.
-
-The agent also keeps what it reads to the people the request is about. What it reads goes into that conversation, and so to the agent's AI provider. Peeps itself still talks only to Google.
 
 ## Command line
 
@@ -191,6 +162,35 @@ The refresh token stays in the login keyring under `org.omelia.peeps`. Disconnec
 On startup, and whenever the files change, Peeps reads `~/.local/state/omarchy/current/theme/colors.toml`. If that directory is missing, it tries the legacy `~/.config/omarchy/current` path. A broken or missing palette falls back to Tokyo Night as a whole.
 
 Sizes follow the Omarchy shell. The theme's `shell.toml` sets the base text size, and `~/.config/omarchy/shell.toml`, which the text size in the Omarchy menu writes, overrides it. Text, rows, padding, and photos scale from that base the way the bar does, and change while the window is open. Ctrl+= and Ctrl+- make Peeps' text a pixel larger or smaller than Omarchy's, up to 8 larger or 4 smaller, and Ctrl+0 goes back to Omarchy's size. Peeps remembers that difference, not a fixed size, so it still follows the Omarchy menu. The font is the one fontconfig gives `monospace`, which `omarchy font set` changes. Controls stay square, with quiet borders from the palette.
+
+## Install
+
+CMake, Qt 6 (widgets and network), libsecret, and a C++20 compiler.
+
+```bash
+make
+make test
+make install
+```
+
+`make install` puts `peeps` in `~/.local/bin`, adds a launcher, and links the [agent skill](#agents). The tests use Qt Test and the offscreen platform. `make screenshots` redraws the pictures in this README from a made-up address book, offscreen, without touching your own contacts.
+
+A build from source needs a Google OAuth client of your own before it can connect. Setting one up takes a few minutes, and [Google](#google) has the steps. A packaged Peeps has its client built in, so there you only choose Connect.
+
+### Packaging
+
+`PREFIX` and `DESTDIR` work the usual way:
+
+```bash
+make PREFIX=/usr
+make install PREFIX=/usr DESTDIR="$pkgdir"
+```
+
+The Makefile wraps CMake, so a package can also call `cmake` with `CMAKE_INSTALL_PREFIX`, and `-DBUILD_TESTING=OFF` to skip the tests.
+
+The agent skill installs to `share/peeps/skills/peeps`. A package cannot reach anyone's home folder, so after installing, each person runs `peeps skill install` to link it for their agents.
+
+Peeps signs in through a Google OAuth client that is built into the app, so people only choose Connect. Set `PEEPS_GOOGLE_CLIENT_ID`, and `PEEPS_GOOGLE_CLIENT_SECRET` if the client has one, when you build. A build without them cannot connect to Google. A Desktop client id is not a secret: Google treats an installed app as unable to keep one.
 
 ## License
 
