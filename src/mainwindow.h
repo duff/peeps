@@ -128,6 +128,8 @@ class MainWindow : public QMainWindow {
   ContactIndex index_;
   std::unique_ptr<SecretStore> secrets_;
   bool busy_ = false;
+  // The running sync started by itself, so the footer does not announce it.
+  bool quietSync_ = false;
   bool closing_ = false;
   bool detailOpen_ = false;
   bool editing_ = false;

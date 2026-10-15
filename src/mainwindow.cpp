@@ -986,7 +986,8 @@ void MainWindow::updateChrome() {
   if (detailOpen_) countLabel_->clear();
   else if (!search_->text().isEmpty()) countLabel_->setText(QStringLiteral("%1 of %2").arg(shown).arg(total));
   else countLabel_->setText(total == 1 ? QStringLiteral("1 contact") : QStringLiteral("%1 contacts").arg(total));
-  if (busy_) statusLabel_->setText(QStringLiteral("Syncing…"));
+  // A background sync stays quiet, unless there is nothing to show until it lands.
+  if (busy_ && (!quietSync_ || index_.size() == 0)) statusLabel_->setText(QStringLiteral("Syncing…"));
   else if (saving_) statusLabel_->setText(QStringLiteral("Saving to Google"));
   else if (!signedIn()) statusLabel_->setText(QStringLiteral("Not signed in"));
   else if (signInExpired_) statusLabel_->setText(QStringLiteral("Google sign-in expired"));
@@ -1414,6 +1415,7 @@ void MainWindow::openAccount() {
 
 void MainWindow::setBusy(bool busy) {
   busy_ = busy;
+  if (!busy) quietSync_ = false;
   updateChrome();
 }
 
@@ -1571,6 +1573,7 @@ void MainWindow::runSync(bool forceFull, bool announce) {
   // Each try would fail the same way until Reconnect.
   if (signInExpired_ && !announce) return;
   lastSyncAt_ = nowUnix();
+  quietSync_ = !announce;
   setBusy(true);
   const QString syncToken = forceFull ? QString() : syncToken_;
   auto fetched = std::make_shared<PeopleResult>();
