@@ -586,9 +586,14 @@ void MainWindow::buildUi() {
   statusLabel_->setObjectName(QStringLiteral("status"));
   // Status text is clipped rather than widening the window.
   statusLabel_->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+  reconnectButton_ = kindButton(QStringLiteral("Reconnect"), QStringLiteral("link"));
+  reconnectButton_->setAutoDefault(false);
+  reconnectButton_->hide();
+  connect(reconnectButton_, &QPushButton::clicked, this, &MainWindow::startOAuth);
   footer->addWidget(countLabel_);
   footer->addSpacing(16);
   footer->addWidget(statusLabel_, 1);
+  footer->addWidget(reconnectButton_);
   rootLayout_->addLayout(footer);
 
   // The toast floats over the bottom of the window, so a notice never pushes
@@ -971,9 +976,11 @@ void MainWindow::updateChrome() {
   if (busy_) statusLabel_->setText(QStringLiteral("Syncing…"));
   else if (saving_) statusLabel_->setText(QStringLiteral("Saving to Google"));
   else if (!signedIn()) statusLabel_->setText(QStringLiteral("Not signed in"));
+  else if (signInExpired_) statusLabel_->setText(QStringLiteral("Google sign-in expired"));
   else if (!syncError_.isEmpty()) statusLabel_->setText(QStringLiteral("Sync failed. Menu → Sync now tries again."));
   else statusLabel_->clear();
   statusLabel_->setToolTip(syncError_);
+  reconnectButton_->setVisible(signInExpired_ && signedIn() && !busy_);
   syncAction_->setEnabled(!busy_ && signedIn());
   newAction_->setEnabled(!busy_);
   emptyLabel_->setVisible(shown == 0);
@@ -1382,6 +1389,7 @@ void MainWindow::openAccount() {
   tokens_ = {};
   syncToken_.clear();
   syncError_.clear();
+  signInExpired_ = false;
   index_.replaceAll({});
   saveCache();
   refilter();
@@ -1527,6 +1535,10 @@ void MainWindow::runGoogle(GoogleWork work, GoogleDone done) {
           // A refreshed access token is worth keeping, unless the account was
           // disconnected while the request ran.
           if (after != before && tokens_.refreshToken == before.refreshToken && !tokens_.refreshToken.isEmpty()) saveTokens(after);
+          if (error == signInExpiredError() && tokens_.refreshToken == before.refreshToken) {
+            signInExpired_ = true;
+            updateChrome();
+          }
           done(error);
         },
         Qt::QueuedConnection);
@@ -1540,6 +1552,8 @@ void MainWindow::runSync(bool forceFull, bool announce) {
     if (announce) toast(QStringLiteral("Connect a Google account first."), true);
     return;
   }
+  // Each try would fail the same way until Reconnect.
+  if (signInExpired_ && !announce) return;
   lastSyncAt_ = nowUnix();
   setBusy(true);
   const QString syncToken = forceFull ? QString() : syncToken_;
@@ -1782,6 +1796,7 @@ void MainWindow::finishOAuth(const QString& code) {
             return;
           }
           syncError_.clear();
+          signInExpired_ = false;
           index_.replaceAll(applyFullSync(fetched.people));
           syncToken_ = fetched.syncToken;
           lastSyncAt_ = nowUnix();

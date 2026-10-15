@@ -43,6 +43,9 @@ RedirectQuery parseOauthRedirect(const QByteArray& httpRequest);
 QString authorizationCodeBody(const OAuthClient& client, const QString& code, const QString& redirectUri,
                               const QString& verifier);
 QString refreshBody(const OAuthClient& client, const QString& refreshToken);
+// What a refresh reports when Google has revoked or expired the sign-in, so
+// only connecting again helps. The window matches it to offer Reconnect.
+QString signInExpiredError();
 TokenResult parseTokenResponse(const QByteArray& json, qint64 nowUnix, const QString& previousRefreshToken);
 bool accessExpiring(const OAuthTokens& tokens, qint64 nowUnix);
 

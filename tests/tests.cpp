@@ -460,6 +460,16 @@ void GoogleTests::keepsRefreshToken() {
   QVERIFY(contacts::accessExpiring(parsed.tokens, 1040));
 }
 
+void GoogleTests::expiredSignInIsNamed() {
+  const QByteArray revoked = R"({"error":"invalid_grant","error_description":"Token has been expired or revoked."})";
+  // A refresh: only connecting again helps, and the window offers Reconnect.
+  const auto refresh = contacts::parseTokenResponse(revoked, 1000, QStringLiteral("refresh-1"));
+  QCOMPARE(refresh.error, contacts::signInExpiredError());
+  // Exchanging a sign-in code: the same error means a bad code, not an expired sign-in.
+  const auto exchange = contacts::parseTokenResponse(revoked, 1000, {});
+  QCOMPARE(exchange.error, QStringLiteral("Token has been expired or revoked."));
+}
+
 void GoogleTests::refreshPostsToken() {
   ScriptedHttp http;
   http.script.append({200, R"({"access_token":"fresh","expires_in":50})", {}, {}});

@@ -147,7 +147,7 @@ Use a published app, not a testing one. A consent screen left in Testing only al
 
 The Contacts scope is sensitive. Until Google verifies the app, the consent screen warns that Google has not verified it. For your own account, continue past that warning. Verification, which wants a homepage, a privacy policy, and a review, is how you remove the warning for everyone else, and it is what a build with a built-in client (see [Packaging](#packaging)) needs before strangers use it. Publishing is what leaves Testing. Verification is a separate step.
 
-The refresh token stays in the login keyring under `org.omelia.peeps`. Disconnect from Menu → Google account clears it.
+The refresh token stays in the login keyring under `org.omelia.peeps`. Disconnect from Menu → Google account clears it. If Google ends the sign-in, for example because Peeps' access was removed from the Google account, the footer says so and Reconnect signs in again.
 
 ## Where the data lives
 

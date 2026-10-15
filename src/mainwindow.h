@@ -139,6 +139,8 @@ class MainWindow : public QMainWindow {
   bool saving_ = false;
   bool windowActive_ = false;
   qint64 lastSyncAt_ = 0;
+  // Google revoked or expired the sign-in, so only Reconnect helps.
+  bool signInExpired_ = false;
 
   QVBoxLayout* rootLayout_ = nullptr;
   QHBoxLayout* headerLayout_ = nullptr;
@@ -158,6 +160,7 @@ class MainWindow : public QMainWindow {
   QLabel* emptyLabel_ = nullptr;
   QLabel* countLabel_ = nullptr;
   QLabel* statusLabel_ = nullptr;
+  QPushButton* reconnectButton_ = nullptr;
   QAction* clearSearchAction_ = nullptr;
   QLabel* toastLabel_ = nullptr;
   QFrame* toastFrame_ = nullptr;

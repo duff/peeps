@@ -99,6 +99,10 @@ QString refreshBody(const OAuthClient& client, const QString& refreshToken) {
   return body;
 }
 
+QString signInExpiredError() {
+  return QStringLiteral("Google ended this sign-in. Reconnect from Menu → Google account.");
+}
+
 TokenResult parseTokenResponse(const QByteArray& json, qint64 nowUnix, const QString& previousRefreshToken) {
   TokenResult result;
   QJsonParseError parseError;
@@ -110,6 +114,11 @@ TokenResult parseTokenResponse(const QByteArray& json, qint64 nowUnix, const QSt
   }
   const QJsonObject object = document.object();
   if (object.contains(QLatin1String("error"))) {
+    // A refresh token that was revoked, or left unused for months.
+    if (!previousRefreshToken.isEmpty() && object.value(QLatin1String("error")).toString() == QLatin1String("invalid_grant")) {
+      result.error = signInExpiredError();
+      return result;
+    }
     result.error = object.value(QLatin1String("error_description")).toString();
     if (result.error.isEmpty()) result.error = object.value(QLatin1String("error")).toString();
     if (result.error.isEmpty()) result.error = QStringLiteral("Google refused the token request.");

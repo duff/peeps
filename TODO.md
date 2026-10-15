@@ -19,7 +19,7 @@ Ideas from the October 2026 review, roughly in order of value. None of these are
 
 - [ ] **Labels.** Filter by Google contact labels (contactGroups).
 - [ ] **Duplicates.** Find likely duplicates and merge them.
-- [ ] **Expired sign-in.** When Google revokes the refresh token, offer a Reconnect button instead of the raw error.
+- [x] **Expired sign-in.** When Google revokes the refresh token, the footer says so and offers Reconnect.
 
 ## Before a public release
 

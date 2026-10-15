@@ -44,6 +44,7 @@ class GoogleTests : public QObject {
   void authUrl();
   void parsesBrowserRedirect();
   void keepsRefreshToken();
+  void expiredSignInIsNamed();
   void refreshPostsToken();
   void parsesPrimaryFields();
   void prefersRealPhotoOverDefault();
