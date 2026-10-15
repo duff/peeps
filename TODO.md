@@ -7,7 +7,7 @@ Ideas from the October 2026 review, roughly in order of value. None of these are
 - [ ] **Contact header.** Open a contact on a large name, "title · company", and the photo, instead of a "Full name" row. Group the fields under the same headings the editor uses.
 - [ ] **Email from the list.** Ctrl+Enter on a search result emails that person's first address, so search, then Ctrl+Enter, sends mail without opening the contact.
 - [ ] **PgUp and PgDn.** These were removed on purpose (commit 46447d0). With a couple of thousand contacts they may be worth having again in the list.
-- [ ] **Sync time.** Show "Synced 2 min ago" in the footer, so a stale cache is obvious.
+- [x] **Sync time.** Once the last sync is over an hour old, the footer says so ("Synced 3 hours ago"), so a stale cache is obvious.
 
 ## Getting contacts in and out
 

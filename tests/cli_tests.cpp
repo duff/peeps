@@ -371,6 +371,7 @@ void CliTests::syncRefreshesTheCache() {
   QCOMPARE(synced.code, contacts::kCliOk);
   QCOMPARE(calls, QList<bool>({false, true}));
   QCOMPARE(session.syncToken, QStringLiteral("next"));
+  QVERIFY(session.syncedAt > 0);
   QCOMPARE(session.contacts.size(), 1);
   QCOMPARE(session.contacts.first().givenName, QStringLiteral("Grace"));
   QVERIFY(objectOf(synced).value(QStringLiteral("full")).toBool());

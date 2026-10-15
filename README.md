@@ -55,7 +55,7 @@ Peeps signs in through a Google OAuth client that is built into the app, so peop
 
 Type to search. Up and Down move through the matches, including while the search field still has focus. Typing anywhere in the list starts a new search. Enter opens the contact. On a contact, letters don't search: Up and Down, or j and k, move through the fields, g and G jump to the first and last, and `/` goes back to search. Enter on a field copies it. Ctrl+Enter sends mail to the selected address through `xdg-email`, which follows the desktop mail handler. The selected field names these keys, as in "Enter to copy" and "Ctrl+Enter to email", until you have used each one ten times from the keyboard.
 
-Esc or Backspace returns to the list, or clears the search if that is where you are. `?` opens the keybindings. Ctrl+N starts a contact and Ctrl+E edits the one you are on. New, Sync, Keybindings, and Google account are in the Menu.
+Esc or Backspace returns to the list, or clears the search if that is where you are. The footer counts the contacts, and says when Peeps last synced with Google if that was over an hour ago. `?` opens the keybindings. Ctrl+N starts a contact and Ctrl+E edits the one you are on. New, Sync, Keybindings, and Google account are in the Menu.
 
 The mouse works too. One click opens a contact. One click on a field copies it, and one click on Share, Edit, or Delete this contact does that. While a contact is open, the title reads "← Peeps", and clicking it, or a mouse's back button, returns to the list.
 

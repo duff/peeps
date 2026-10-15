@@ -1430,6 +1430,7 @@ CliResult execute(Parsed parsed, CliSession& session, bool stdoutIsTty) {
     if (!fetched.ok()) return finish(kCliFailed, {}, fetched.error);
     session.contacts = full ? applyFullSync(fetched.people) : applyIncrementalSync(session.contacts, fetched.people);
     if (!fetched.syncToken.isEmpty()) session.syncToken = fetched.syncToken;
+    session.syncedAt = QDateTime::currentSecsSinceEpoch();
     QString error;
     if (!persist(session, error)) return finish(kCliFailed, {}, error);
     if (json) {
@@ -1581,9 +1582,10 @@ CliResult runContactsCommand(const QStringList& args, const CliLaunch& launch) {
     if (!snapshot.ok()) return finish(kCliFailed, {}, snapshot.error);
     session.contacts = snapshot.contacts;
     session.syncToken = snapshot.syncToken;
+    session.syncedAt = snapshot.syncedAt;
   }
   session.save = [&](const QList<Contact>& contacts, const QString& syncToken, QString& error) {
-    return writePrivateFile(launch.paths.cacheFile, writeCacheJson(contacts, syncToken), error);
+    return writePrivateFile(launch.paths.cacheFile, writeCacheJson(contacts, syncToken, session.syncedAt), error);
   };
 
   std::unique_ptr<SecretStore> ownedSecrets;

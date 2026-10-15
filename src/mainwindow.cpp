@@ -447,6 +447,9 @@ QString copiedNotice(const QModelIndex& index) {
 
 qint64 nowUnix() { return QDateTime::currentSecsSinceEpoch(); }
 
+// The footer names the last sync once it is this many seconds old.
+constexpr qint64 kStaleAfter = 60 * 60;
+
 // An x in the theme's quiet text color, brighter while pressed.
 QIcon clearIcon(const Palette& palette, int size, qreal ratio) {
   QIcon icon;
@@ -595,6 +598,11 @@ void MainWindow::buildUi() {
   footer->addWidget(statusLabel_, 1);
   footer->addWidget(reconnectButton_);
   rootLayout_->addLayout(footer);
+  // A copy that turns stale while the window sits open says so.
+  syncedTimer_ = new QTimer(this);
+  syncedTimer_->setInterval(30'000);
+  connect(syncedTimer_, &QTimer::timeout, this, &MainWindow::updateChrome);
+  syncedTimer_->start();
 
   // The toast floats over the bottom of the window, so a notice never pushes
   // the list around.
@@ -671,6 +679,7 @@ void MainWindow::loadLocal() {
     const auto snapshot = readCacheJson(*bytes);
     if (snapshot.ok()) {
       syncToken_ = snapshot.syncToken;
+      syncedAt_ = snapshot.syncedAt;
       index_.replaceAll(snapshot.contacts);
     }
   }
@@ -978,6 +987,8 @@ void MainWindow::updateChrome() {
   else if (!signedIn()) statusLabel_->setText(QStringLiteral("Not signed in"));
   else if (signInExpired_) statusLabel_->setText(QStringLiteral("Google sign-in expired"));
   else if (!syncError_.isEmpty()) statusLabel_->setText(QStringLiteral("Sync failed. Menu → Sync now tries again."));
+  // Only a stale copy is worth a word. Peeps syncs whenever it is focused.
+  else if (syncedAt_ > 0 && nowUnix() - syncedAt_ >= kStaleAfter) statusLabel_->setText(syncedAgo(syncedAt_, nowUnix()));
   else statusLabel_->clear();
   statusLabel_->setToolTip(syncError_);
   reconnectButton_->setVisible(signInExpired_ && signedIn() && !busy_);
@@ -1389,6 +1400,7 @@ void MainWindow::openAccount() {
   tokens_ = {};
   syncToken_.clear();
   syncError_.clear();
+  syncedAt_ = 0;
   signInExpired_ = false;
   index_.replaceAll({});
   saveCache();
@@ -1403,7 +1415,7 @@ void MainWindow::setBusy(bool busy) {
 
 void MainWindow::saveCache() {
   QString error;
-  if (!writePrivateFile(paths_.cacheFile, writeCacheJson(index_.all(), syncToken_), error)) toast(error, true);
+  if (!writePrivateFile(paths_.cacheFile, writeCacheJson(index_.all(), syncToken_, syncedAt_), error)) toast(error, true);
 }
 
 void MainWindow::setTextSizeOffset(int offset) {
@@ -1588,6 +1600,7 @@ void MainWindow::runSync(bool forceFull, bool announce) {
         index_.replaceAll(syncToken.isEmpty() ? applyFullSync(fetched->people)
                                               : applyIncrementalSync(index_.all(), fetched->people));
         if (!fetched->syncToken.isEmpty()) syncToken_ = fetched->syncToken;
+        syncedAt_ = nowUnix();
         saveCache();
         refilter();
         if (detailOpen_ && !editing_) renderDetail();
@@ -1800,6 +1813,7 @@ void MainWindow::finishOAuth(const QString& code) {
           index_.replaceAll(applyFullSync(fetched.people));
           syncToken_ = fetched.syncToken;
           lastSyncAt_ = nowUnix();
+          syncedAt_ = lastSyncAt_;
           saveCache();
           refilter();
           activateWindow();

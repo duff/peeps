@@ -625,6 +625,27 @@ void GoogleTests::oldCacheRequestsFullSync() {
   QVERIFY(fresh.syncToken.isEmpty());
 }
 
+void GoogleTests::cacheKeepsSyncTime() {
+  const auto saved = contacts::readCacheJson(contacts::writeCacheJson({}, QStringLiteral("s"), 1'700'000'000));
+  QVERIFY(saved.ok());
+  QCOMPARE(saved.syncedAt, 1'700'000'000);
+  // Caches from before the sync time was kept read as unknown.
+  QCOMPARE(contacts::readCacheJson(R"({"version":3,"sync_token":"s","contacts":[]})").syncedAt, 0);
+  QVERIFY(!contacts::writeCacheJson({}, QStringLiteral("s")).contains("synced_at"));
+}
+
+void GoogleTests::syncedAgoReads() {
+  const qint64 now = 1'700'000'000;
+  QCOMPARE(contacts::syncedAgo(now - 20, now), QStringLiteral("Synced just now"));
+  QCOMPARE(contacts::syncedAgo(now + 30, now), QStringLiteral("Synced just now"));
+  QCOMPARE(contacts::syncedAgo(now - 60, now), QStringLiteral("Synced 1 min ago"));
+  QCOMPARE(contacts::syncedAgo(now - 59 * 60, now), QStringLiteral("Synced 59 min ago"));
+  QCOMPARE(contacts::syncedAgo(now - 60 * 60, now), QStringLiteral("Synced an hour ago"));
+  QCOMPARE(contacts::syncedAgo(now - 5 * 3600, now), QStringLiteral("Synced 5 hours ago"));
+  QCOMPARE(contacts::syncedAgo(now - 30 * 3600, now), QStringLiteral("Synced yesterday"));
+  QCOMPARE(contacts::syncedAgo(now - 3 * 86400, now), QStringLiteral("Synced 3 days ago"));
+}
+
 void GoogleTests::roundTripsPerson() {
   contacts::Contact contact;
   contact.resourceName = QStringLiteral("people/c1");

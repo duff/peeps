@@ -8,6 +8,8 @@
 #include <QJsonObject>
 #include <QSaveFile>
 
+#include <algorithm>
+
 namespace contacts {
 namespace {
 
@@ -253,7 +255,7 @@ AppSettings readSettingsJson(const QByteArray& json) {
   return settings;
 }
 
-QByteArray writeCacheJson(const QList<Contact>& contacts, const QString& syncToken) {
+QByteArray writeCacheJson(const QList<Contact>& contacts, const QString& syncToken, qint64 syncedAt) {
   QJsonArray array;
   for (const auto& contact : contacts) {
     QJsonObject object;
@@ -291,6 +293,7 @@ QByteArray writeCacheJson(const QList<Contact>& contacts, const QString& syncTok
   QJsonObject root;
   root.insert(QStringLiteral("version"), 3);
   root.insert(QStringLiteral("sync_token"), syncToken);
+  if (syncedAt > 0) root.insert(QStringLiteral("synced_at"), static_cast<double>(syncedAt));
   root.insert(QStringLiteral("contacts"), array);
   return QJsonDocument(root).toJson(QJsonDocument::Compact);
 }
@@ -308,12 +311,24 @@ CacheSnapshot readCacheJson(const QByteArray& json) {
   // Version 2 did not store every Google field. Drop its sync token so the next
   // sync is a full read and those fields are not wiped by a later edit.
   if (version >= 3) snapshot.syncToken = document.object().value(QLatin1String("sync_token")).toString();
+  snapshot.syncedAt = static_cast<qint64>(document.object().value(QLatin1String("synced_at")).toDouble());
   const QJsonArray array = document.object().value(QLatin1String("contacts")).toArray();
   snapshot.contacts.reserve(array.size());
   for (const QJsonValue& value : array) {
     if (value.isObject()) snapshot.contacts.append(contactFromObject(value.toObject()));
   }
   return snapshot;
+}
+
+QString syncedAgo(qint64 syncedAt, qint64 nowUnix) {
+  const qint64 seconds = std::max<qint64>(0, nowUnix - syncedAt);
+  const qint64 minutes = seconds / 60;
+  const qint64 hours = minutes / 60;
+  const qint64 days = hours / 24;
+  if (minutes < 1) return QStringLiteral("Synced just now");
+  if (hours < 1) return QStringLiteral("Synced %1 min ago").arg(minutes);
+  if (days < 1) return hours == 1 ? QStringLiteral("Synced an hour ago") : QStringLiteral("Synced %1 hours ago").arg(hours);
+  return days == 1 ? QStringLiteral("Synced yesterday") : QStringLiteral("Synced %1 days ago").arg(days);
 }
 
 QByteArray writeTokensJson(const OAuthTokens& tokens) {

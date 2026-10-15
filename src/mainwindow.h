@@ -139,6 +139,8 @@ class MainWindow : public QMainWindow {
   bool saving_ = false;
   bool windowActive_ = false;
   qint64 lastSyncAt_ = 0;
+  // When the cache last matched Google, for "Synced 3 hours ago".
+  qint64 syncedAt_ = 0;
   // Google revoked or expired the sign-in, so only Reconnect helps.
   bool signInExpired_ = false;
 
@@ -173,6 +175,7 @@ class MainWindow : public QMainWindow {
   QTimer* themeTimer_ = nullptr;
   QTimer* toastTimer_ = nullptr;
   QTimer* focusSyncTimer_ = nullptr;
+  QTimer* syncedTimer_ = nullptr;
   QTcpServer* oauthServer_ = nullptr;
   QTimer* oauthTimer_ = nullptr;
   QString oauthVerifier_;

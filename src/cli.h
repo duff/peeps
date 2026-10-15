@@ -30,6 +30,7 @@ struct CliResult {
 struct CliSession {
   QList<Contact> contacts;
   QString syncToken;
+  qint64 syncedAt = 0;
   bool signedIn = false;
   QString authError;
   std::function<WriteResult(const Contact&)> create;

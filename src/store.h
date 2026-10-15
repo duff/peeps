@@ -40,13 +40,18 @@ struct AppSettings {
 struct CacheSnapshot {
   QList<Contact> contacts;
   QString syncToken;
+  // When the cache last matched Google, in Unix seconds. Zero when unknown.
+  qint64 syncedAt = 0;
   QString error;
   bool ok() const { return error.isEmpty(); }
 };
 
 QByteArray writeSettingsJson(const AppSettings& settings);
 AppSettings readSettingsJson(const QByteArray& json);
-QByteArray writeCacheJson(const QList<Contact>& contacts, const QString& syncToken);
+QByteArray writeCacheJson(const QList<Contact>& contacts, const QString& syncToken, qint64 syncedAt = 0);
+
+// "Synced 3 hours ago", "Synced yesterday", and so on, for the footer.
+QString syncedAgo(qint64 syncedAt, qint64 nowUnix);
 CacheSnapshot readCacheJson(const QByteArray& json);
 QByteArray writeTokensJson(const OAuthTokens& tokens);
 std::optional<OAuthTokens> readTokensJson(const QByteArray& json);

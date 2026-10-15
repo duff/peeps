@@ -52,6 +52,8 @@ class GoogleTests : public QObject {
   void savedPhotoIsVisibleImmediately();
   void downloadedPhotoIsVisibleImmediately();
   void oldCacheRequestsFullSync();
+  void cacheKeepsSyncTime();
+  void syncedAgoReads();
   void roundTripsPerson();
   void labelTypesRoundTrip();
   void updateRetriesWithFreshEtag();
