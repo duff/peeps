@@ -1,8 +1,13 @@
 # Peeps
 
-A keyboard-first address book for Omarchy. It keeps your Google contacts on the desktop, paints itself from the current Omarchy theme and text size, and answers search from a local cache so looking someone up does not wait on the network.
+A keyboard-first address book for Omarchy, for the contacts you keep in Google.
 
-With no arguments, `peeps` opens the window. A command stays in the terminal, which is how a person or an agent lists, searches, exports, and changes the same contacts.
+- **Instant search.** Peeps searches a copy of your contacts on this computer, so finding someone never waits on the network.
+- **The same book on your phone.** Edits go straight to Google, so they show up on an iPhone, an Android phone, or a Mac that uses Google Contacts.
+- **At home in Omarchy.** It takes the current theme, text size, and font, and follows them when they change.
+- **Keyboard first, and scriptable.** Search, copy, and email without the mouse. The `peeps` command lists, searches, and edits the same contacts, with JSON for scripts and agents.
+
+Your contacts travel only between this computer and Google. There is no Peeps server, and no analytics or tracking. The [privacy policy](https://omelia.org/peeps/privacy) has the details.
 
 ![Peeps showing a list of contacts in the Tokyo Night theme](docs/screenshots/list.png)
 
@@ -99,7 +104,7 @@ Share this contact sits with Edit and Delete at the end of a contact. It writes 
 
 ## Command line
 
-`peeps help` lists every command, and `peeps <command> --help` shows that command's flags. A terminal prints text. A pipe prints JSON. `--json` and `--text` force either one.
+With no arguments, `peeps` opens the window. A command stays in the terminal, which is how a person or an agent lists, searches, exports, and changes the same contacts. `peeps help` lists every command, and `peeps <command> --help` shows that command's flags. A terminal prints text. A pipe prints JSON. `--json` and `--text` force either one.
 
 List, search, show, and export read the cache only. Add, update, delete, and sync talk to Google, then write the cache again. Omitted fields on an update stay as they are. Repeatable flags such as `--email` replace that whole list. `--data` accepts the same JSON object that `peeps show --json` prints, which is the way to set an address, a date, or anything a flag does not cover.
 
