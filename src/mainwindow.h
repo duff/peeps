@@ -79,9 +79,12 @@ class MainWindow : public QMainWindow {
   void moveSelection(int delta, bool wrap);
   void moveField(int delta, bool wrap);
   void selectId(const QString& id);
-  void activateField();
-  void copyCurrentField();
-  void sendSelectedEmail();
+  // These return true when something was copied or an email was started.
+  bool activateField();
+  bool copyCurrentField();
+  bool sendSelectedEmail();
+  void countShortcut(int& uses);
+  void saveSettings();
   const Contact* selected() const;
   void editSelected();
   void newContact();

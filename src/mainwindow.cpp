@@ -161,6 +161,8 @@ class FieldDelegate : public QStyledItemDelegate {
   Palette palette;
   ShellMetrics metrics;
   bool controlHeld = false;
+  bool copyLearned = false;
+  bool emailLearned = false;
 
   int photoEdge() const { return metrics.space(160); }
 
@@ -176,16 +178,48 @@ class FieldDelegate : public QStyledItemDelegate {
 
   static FieldAction action(const QModelIndex& index) { return static_cast<FieldAction>(index.data(ActionRole).toInt()); }
 
+  // One piece of a cue. A key, when there is one, is drawn in the accent
+  // color in front of what it does, the way the keybindings list shows it.
+  struct CuePart {
+    QString key;
+    QString text;
+  };
+
+  // The cue at the end of a row. The selected row also names its keys until
+  // they have been used a few times, so a newcomer learns them in place.
+  QList<CuePart> cueFor(const QModelIndex& index, bool selected) const {
+    const QString cue = index.data(CueRole).toString();
+    if (cue.isEmpty()) return {};
+    if (action(index) != FieldAction::Copy) return {{QString(), cue}};
+    const bool email = index.data(EmailRole).toBool();
+    // Holding Control turns Copy into Send email on an address.
+    if (email && controlHeld) return {{QString(), QStringLiteral("Send email")}};
+    if (!selected) return {{QString(), cue}};
+    QList<CuePart> parts{copyLearned ? CuePart{QString(), cue} : CuePart{QStringLiteral("Enter"), QStringLiteral("to copy")}};
+    if (email && !emailLearned) parts.append({QStringLiteral("Ctrl+Enter"), QStringLiteral("to email")});
+    return parts;
+  }
+
+  int cuePartGap() const { return metrics.space(20); }
+
+  int cueWidth(const QFontMetrics& fm, const QList<CuePart>& parts) const {
+    int width = 0;
+    for (const CuePart& part : parts) {
+      if (width > 0) width += cuePartGap();
+      width += fm.horizontalAdvance(part.key.isEmpty() ? part.text : part.key + QLatin1Char(' ') + part.text);
+    }
+    return width == 0 ? 0 : width + metrics.space(16);
+  }
+
   int labelWidth(const QFontMetrics& fm, int width) const {
     return std::min(width / 3, fm.horizontalAdvance(QStringLiteral("Phonetic first name")) + metrics.space(16));
   }
 
   int valueColumnWidth(const QFontMetrics& fm, int width, const QModelIndex& index) const {
     const int inner = std::max(0, width - 2 * metrics.space(8));
-    const QString cue = index.data(CueRole).toString();
-    const int cueWidth = cue.isEmpty() ? 0 : fm.horizontalAdvance(cue) + metrics.space(16);
+    const int cue = cueWidth(fm, cueFor(index, true));
     const int label = index.data(LabelRole).toString().isEmpty() ? 0 : labelWidth(fm, inner);
-    return std::max(1, inner - label - cueWidth);
+    return std::max(1, inner - label - cue);
   }
 
   void paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const override {
@@ -233,9 +267,11 @@ class FieldDelegate : public QStyledItemDelegate {
     const int textHeight = several ? lineHeight : rect.height();
     // Copy, Edit, and the other cues show on the selected or hovered row only.
     const bool showCue = !cue.isEmpty() && (selected || hover);
-    const bool emailCopy = showCue && kind == FieldAction::Copy && index.data(EmailRole).toBool();
-    const QString shownCue = emailCopy && controlHeld ? QStringLiteral("Send email") : cue;
-    const int cueWidth = showCue || (kind == FieldAction::Copy && wrap) ? fm.horizontalAdvance(shownCue) + metrics.space(16) : 0;
+    const QList<CuePart> shownCue = cueFor(index, selected);
+    // Wrapped notes keep room for the widest cue, so selecting them does not rewrap.
+    const int cueSpace = kind == FieldAction::Copy && wrap ? cueWidth(fm, cueFor(index, true))
+                         : showCue                      ? cueWidth(fm, shownCue)
+                                                        : 0;
     const int labelColumn = label.isEmpty() && !index.data(KeepLabelRole).toBool() ? 0 : labelWidth(fm, rect.width());
     painter->setPen(palette.secondary);
     if (!label.isEmpty()) {
@@ -243,7 +279,7 @@ class FieldDelegate : public QStyledItemDelegate {
                         fm.elidedText(label, Qt::ElideRight, labelColumn));
     }
     const int valueLeft = rect.left() + labelColumn;
-    const int valueWidth = std::max(0, rect.width() - labelColumn - cueWidth);
+    const int valueWidth = std::max(0, rect.width() - labelColumn - cueSpace);
     painter->setPen(danger ? palette.danger : palette.foreground);
     if (wrap) {
       painter->drawText(QRect(valueLeft, textTop, valueWidth, std::max(lineHeight, rect.bottom() - textTop - top + 1)),
@@ -255,9 +291,20 @@ class FieldDelegate : public QStyledItemDelegate {
       }
     }
     if (showCue) {
-      painter->setPen(danger ? palette.danger : palette.secondary);
-      painter->drawText(QRect(rect.right() - cueWidth + metrics.space(16), textTop, cueWidth - metrics.space(16), textHeight),
-                        Qt::AlignVCenter | Qt::AlignRight, shownCue);
+      // Right-aligned: the last part ends at the row's edge.
+      int x = rect.right() + 1 - (cueWidth(fm, shownCue) - metrics.space(16));
+      const auto draw = [&](const QString& text, const QColor& color) {
+        const int width = fm.horizontalAdvance(text);
+        painter->setPen(color);
+        painter->drawText(QRect(x, textTop, width, textHeight), Qt::AlignVCenter | Qt::AlignLeft, text);
+        x += width;
+      };
+      for (int i = 0; i < shownCue.size(); ++i) {
+        if (i > 0) x += cuePartGap();
+        const CuePart& part = shownCue.at(i);
+        if (!part.key.isEmpty()) draw(part.key + QLatin1Char(' '), palette.accent);
+        draw(part.text, danger ? palette.danger : palette.secondary);
+      }
     }
     painter->restore();
   }
@@ -555,6 +602,8 @@ void MainWindow::buildUi() {
 
 void MainWindow::loadLocal() {
   if (auto bytes = readFile(paths_.settingsFile)) settings_ = readSettingsJson(*bytes);
+  fieldDelegate_->copyLearned = settings_.copyLearned();
+  fieldDelegate_->emailLearned = settings_.emailLearned();
   QString error;
   if (auto secret = secrets_->load(error)) {
     if (auto tokens = readTokensJson(secret->toUtf8())) tokens_ = *tokens;
@@ -932,13 +981,13 @@ void MainWindow::handleCommand(Command command) {
       openSelected();
       break;
     case Command::ActivateField:
-      activateField();
+      if (activateField()) countShortcut(settings_.keyboardCopies);
       break;
     case Command::CopyField:
-      copyCurrentField();
+      if (copyCurrentField()) countShortcut(settings_.keyboardCopies);
       break;
     case Command::SendEmail:
-      sendSelectedEmail();
+      if (sendSelectedEmail()) countShortcut(settings_.keyboardEmails);
       break;
     case Command::NewContact:
       newContact();
@@ -988,9 +1037,9 @@ void MainWindow::moveSelection(int delta, bool wrap) {
   list_->scrollTo(index);
 }
 
-void MainWindow::activateField() {
+bool MainWindow::activateField() {
   const QModelIndex index = fieldList_->currentIndex();
-  if (!index.isValid()) return;
+  if (!index.isValid()) return false;
   switch (FieldDelegate::action(index)) {
     case FieldAction::DeleteContact:
       deleteSelected();
@@ -1003,46 +1052,66 @@ void MainWindow::activateField() {
       break;
     case FieldAction::Copy:
     case FieldAction::CopyPhoto:
-      copyCurrentField();
-      break;
+      return copyCurrentField();
   }
+  return false;
 }
 
-void MainWindow::sendSelectedEmail() {
+bool MainWindow::sendSelectedEmail() {
   const QModelIndex index = fieldList_->currentIndex();
   if (!index.isValid() || !index.data(EmailRole).toBool()) {
     toast(QStringLiteral("Select an email address first."), true);
-    return;
+    return false;
   }
   const DesktopCommand command = mailCommand(index.data(Qt::DisplayRole).toString());
   if (!command.ok()) {
     toast(command.error, true);
-    return;
+    return false;
   }
   runDetached(command);
   toast(QStringLiteral("Opening email…"));
+  return true;
 }
 
-void MainWindow::copyCurrentField() {
+bool MainWindow::copyCurrentField() {
   const QModelIndex index = fieldList_->currentIndex();
-  if (!index.isValid()) return;
+  if (!index.isValid()) return false;
   const FieldAction action = FieldDelegate::action(index);
   if (action == FieldAction::CopyPhoto) {
     const Contact* contact = selected();
     const QImage image = contact == nullptr ? QImage() : photos_->originalImage(contact->resourceName, contact->photoUrl);
     if (image.isNull()) {
       toast(QStringLiteral("The photo isn’t downloaded yet."), true);
-      return;
+      return false;
     }
     QGuiApplication::clipboard()->setImage(image);
     toast(QStringLiteral("Copied photo"));
-    return;
+    return true;
   }
-  if (action != FieldAction::Copy) return;
+  if (action != FieldAction::Copy) return false;
   const QString value = index.data(Qt::DisplayRole).toString().trimmed();
-  if (value.isEmpty()) return;
+  if (value.isEmpty()) return false;
   QGuiApplication::clipboard()->setText(value);
   toast(copiedNotice(index));
+  return true;
+}
+
+// A shortcut used from the keyboard counts toward retiring its hint. The
+// mouse does not, since clicking teaches nothing about the keys.
+void MainWindow::countShortcut(int& uses) {
+  if (uses >= kHintLearnedAfter) return;
+  ++uses;
+  saveSettings();
+  fieldDelegate_->copyLearned = settings_.copyLearned();
+  fieldDelegate_->emailLearned = settings_.emailLearned();
+  // A shorter cue gives wrapped notes more room.
+  fieldList_->doItemsLayout();
+  fieldList_->viewport()->update();
+}
+
+void MainWindow::saveSettings() {
+  QString error;
+  if (!writePrivateFile(paths_.settingsFile, writeSettingsJson(settings_), error)) toast(error, true);
 }
 
 void MainWindow::selectId(const QString& id) {
@@ -1274,8 +1343,7 @@ void MainWindow::setTextSizeOffset(int offset) {
   offset = std::clamp(offset, kMinTextSizeOffset, kMaxTextSizeOffset);
   if (offset != settings_.textSizeOffset) {
     settings_.textSizeOffset = offset;
-    QString error;
-    if (!writePrivateFile(paths_.settingsFile, writeSettingsJson(settings_), error)) toast(error, true);
+    saveSettings();
     reloadTheme();
   }
   toast(QStringLiteral("Text size %1 px").arg(metrics_.basePx));

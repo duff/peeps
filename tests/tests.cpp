@@ -859,6 +859,12 @@ void GoogleTests::storeRoundTrip() {
 
   QCOMPARE(contacts::readSettingsJson(contacts::writeSettingsJson({3})).textSizeOffset, 3);
   QCOMPARE(contacts::readSettingsJson("{").textSizeOffset, 0);
+  const auto hints = contacts::readSettingsJson(contacts::writeSettingsJson({0, contacts::kHintLearnedAfter, 1}));
+  QCOMPARE(hints.keyboardCopies, contacts::kHintLearnedAfter);
+  QCOMPARE(hints.keyboardEmails, 1);
+  QVERIFY(hints.copyLearned());
+  QVERIFY(!hints.emailLearned());
+  QVERIFY(!contacts::readSettingsJson(R"({"text_size_offset":2})").copyLearned());
 
   const auto stored =
       contacts::readTokensJson(contacts::writeTokensJson({QStringLiteral("access"), QStringLiteral("refresh"), 50}));

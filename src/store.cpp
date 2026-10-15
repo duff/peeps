@@ -239,12 +239,17 @@ OAuthClient builtInClient() {
 QByteArray writeSettingsJson(const AppSettings& settings) {
   QJsonObject object;
   object.insert(QStringLiteral("text_size_offset"), settings.textSizeOffset);
+  object.insert(QStringLiteral("keyboard_copies"), settings.keyboardCopies);
+  object.insert(QStringLiteral("keyboard_emails"), settings.keyboardEmails);
   return QJsonDocument(object).toJson(QJsonDocument::Compact);
 }
 
 AppSettings readSettingsJson(const QByteArray& json) {
+  const QJsonObject object = QJsonDocument::fromJson(json).object();
   AppSettings settings;
-  settings.textSizeOffset = QJsonDocument::fromJson(json).object().value(QLatin1String("text_size_offset")).toInt();
+  settings.textSizeOffset = object.value(QLatin1String("text_size_offset")).toInt();
+  settings.keyboardCopies = object.value(QLatin1String("keyboard_copies")).toInt();
+  settings.keyboardEmails = object.value(QLatin1String("keyboard_emails")).toInt();
   return settings;
 }
 

@@ -22,10 +22,19 @@ struct AppPaths {
 // Desktop client ids are not secret: Google says an installed app cannot keep one.
 OAuthClient builtInClient();
 
+// The selected field names its shortcut until it has been used this often.
+inline constexpr int kHintLearnedAfter = 10;
+
 // Choices that belong to Peeps rather than to Omarchy.
 struct AppSettings {
   // Added to Omarchy's text size. Ctrl+= and Ctrl+- change it.
   int textSizeOffset = 0;
+  // Copies and emails done from the keyboard, counted up to kHintLearnedAfter.
+  int keyboardCopies = 0;
+  int keyboardEmails = 0;
+
+  bool copyLearned() const { return keyboardCopies >= kHintLearnedAfter; }
+  bool emailLearned() const { return keyboardEmails >= kHintLearnedAfter; }
 };
 
 struct CacheSnapshot {
