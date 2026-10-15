@@ -191,7 +191,6 @@ class FieldDelegate : public QStyledItemDelegate {
   QList<CuePart> cueFor(const QModelIndex& index, bool selected) const {
     const QString cue = index.data(CueRole).toString();
     if (cue.isEmpty()) return {};
-    if (action(index) != FieldAction::Copy) return {{QString(), cue}};
     const bool email = index.data(EmailRole).toBool();
     // Holding Control turns Copy into Send email on an address.
     if (email && controlHeld) return {{QString(), QStringLiteral("Send email")}};
@@ -266,7 +265,7 @@ class FieldDelegate : public QStyledItemDelegate {
     const bool several = wrap || lines.size() > 1;
     const int textTop = several ? rect.top() + top : rect.top();
     const int textHeight = several ? lineHeight : rect.height();
-    // Copy, Edit, and the other cues show on the selected or hovered row only.
+    // The cue shows on the selected or hovered row only.
     const bool showCue = !cue.isEmpty() && (selected || hover);
     const QList<CuePart> shownCue = cueFor(index, selected);
     // Wrapped notes keep room for the widest cue, so selecting them does not rewrap.
@@ -835,12 +834,9 @@ void MainWindow::renderDetail() {
     item->setEditable(false);
     item->setData(label, LabelRole);
     item->setData(keepLabelColumn, KeepLabelRole);
-    const QString cue = action == FieldAction::Edit            ? QStringLiteral("Edit")
-                        : action == FieldAction::DeleteContact ? QStringLiteral("Delete")
-                        : action == FieldAction::ShareContact  ? QStringLiteral("Share")
-                        : action == FieldAction::Copy          ? QStringLiteral("Copy")
-                                                               : QString();
-    item->setData(cue, CueRole);
+    // Share, Edit, and Delete name their action in the row itself, so only a
+    // field gets a cue.
+    item->setData(action == FieldAction::Copy ? QStringLiteral("Copy") : QString(), CueRole);
     item->setData(static_cast<int>(action), ActionRole);
     item->setData(email, EmailRole);
     if (focus) {
