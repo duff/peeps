@@ -1,4 +1,4 @@
-.PHONY: all test clean install
+.PHONY: all test clean install screenshots
 
 PREFIX ?= $(HOME)/.local
 
@@ -18,6 +18,13 @@ test:
 	$(CONFIGURE)
 	$(BUILD) --target peeps-tests
 	ctest --test-dir build --output-on-failure
+
+# The README's pictures, rendered offscreen from fictional contacts.
+screenshots:
+	$(CONFIGURE)
+	$(BUILD) --target peeps-screenshots
+	build/peeps-screenshots docs/screenshots tools/screenshot-photo.jpg
+	if command -v oxipng >/dev/null; then oxipng -q -o 4 --strip safe docs/screenshots/*.png; fi
 
 # DESTDIR stages a package. Without it, the launcher points at the installed
 # binary so it works even when ~/.local/bin is not on the launcher's PATH.

@@ -72,4 +72,8 @@ if(BUILD_TESTING)
   target_link_libraries(peeps-tests PRIVATE peeps_core Qt6::Test)
   add_test(NAME peeps-tests COMMAND peeps-tests)
   set_tests_properties(peeps-tests PROPERTIES ENVIRONMENT QT_QPA_PLATFORM=offscreen)
+
+  # make screenshots: the README's pictures, from a made-up address book.
+  qt_add_executable(peeps-screenshots tools/screenshots.cpp)
+  target_link_libraries(peeps-screenshots PRIVATE peeps_core)
 endif()
