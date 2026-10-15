@@ -106,7 +106,7 @@ Share this contact sits with Edit and Delete at the end of a contact. It writes 
 
 ## Agents
 
-Peeps comes with a skill for AI agents such as Claude Code, Codex, and pi. A skill is a page of instructions an agent reads when a request matches it. This one teaches the `peeps` command, and sets house rules: the agent shows what it will change and waits for a yes before adding, changing, or deleting anyone, and keeps what it reads to the people the request is about.
+Peeps comes with a skill for AI agents such as Claude Code, Codex, and pi. A skill is a page of instructions an agent reads when a request matches it. This one teaches the `peeps` command and how to use it with care.
 
 `make install` links the skill into the skills folder of each agent set up on the machine (`~/.claude`, `~/.codex`, `~/.pi/agent`, and `~/.agents`), the same way Omarchy shares its own skills. With a package, run `peeps skill install` once. `peeps skill remove` takes the links away.
 
@@ -115,9 +115,11 @@ Then ask in plain words:
 - "Add the person from this email signature."
 - "What's Maya Okafor's work number?"
 - "Who do I know at Northwind, and whose birthday is this month?"
-- "Put every phone number in the +1 format. Show me the changes first."
+- "Put every phone number in the +1 format."
 
-What an agent reads from `peeps` goes into that conversation, and so to the agent's AI provider. Peeps itself still talks only to Google.
+Every add, edit, or delete is confirmed first. Asking for a change is not agreeing to it: the agent looks the person up, says exactly what will change, including any label or other choice it would make, and changes nothing until you say yes. Looking people up needs no confirmation. The skill is instructions the agent follows, so for a hard guarantee, have your agent ask permission before it runs `peeps add`, `peeps update`, or `peeps delete`. In Claude Code, that is an `ask` rule in its permission settings.
+
+The agent also keeps what it reads to the people the request is about. What it reads goes into that conversation, and so to the agent's AI provider. Peeps itself still talks only to Google.
 
 ## Command line
 
