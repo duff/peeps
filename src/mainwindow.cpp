@@ -26,7 +26,9 @@
 #include <QMenu>
 #include <QMimeData>
 #include <QMouseEvent>
+#include <QIcon>
 #include <QPainter>
+#include <QPixmap>
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QResizeEvent>
@@ -445,6 +447,27 @@ QString copiedNotice(const QModelIndex& index) {
 
 qint64 nowUnix() { return QDateTime::currentSecsSinceEpoch(); }
 
+// An x in the theme's quiet text color, brighter while pressed.
+QIcon clearIcon(const Palette& palette, int size, qreal ratio) {
+  QIcon icon;
+  const std::pair<QIcon::Mode, QColor> modes[] = {{QIcon::Normal, palette.secondary}, {QIcon::Active, palette.foreground}};
+  for (const auto& [mode, color] : modes) {
+    QPixmap pixmap(QSize(size, size) * ratio);
+    pixmap.setDevicePixelRatio(ratio);
+    pixmap.fill(Qt::transparent);
+    QPainter painter(&pixmap);
+    painter.setRenderHint(QPainter::Antialiasing);
+    QPen pen(color, std::max(1.0, size / 10.0));
+    pen.setCapStyle(Qt::RoundCap);
+    painter.setPen(pen);
+    const qreal inset = size * 0.3;
+    painter.drawLine(QPointF(inset, inset), QPointF(size - inset, size - inset));
+    painter.drawLine(QPointF(size - inset, inset), QPointF(inset, size - inset));
+    icon.addPixmap(pixmap, mode);
+  }
+  return icon;
+}
+
 }  // namespace
 
 MainWindow::MainWindow() : secrets_(makeSecretStore()) {
@@ -507,8 +530,15 @@ void MainWindow::buildUi() {
 
   search_ = new QLineEdit;
   search_->setPlaceholderText(QStringLiteral("Find a contact"));
-  search_->setClearButtonEnabled(true);
   search_->setAccessibleName(QStringLiteral("Find a contact"));
+  // Qt's own clear button has a fixed gray icon. This one is drawn in the theme.
+  clearSearchAction_ = search_->addAction(QIcon(), QLineEdit::TrailingPosition);
+  clearSearchAction_->setToolTip(QStringLiteral("Clear the search"));
+  clearSearchAction_->setVisible(false);
+  connect(clearSearchAction_, &QAction::triggered, this, [this] {
+    search_->clear();
+    search_->setFocus();
+  });
   rootLayout_->addWidget(search_);
 
   listPane_ = new QWidget;
@@ -581,6 +611,7 @@ void MainWindow::buildUi() {
   });
 
   connect(search_, &QLineEdit::textChanged, this, [this] {
+    clearSearchAction_->setVisible(!search_->text().isEmpty());
     if (detailOpen_) closeDetail();
     refilter();
   });
@@ -750,6 +781,7 @@ void MainWindow::applyStyle() {
   delegate_->metrics = metrics_;
   fieldDelegate_->palette = palette_;
   fieldDelegate_->metrics = metrics_;
+  clearSearchAction_->setIcon(clearIcon(palette_, metrics_.text(16), devicePixelRatioF()));
   const int pad = metrics_.space(18);
   rootLayout_->setContentsMargins(pad, pad, pad, pad);
   rootLayout_->setSpacing(metrics_.space(14));

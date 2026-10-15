@@ -158,6 +158,7 @@ class MainWindow : public QMainWindow {
   QLabel* emptyLabel_ = nullptr;
   QLabel* countLabel_ = nullptr;
   QLabel* statusLabel_ = nullptr;
+  QAction* clearSearchAction_ = nullptr;
   QLabel* toastLabel_ = nullptr;
   QFrame* toastFrame_ = nullptr;
   QPushButton* titleButton_ = nullptr;
