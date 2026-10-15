@@ -4,6 +4,8 @@ A keyboard-first address book for Omarchy. It keeps your Google contacts on the 
 
 With no arguments, `peeps` opens the window. A command stays in the terminal, which is how a person or an agent lists, searches, exports, and changes the same contacts.
 
+![Peeps showing a list of contacts in the Tokyo Night theme](docs/screenshots/list.png)
+
 ## Why Peeps
 
 My family came to Omarchy from Macs. We all have iPhones, and our contacts lived in iCloud. After the switch we still wanted one address book that we could read and edit on the phones and on the Omarchy desktop. Google Contacts made the most sense as the place for it: an iPhone syncs with it from Settings, Android uses it already, and it has a real API. That left us needing an Omarchy app for Google Contacts, and Peeps is that app.
@@ -30,7 +32,7 @@ make test
 make install
 ```
 
-`make install` puts `peeps` in `~/.local/bin` and adds a launcher. The tests use Qt Test and the offscreen platform.
+`make install` puts `peeps` in `~/.local/bin` and adds a launcher. The tests use Qt Test and the offscreen platform. `make screenshots` redraws the pictures in this README from a made-up address book, offscreen, without touching your own contacts.
 
 A build from source needs a Google OAuth client of your own before it can connect. Setting one up takes a few minutes, and [Google](#google) has the steps. A packaged Peeps has its client built in, so there you only choose Connect.
 
@@ -56,6 +58,8 @@ Type to search. Up and Down move through the matches, including while the search
 Esc or Backspace returns to the list, or clears the search if that is where you are. `?` opens the keybindings. Ctrl+N starts a contact and Ctrl+E edits the one you are on. New, Sync, Keybindings, and Google account are in the Menu.
 
 The mouse works too. One click opens a contact. One click on a field copies it, and one click on Share, Edit, or Delete this contact does that. While a contact is open, the title reads "← Peeps", and clicking it, or a mouse's back button, returns to the list.
+
+![An open contact with a photo. The selected work email reads "Enter to copy" and "Ctrl+Enter to email"](docs/screenshots/contact.png)
 
 | Keys | Action |
 | --- | --- |

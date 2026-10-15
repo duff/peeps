@@ -24,7 +24,7 @@ Ideas from the October 2026 review, roughly in order of value. None of these are
 ## Before a public release
 
 - [x] **License.** MIT, like Omarchy.
-- [ ] **Screenshots.** Put a few in the README.
+- [x] **Screenshots.** `make screenshots` draws the README's pictures from fictional contacts.
 - [x] **App id.** The window class and desktop file are now `org.omelia.Peeps`.
 - [x] **Google client.** Peeps ships its own client, built in with `PEEPS_GOOGLE_CLIENT_ID`. The account screen no longer asks for one.
 - [ ] **Verification.** Branding is verified. Data access for the contacts scope was submitted on October 14, 2026 with the demo video (https://youtu.be/WobFZxedkRk). Waiting on Google.
