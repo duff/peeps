@@ -31,7 +31,7 @@ It is one Google account, not a CRM. Lookups and the contact you are reading com
 
 Peeps comes with a skill for AI agents such as Claude Code, Codex, and pi. A skill is a page of instructions an agent reads when a request matches it. This one teaches the `peeps` command and how to use it with care.
 
-`peeps skill install` links the skill into the skills folder of each agent set up on the machine (`~/.claude`, `~/.codex`, `~/.pi/agent`, and `~/.agents`), the same way Omarchy shares its own skills. Run it once after [installing](#install) a package. A build from source runs it for you. `peeps skill remove` takes the links away.
+When Peeps opens, it links the skill into the skills folder of each agent set up on the machine (`~/.claude`, `~/.codex`, `~/.pi/agent`, and `~/.agents`), the same way Omarchy shares its own skills, and says so the first time. `peeps skill remove` takes the links away and keeps Peeps from adding them back. `peeps skill install` brings them back.
 
 Then ask in plain words:
 
@@ -153,7 +153,7 @@ The refresh token stays in the login keyring under `org.omelia.peeps`. Disconnec
 | `~/.cache/peeps/photos` | Cached photos |
 | `$XDG_RUNTIME_DIR/peeps` | vCards made for sharing, cleared at logout |
 | Login keyring | The Google refresh token |
-| `~/.claude/skills/peeps` and the like | Links to the agent skill, from `peeps skill install` |
+| `~/.claude/skills/peeps` and the like | Links to the agent skill, made when Peeps opens |
 
 `peeps sync` downloads changes since the last sync. `peeps sync --full` downloads the whole book.
 
@@ -165,7 +165,7 @@ Sizes follow the Omarchy shell. The theme's `shell.toml` sets the base text size
 
 ## Install
 
-Most people will install Peeps from the AUR. The package has Peeps' Google client built in, so after installing you only open Menu → Google account and choose Connect, then run `peeps skill install` to set up the [agent skill](#agents). The package is coming once Google finishes verifying Peeps.
+Most people will install Peeps from the AUR. The package has Peeps' Google client built in, so after installing you only open Menu → Google account and choose Connect. Opening Peeps also sets up the [agent skill](#agents). The package is coming once Google finishes verifying Peeps.
 
 ### Building it yourself
 
@@ -177,7 +177,7 @@ make test
 make install
 ```
 
-`make install` puts `peeps` in `~/.local/bin`, adds a launcher, and links the [agent skill](#agents). The tests use Qt Test and the offscreen platform. `make screenshots` redraws the pictures in this README from a made-up address book, offscreen, without touching your own contacts.
+`make install` puts `peeps` in `~/.local/bin`, adds a launcher, and installs the [agent skill](#agents), which Peeps links when it opens. The tests use Qt Test and the offscreen platform. `make screenshots` redraws the pictures in this README from a made-up address book, offscreen, without touching your own contacts.
 
 ### Packaging
 
@@ -190,7 +190,7 @@ make install PREFIX=/usr DESTDIR="$pkgdir"
 
 The Makefile wraps CMake, so a package can also call `cmake` with `CMAKE_INSTALL_PREFIX`, and `-DBUILD_TESTING=OFF` to skip the tests.
 
-The agent skill installs to `share/peeps/skills/peeps`. A package cannot reach anyone's home folder, so after installing, each person runs `peeps skill install` to link it for their agents.
+The agent skill installs to `share/peeps/skills/peeps`. A package cannot reach anyone's home folder, so Peeps links the skill for each person when they open it.
 
 Peeps signs in through a Google OAuth client that is built into the app, so people only choose Connect. Set `PEEPS_GOOGLE_CLIENT_ID`, and `PEEPS_GOOGLE_CLIENT_SECRET` if the client has one, when you build. A build without them cannot connect to Google. A Desktop client id is not a secret: Google treats an installed app as unable to keep one.
 

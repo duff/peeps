@@ -908,6 +908,8 @@ void GoogleTests::storeRoundTrip() {
   QVERIFY(hints.copyLearned());
   QVERIFY(!hints.emailLearned());
   QVERIFY(!contacts::readSettingsJson(R"({"text_size_offset":2})").copyLearned());
+  QVERIFY(contacts::readSettingsJson(contacts::writeSettingsJson({0, 0, 0, true})).skillDeclined);
+  QVERIFY(!contacts::readSettingsJson(R"({"text_size_offset":2})").skillDeclined);
 
   const auto stored =
       contacts::readTokensJson(contacts::writeTokensJson({QStringLiteral("access"), QStringLiteral("refresh"), 50}));

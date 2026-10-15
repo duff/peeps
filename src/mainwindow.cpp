@@ -5,6 +5,7 @@
 #include "dialogs.h"
 #include "google.h"
 #include "photos.h"
+#include "skill.h"
 #include "vcard.h"
 #include "worker.h"
 
@@ -695,6 +696,7 @@ void MainWindow::showEvent(QShowEvent* event) {
     firstShow_ = false;
     applyView();
     search_->setFocus();
+    linkAgentSkill();
   }
 }
 
@@ -1192,8 +1194,22 @@ void MainWindow::countShortcut(int& uses) {
 }
 
 void MainWindow::saveSettings() {
+  // peeps skill remove may have written this while the window was open.
+  if (auto bytes = readFile(paths_.settingsFile)) settings_.skillDeclined = readSettingsJson(*bytes).skillDeclined;
   QString error;
   if (!writePrivateFile(paths_.settingsFile, writeSettingsJson(settings_), error)) toast(error, true);
+}
+
+// Each person gets the agent skill without a step of their own: a package
+// cannot write into home folders, so the window links it when it opens. After
+// peeps skill remove it stays away.
+void MainWindow::linkAgentSkill() {
+  if (settings_.skillDeclined) return;
+  const QString skill = installedSkillDir(QCoreApplication::applicationDirPath());
+  if (skill.isEmpty()) return;
+  const SkillLinks links = linkSkill(
+      skill, agentSkillFolders(QDir::homePath(), qEnvironmentVariable("CLAUDE_CONFIG_DIR"), qEnvironmentVariable("CODEX_HOME")));
+  if (!links.changed.isEmpty() && links.error.isEmpty()) toast(QStringLiteral("Linked the Peeps skill for your AI agents"));
 }
 
 void MainWindow::selectId(const QString& id) {

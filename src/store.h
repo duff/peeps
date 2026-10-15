@@ -32,6 +32,8 @@ struct AppSettings {
   // Copies and emails done from the keyboard, counted up to kHintLearnedAfter.
   int keyboardCopies = 0;
   int keyboardEmails = 0;
+  // Set by peeps skill remove, so Peeps stops linking the agent skill.
+  bool skillDeclined = false;
 
   bool copyLearned() const { return keyboardCopies >= kHintLearnedAfter; }
   bool emailLearned() const { return keyboardEmails >= kHintLearnedAfter; }

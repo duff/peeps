@@ -437,12 +437,57 @@ void CliTests::skillLinks() {
   QCOMPARE(linked.skipped, QStringList({home + QStringLiteral("/.agents/skills/peeps")}));
   QCOMPARE(QFileInfo(home + QStringLiteral("/.claude/skills/peeps")).symLinkTarget(), skill);
   QCOMPARE(QFileInfo(home + QStringLiteral("/.pi/agent/skills/peeps")).symLinkTarget(), skill);
-  QVERIFY(contacts::linkSkill(skill, folders).error.isEmpty());
+  // Run again, nothing changes: the links are already in place.
+  const auto again = contacts::linkSkill(skill, folders);
+  QVERIFY(again.error.isEmpty());
+  QVERIFY(again.changed.isEmpty());
+  QCOMPARE(again.unchanged.size(), 2);
 
   const auto removed = contacts::unlinkSkill(folders);
   QCOMPARE(removed.changed.size(), 2);
   QVERIFY(!QFileInfo(home + QStringLiteral("/.claude/skills/peeps")).isSymLink());
   QVERIFY(QFileInfo(home + QStringLiteral("/.agents/skills/peeps")).isDir());
+}
+
+void CliTests::skillRemoveSticks() {
+  QTemporaryDir root;
+  QVERIFY(root.isValid());
+  qunsetenv("CLAUDE_CONFIG_DIR");
+  qunsetenv("CODEX_HOME");
+  const QString skill = root.path() + QStringLiteral("/usr/share/peeps/skills/peeps");
+  QVERIFY(QDir().mkpath(skill));
+  QVERIFY(QDir().mkpath(root.path() + QStringLiteral("/usr/bin")));
+  QFile file(skill + QStringLiteral("/SKILL.md"));
+  QVERIFY(file.open(QIODevice::WriteOnly));
+  file.close();
+  contacts::CliLaunch launch;
+  launch.home = root.path() + QStringLiteral("/home");
+  launch.binDir = root.path() + QStringLiteral("/usr/bin");
+  launch.paths = contacts::AppPaths::forEnv(launch.home, {}, {}, {});
+  QVERIFY(QDir().mkpath(launch.home + QStringLiteral("/.claude")));
+  const QString link = launch.home + QStringLiteral("/.claude/skills/peeps");
+  const auto declined = [&] {
+    const auto bytes = contacts::readFile(launch.paths.settingsFile);
+    return bytes && contacts::readSettingsJson(*bytes).skillDeclined;
+  };
+
+  const auto installed = contacts::runContactsCommand({QStringLiteral("skill"), QStringLiteral("install"), QStringLiteral("--text")}, launch);
+  QCOMPARE(installed.code, contacts::kCliOk);
+  QVERIFY(installed.out.contains(QStringLiteral("Linked the Peeps skill")));
+  QVERIFY(QFileInfo(link).isSymLink());
+  QVERIFY(!declined());
+  const auto again = contacts::runContactsCommand({QStringLiteral("skill"), QStringLiteral("install"), QStringLiteral("--text")}, launch);
+  QVERIFY(again.out.contains(QStringLiteral("already linked")));
+
+  // Remove is remembered, so the window does not link it again.
+  const auto removed = contacts::runContactsCommand({QStringLiteral("skill"), QStringLiteral("remove"), QStringLiteral("--text")}, launch);
+  QCOMPARE(removed.code, contacts::kCliOk);
+  QVERIFY(removed.out.contains(QStringLiteral("will not link the skill again")));
+  QVERIFY(!QFileInfo(link).isSymLink());
+  QVERIFY(declined());
+
+  QCOMPARE(contacts::runContactsCommand({QStringLiteral("skill"), QStringLiteral("install")}, launch).code, contacts::kCliOk);
+  QVERIFY(!declined());
 }
 
 void CliTests::skillCoversEveryCommand() {

@@ -39,7 +39,7 @@ SkillLinks linkSkill(const QString& skillDir, const QStringList& folders) {
     const QFileInfo entry(link);
     if (entry.isSymLink()) {
       if (entry.symLinkTarget() == skillDir) {
-        result.changed.append(link);
+        result.unchanged.append(link);
         continue;
       }
       QFile::remove(link);

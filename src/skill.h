@@ -19,12 +19,15 @@ QString installedSkillDir(const QString& binDir);
 QStringList agentSkillFolders(const QString& home, const QString& claudeConfigDir = {}, const QString& codexHome = {});
 
 struct SkillLinks {
+  // Links made or taken away by this call.
   QStringList changed;
+  // Links that already pointed at the skill.
+  QStringList unchanged;
   QStringList skipped;
   QString error;
 };
 
-// Links `skillDir` as peeps in each skills folder. A link already there is
+// Links `skillDir` as peeps in each skills folder. A link to somewhere else is
 // replaced. Anything else named peeps is left alone and reported.
 SkillLinks linkSkill(const QString& skillDir, const QStringList& folders);
 

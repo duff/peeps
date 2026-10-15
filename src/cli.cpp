@@ -11,6 +11,7 @@
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QImage>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -185,14 +186,16 @@ QString commandHelp(const QString& command) {
   if (command == QLatin1String("skill")) {
     return QStringLiteral(
         "Link the Peeps skill for AI agents, so Claude Code, Codex, pi, and\n"
-        "others know how to use peeps. make install runs install for you.\n"
+        "others know how to use peeps.\n"
         "\n"
         "  peeps skill install\n"
         "  peeps skill remove\n"
         "\n"
-        "The skill is installed with Peeps. install links it as peeps in the\n"
-        "skills folder of each agent set up here: ~/.claude, ~/.codex,\n"
-        "~/.pi/agent, and ~/.agents. remove takes those links away.\n");
+        "The skill is installed with Peeps, which links it as peeps in the\n"
+        "skills folder of each agent set up here (~/.claude, ~/.codex,\n"
+        "~/.pi/agent, and ~/.agents) whenever the window opens. remove takes\n"
+        "those links away and keeps Peeps from adding them back. install\n"
+        "links them now and lets Peeps keep them.\n");
   }
   if (command == QLatin1String("commands")) {
     return QStringLiteral("List the commands.\n\n  contacts commands [--json]\n");
@@ -1661,10 +1664,11 @@ CliResult runCli(const QStringList& args, CliSession& session, bool stdoutIsTty)
 namespace {
 
 CliResult runSkill(const QString& action, const CliLaunch& launch, bool json) {
+  const bool install = action == QLatin1String("install");
   const QStringList folders =
       agentSkillFolders(launch.home, qEnvironmentVariable("CLAUDE_CONFIG_DIR"), qEnvironmentVariable("CODEX_HOME"));
   SkillLinks links;
-  if (action == QLatin1String("install")) {
+  if (install) {
     const QString skill = installedSkillDir(launch.binDir);
     if (skill.isEmpty()) {
       return finish(kCliFailed, {}, QStringLiteral("This peeps has no skill installed beside it. Run make install."));
@@ -1674,26 +1678,37 @@ CliResult runSkill(const QString& action, const CliLaunch& launch, bool json) {
     links = unlinkSkill(folders);
   }
   if (!links.error.isEmpty()) return finish(kCliFailed, {}, links.error);
+
+  // Peeps links the skill each time it opens, so remove has to stick.
+  AppSettings settings;
+  if (const auto bytes = readFile(launch.paths.settingsFile)) settings = readSettingsJson(*bytes);
+  if (settings.skillDeclined == install) {
+    settings.skillDeclined = !install;
+    QString error;
+    QDir().mkpath(QFileInfo(launch.paths.settingsFile).path());
+    if (!writePrivateFile(launch.paths.settingsFile, writeSettingsJson(settings), error)) return finish(kCliFailed, {}, error);
+  }
+
   if (json) {
     QJsonObject object;
-    object.insert(action == QLatin1String("install") ? QStringLiteral("linked") : QStringLiteral("removed"),
-                  QJsonArray::fromStringList(links.changed));
+    object.insert(install ? QStringLiteral("linked") : QStringLiteral("removed"), QJsonArray::fromStringList(links.changed));
+    if (install) object.insert(QStringLiteral("already"), QJsonArray::fromStringList(links.unchanged));
     object.insert(QStringLiteral("skipped"), QJsonArray::fromStringList(links.skipped));
     return finish(kCliOk, QString::fromUtf8(QJsonDocument(object).toJson(QJsonDocument::Compact)));
   }
   QString out;
-  if (folders.isEmpty()) {
+  if (install && folders.isEmpty()) {
     out = QStringLiteral("No AI agents found. Peeps looks for ~/.claude, ~/.codex, ~/.pi/agent, and ~/.agents.\n");
-  } else if (links.changed.isEmpty()) {
-    out = action == QLatin1String("install") ? QString() : QStringLiteral("The Peeps skill was not linked.\n");
-  } else {
-    out = action == QLatin1String("install") ? QStringLiteral("Linked the Peeps skill for your AI agents:\n")
-                                             : QStringLiteral("Removed the Peeps skill links:\n");
+  } else if (install && links.changed.isEmpty() && !links.unchanged.isEmpty()) {
+    out = QStringLiteral("The Peeps skill is already linked for your AI agents.\n");
+  } else if (!links.changed.isEmpty()) {
+    out = install ? QStringLiteral("Linked the Peeps skill for your AI agents:\n") : QStringLiteral("Removed the Peeps skill links:\n");
     for (const QString& link : links.changed) out += QStringLiteral("  ") + link + QLatin1Char('\n');
   }
   for (const QString& link : links.skipped) {
     out += QStringLiteral("Left %1 alone, since it is not a Peeps link.\n").arg(link);
   }
+  if (!install) out += QStringLiteral("Peeps will not link the skill again. peeps skill install brings it back.\n");
   return finish(kCliOk, out);
 }
 

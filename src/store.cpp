@@ -243,6 +243,7 @@ QByteArray writeSettingsJson(const AppSettings& settings) {
   object.insert(QStringLiteral("text_size_offset"), settings.textSizeOffset);
   object.insert(QStringLiteral("keyboard_copies"), settings.keyboardCopies);
   object.insert(QStringLiteral("keyboard_emails"), settings.keyboardEmails);
+  if (settings.skillDeclined) object.insert(QStringLiteral("skill_declined"), true);
   return QJsonDocument(object).toJson(QJsonDocument::Compact);
 }
 
@@ -252,6 +253,7 @@ AppSettings readSettingsJson(const QByteArray& json) {
   settings.textSizeOffset = object.value(QLatin1String("text_size_offset")).toInt();
   settings.keyboardCopies = object.value(QLatin1String("keyboard_copies")).toInt();
   settings.keyboardEmails = object.value(QLatin1String("keyboard_emails")).toInt();
+  settings.skillDeclined = object.value(QLatin1String("skill_declined")).toBool();
   return settings;
 }
 

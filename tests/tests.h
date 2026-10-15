@@ -116,6 +116,7 @@ class CliTests : public QObject {
   void addFlagsAppend();
   void partialNamesListCandidates();
   void skillLinks();
+  void skillRemoveSticks();
   void skillCoversEveryCommand();
   void liveCacheAndGoogle();
   void exportPrintsVCards();

@@ -86,6 +86,7 @@ class MainWindow : public QMainWindow {
   bool sendSelectedEmail();
   void countShortcut(int& uses);
   void saveSettings();
+  void linkAgentSkill();
   const Contact* selected() const;
   void editSelected();
   void newContact();
