@@ -12,6 +12,7 @@ class ThemeTests : public QObject {
   void derivesMissingRoles();
   void ansiAliases();
   void rejectsIncompleteDocuments();
+  void ignoresValuesItDoesNotRead();
   void lightModeDarkensStatusInk();
   void infersLightAppearance();
   void brokenStateDoesNotReviveLegacy();

@@ -193,6 +193,18 @@ void ThemeTests::rejectsIncompleteDocuments() {
   QVERIFY(!contacts::parseColorsToml(QStringLiteral("this is not toml"), QStringLiteral("x")));
 }
 
+void ThemeTests::ignoresValuesItDoesNotRead() {
+  // Solitude, Last Horizon, and Hackerman give Hyprland gradient borders.
+  const auto palette = contacts::parseColorsToml(
+      QStringLiteral("mode = \"dark\"\naccent = \"#798186\"\nbackground = \"#101315\"\nforeground = \"#cacccc\"\n"
+                     "hyprland_active_border = \"rgba(798186ee) rgba(caccccee)\"\n"
+                     "hyprland_inactive_border = \"rgb(1e1e1e)\"\n"
+                     "red = \"#565d60\"\nyellow = \"#d9dbdc\"\ngreen = \"#9fa5a9\"\n"),
+      QStringLiteral("Solitude"));
+  QVERIFY(palette.has_value());
+  QCOMPARE(palette->background.name(QColor::HexRgb), QStringLiteral("#101315"));
+}
+
 void ThemeTests::lightModeDarkensStatusInk() {
   auto palette = contacts::parseColorsToml(QStringLiteral("mode = \"light\"\nbackground = \"#FFFCF0\"\n"
                                                              "foreground = \"#100F0F\"\naccent = \"#205EA6\"\n"

@@ -240,7 +240,8 @@ std::optional<Palette> parseColorsToml(const QString& text, const QString& name)
       mode = value;
       continue;
     }
-    if (!parseHex(value)) return std::nullopt;
+    // Values Peeps does not read may be anything, such as Hyprland's
+    // "rgba(...) rgba(...)" borders. The colors it reads are checked below.
     values.insert(key, value);
   }
 
