@@ -125,7 +125,7 @@ An id is a Google resource name (`people/c123`), a unique full name, or a unique
 
 ```bash
 peeps list --json | jq '.contacts[] | {name, email}'
-peeps search ada --jq '.contacts[] | {id, name, score}'
+peeps search ada --json | jq '.contacts[] | {id, name, score}'
 ```
 
 ## Agents
