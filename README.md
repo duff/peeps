@@ -165,7 +165,11 @@ Sizes follow the Omarchy shell. The theme's `shell.toml` sets the base text size
 
 ## Install
 
-CMake, Qt 6 (widgets and network), libsecret, and a C++20 compiler.
+Most people will install Peeps from the AUR. The package has Peeps' Google client built in, so after installing you only open Menu → Google account and choose Connect, then run `peeps skill install` to set up the [agent skill](#agents). The package is coming once Google finishes verifying Peeps.
+
+### Building it yourself
+
+If you would rather build Peeps yourself than rely on the AUR package, you will need a Google OAuth client of your own before it can connect. Setting one up takes a few minutes, and [Google](#google) has the steps. You also need CMake, Qt 6 (widgets and network), libsecret, and a C++20 compiler.
 
 ```bash
 make
@@ -174,8 +178,6 @@ make install
 ```
 
 `make install` puts `peeps` in `~/.local/bin`, adds a launcher, and links the [agent skill](#agents). The tests use Qt Test and the offscreen platform. `make screenshots` redraws the pictures in this README from a made-up address book, offscreen, without touching your own contacts.
-
-A build from source needs a Google OAuth client of your own before it can connect. Setting one up takes a few minutes, and [Google](#google) has the steps. A packaged Peeps has its client built in, so there you only choose Connect.
 
 ### Packaging
 
