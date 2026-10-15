@@ -62,7 +62,7 @@ QString overview() {
       "  peeps commands\n"
       "  peeps help [COMMAND]\n"
       "\n"
-      "ID is a resource name (people/c123), a unique name, or a unique email.\n"
+      "ID is a resource name (people/c123), a unique full name, or a unique email.\n"
       "A terminal prints text. A pipe prints JSON. --json and --text choose.\n"
       "\n"
       "  0  success\n"
@@ -931,15 +931,30 @@ Found resolveContact(const QList<Contact>& contacts, const QString& query) {
     found.contact = *matches.first();
     return found;
   }
-  if (matches.size() > 1) {
+  // Lists up to five contacts with their ids, so the next try can pass one.
+  const auto listCandidates = [&](const QString& header, const QList<const Contact*>& candidates) {
     found.code = kCliFailed;
-    QStringList lines;
-    lines.append(QStringLiteral("%1 matches %2 contacts. Pass an id.").arg(needle).arg(matches.size()));
-    const int count = std::min(5, static_cast<int>(matches.size()));
+    QStringList lines = {header};
+    const int count = std::min(5, static_cast<int>(candidates.size()));
     for (int i = 0; i < count; ++i) {
-      lines.append(QStringLiteral("  %1  %2").arg(matches.at(i)->resourceName, matches.at(i)->displayName()));
+      lines.append(QStringLiteral("  %1  %2").arg(candidates.at(i)->resourceName, candidates.at(i)->displayName()));
     }
+    if (candidates.size() > count) lines.append(QStringLiteral("  and %1 more").arg(candidates.size() - count));
     found.error = lines.join(QLatin1Char('\n'));
+  };
+  if (matches.size() > 1) {
+    listCandidates(QStringLiteral("%1 matches %2 contacts. Pass an id.").arg(needle).arg(matches.size()), matches);
+    return found;
+  }
+  // Part of a name, such as a first name, is not an id. Rather than act on a
+  // guess, show who it could mean.
+  ContactIndex index;
+  index.replaceAll(contacts);
+  QList<const Contact*> similar;
+  for (const SearchHit& hit : index.query(needle)) similar.append(hit.contact);
+  if (!similar.isEmpty()) {
+    const QString which = similar.size() == 1 ? QStringLiteral("This contact matches it") : QStringLiteral("These contacts match it");
+    listCandidates(QStringLiteral("\"%1\" is not a full name, email, or id. %2. Pass an id.").arg(needle, which), similar);
     return found;
   }
   found.code = kCliNotFound;

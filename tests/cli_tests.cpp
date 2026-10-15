@@ -386,6 +386,24 @@ void CliTests::addFlagsAppend() {
   QCOMPARE(sent.emails.first().value, QStringLiteral("ada@engine.example"));
 }
 
+void CliTests::partialNamesListCandidates() {
+  contacts::CliSession session;
+  session.contacts = {sample(QStringLiteral("people/c1"), QStringLiteral("Maya"), QStringLiteral("Okafor")),
+                      sample(QStringLiteral("people/c2"), QStringLiteral("Maya"), QStringLiteral("Lindqvist"))};
+  // A first name is not an id. Peeps names who it could mean instead of guessing.
+  const auto both = run({QStringLiteral("show"), QStringLiteral("Maya")}, session);
+  QCOMPARE(both.code, contacts::kCliFailed);
+  QVERIFY(both.err.contains(QStringLiteral("These contacts match it")));
+  QVERIFY(both.err.contains(QStringLiteral("people/c1  Maya Okafor")));
+  QVERIFY(both.err.contains(QStringLiteral("people/c2  Maya Lindqvist")));
+  // Even one possible match is not acted on, since a write could hit the wrong person.
+  const auto one = run({QStringLiteral("delete"), QStringLiteral("okafor"), QStringLiteral("--yes")}, session);
+  QCOMPARE(one.code, contacts::kCliFailed);
+  QVERIFY(one.err.contains(QStringLiteral("This contact matches it")));
+  QCOMPARE(run({QStringLiteral("show"), QStringLiteral("Maya Okafor")}, session).code, contacts::kCliOk);
+  QCOMPARE(run({QStringLiteral("show"), QStringLiteral("nobody")}, session).code, contacts::kCliNotFound);
+}
+
 void CliTests::syncRefreshesTheCache() {
   contacts::CliSession session;
   session.signedIn = true;

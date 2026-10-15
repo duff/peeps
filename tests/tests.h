@@ -114,6 +114,7 @@ class CliTests : public QObject {
   void jsonDataRoundTrip();
   void syncRefreshesTheCache();
   void addFlagsAppend();
+  void partialNamesListCandidates();
   void liveCacheAndGoogle();
   void exportPrintsVCards();
 };

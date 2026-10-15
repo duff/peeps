@@ -119,7 +119,7 @@ peeps delete people/c1 --yes
 peeps sync
 ```
 
-An id is a Google resource name (`people/c123`), a unique name, or a unique email. Exit codes are 0 for success, 1 when the command fails, 2 for usage, 3 when nobody is signed in, and 4 when nothing matches. `peeps commands --json` prints the catalog.
+An id is a Google resource name (`people/c123`), a unique full name, or a unique email. Part of a name, such as a first name, lists the contacts it could mean instead. Exit codes are 0 for success, 1 when the command fails, 2 for usage, 3 when nobody is signed in, and 4 when nothing matches. `peeps commands --json` prints the catalog.
 
 ```bash
 peeps list --json | jq '.contacts[] | {name, email}'
