@@ -30,3 +30,4 @@ Ideas from the October 2026 review, roughly in order of value. None of these are
 - [ ] **Verification.** Verify omelia.org in Search Console and publish the branding, then submit data access with a demo video and a reason for the contacts scope.
 - [x] **Google branding.** The consent screen's app name is Peeps, with https://omelia.org/peeps and its privacy policy.
 - [ ] **Label boxes.** Show a down-arrow on the email, phone, and address label boxes so they read as choices.
+- [x] **README.** It says why Peeps exists and which builds carry a Google client, and no longer has the Hyprland binding example.

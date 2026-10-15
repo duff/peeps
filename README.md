@@ -4,6 +4,10 @@ A keyboard-first address book for Omarchy. It keeps your Google contacts on the 
 
 With no arguments, `peeps` opens the window. A command stays in the terminal, which is how a person or an agent lists, searches, exports, and changes the same contacts.
 
+## Why Peeps
+
+My family came to Omarchy from Macs. We all have iPhones, and our contacts lived in iCloud. After the switch we still wanted one address book that we could read and edit on the phones and on the Omarchy desktop. Google Contacts made the most sense as the place for it: an iPhone syncs with it from Settings, Android uses it already, and it has a real API. That left us needing an Omarchy app for Google Contacts, and Peeps is that app.
+
 ## Is this for you?
 
 It fits if you want these things:
@@ -28,12 +32,9 @@ make install
 
 `make install` puts `peeps` in `~/.local/bin` and adds a launcher. The tests use Qt Test and the offscreen platform.
 
-Launching Peeps again brings the open window forward instead of opening a second one, from the app launcher or the terminal alike. Its window class (the Wayland app id) is `org.omelia.Peeps`, which is also the name of its launcher entry. To give it a key the way other Omarchy apps have one, bind it in `~/.config/hypr/bindings.lua`. Omarchy gives Super+Shift+P to Google Photos, so release it first, or pick another key:
+A build from source needs a Google OAuth client of your own before it can connect. Setting one up takes a few minutes, and [Google](#google) has the steps. A packaged Peeps has its client built in, so there you only choose Connect.
 
-```lua
-hl.unbind("SUPER + SHIFT + P")
-o.bind("SUPER + SHIFT + P", "Peeps", { launch = "peeps", focus = "^org\\.omelia\\.Peeps$" })
-```
+Launching Peeps again brings the open window forward instead of opening a second one, from the app launcher or the terminal alike. Its window class (the Wayland app id) is `org.omelia.Peeps`.
 
 ### Packaging
 
@@ -116,7 +117,7 @@ peeps search ada --jq '.contacts[] | {id, name, score}'
 
 Peeps signs in with a Desktop OAuth client, built in when Peeps is compiled, and the People API scope `https://www.googleapis.com/auth/contacts`. The sign-in redirect is `http://127.0.0.1` on a free port. A Desktop client accepts that loopback address, so you do not register a port or a public URL. The client secret is optional. Peeps uses PKCE.
 
-A packaged build already carries a client, so you only open Menu → Google account and choose Connect. To build Peeps with a client of your own, follow the steps below.
+The Peeps client is not in this repository. A packaged build carries it, so with a package you only open Menu → Google account and choose Connect. A build from source needs a client of your own, made with the steps below.
 
 The name on Google's consent screen comes from the Google Cloud project, not from this app. To change it, edit the app name under Google Auth Platform → Branding.
 
