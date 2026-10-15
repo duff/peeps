@@ -382,6 +382,12 @@ Key mapKey(int key) {
       return Key::S;
     case Qt::Key_C:
       return Key::C;
+    case Qt::Key_J:
+      return Key::J;
+    case Qt::Key_K:
+      return Key::K;
+    case Qt::Key_G:
+      return Key::G;
     case Qt::Key_Plus:
       return Key::Plus;
     case Qt::Key_Equal:
@@ -727,7 +733,6 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event) {
   if (command == Command::Cancel) requestCloseEditor();
   else if (command == Command::Save) commitEditor();
   else if (command == Command::TypeToSearch) {
-    if (detailOpen_) closeDetail();
     search_->setFocus();
     search_->setText(key->text());
   } else {
@@ -992,6 +997,7 @@ void MainWindow::handleCommand(Command command) {
       else moveSelection(1'000'000, false);
       break;
     case Command::FocusSearch:
+      if (detailOpen_) closeDetail();
       search_->setFocus();
       search_->selectAll();
       break;

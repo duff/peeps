@@ -51,7 +51,7 @@ Peeps signs in through a Google OAuth client that is built into the app, so peop
 
 ## The window
 
-Type to search. Up and Down move through the matches, including while the search field still has focus. Typing anywhere outside a field starts a new search. Enter opens the contact. Enter on a field copies it. Ctrl+Enter sends mail to the selected address through `xdg-email`, which follows the desktop mail handler. The selected field names these keys, as in "Enter to copy" and "Ctrl+Enter to email", until you have used each one ten times from the keyboard.
+Type to search. Up and Down move through the matches, including while the search field still has focus. Typing anywhere in the list starts a new search. Enter opens the contact. On a contact, letters don't search: Up and Down, or j and k, move through the fields, g and G jump to the first and last, and `/` goes back to search. Enter on a field copies it. Ctrl+Enter sends mail to the selected address through `xdg-email`, which follows the desktop mail handler. The selected field names these keys, as in "Enter to copy" and "Ctrl+Enter to email", until you have used each one ten times from the keyboard.
 
 Esc or Backspace returns to the list, or clears the search if that is where you are. `?` opens the keybindings. Ctrl+N starts a contact and Ctrl+E edits the one you are on. New, Sync, Keybindings, and Google account are in the Menu.
 
@@ -61,7 +61,9 @@ The mouse works too. One click opens a contact, and one click on a field does wh
 | --- | --- |
 | Type | Search names, email, phone, and notes |
 | Up / Down | Move through matches or fields |
-| `/` | Focus search |
+| j / k | Move through fields on a contact |
+| g / G | First or last field on a contact |
+| `/` | Search, from the list or a contact |
 | Enter | Open the contact, or copy the selected field |
 | Super+C | Copy the selected field. Omarchy delivers this as Ctrl+C |
 | Ctrl+Enter | Email the selected address |

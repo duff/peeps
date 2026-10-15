@@ -1582,8 +1582,10 @@ void ShortcutTests::typingOutsideSearchSearches() {
   auto letter = browser(contacts::Key::Other);
   letter.printable = true;
   QCOMPARE(contacts::routeKey(letter), contacts::Command::TypeToSearch);
+  // On a contact a stray letter does nothing, rather than swap the contact
+  // for a search. Slash is the way to search from there.
   letter.detailOpen = true;
-  QCOMPARE(contacts::routeKey(letter), contacts::Command::TypeToSearch);
+  QCOMPARE(contacts::routeKey(letter), contacts::Command::Ignore);
   auto slash = browser(contacts::Key::Slash);
   slash.printable = true;
   slash.detailOpen = true;
@@ -1594,6 +1596,28 @@ void ShortcutTests::typingOutsideSearchSearches() {
   letter.surface = contacts::Surface::Editor;
   letter.textInput = true;
   QCOMPARE(contacts::routeKey(letter), contacts::Command::Ignore);
+}
+
+void ShortcutTests::vimKeysMoveThroughFields() {
+  const auto onContact = [](contacts::Key key, bool shift = false) {
+    auto event = browser(key);
+    event.printable = true;
+    event.shift = shift;
+    event.detailOpen = true;
+    return event;
+  };
+  QCOMPARE(contacts::routeKey(onContact(contacts::Key::J)), contacts::Command::MoveDown);
+  QCOMPARE(contacts::routeKey(onContact(contacts::Key::K)), contacts::Command::MoveUp);
+  QCOMPARE(contacts::routeKey(onContact(contacts::Key::G)), contacts::Command::MoveHome);
+  QCOMPARE(contacts::routeKey(onContact(contacts::Key::G, true)), contacts::Command::MoveEnd);
+  QCOMPARE(contacts::routeKey(onContact(contacts::Key::Question, true)), contacts::Command::Help);
+  // In the list the same letters are a search.
+  auto inList = onContact(contacts::Key::J);
+  inList.detailOpen = false;
+  QCOMPARE(contacts::routeKey(inList), contacts::Command::TypeToSearch);
+  auto inSearch = inList;
+  inSearch.textInput = true;
+  QCOMPARE(contacts::routeKey(inSearch), contacts::Command::Ignore);
 }
 
 void ShortcutTests::editorKeepsKeys() {

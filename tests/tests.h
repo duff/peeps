@@ -95,6 +95,7 @@ class ShortcutTests : public QObject {
   void deleteConfirmIgnoresEnter();
   void helpListsEmail();
   void typingOutsideSearchSearches();
+  void vimKeysMoveThroughFields();
 };
 
 class CliTests : public QObject {

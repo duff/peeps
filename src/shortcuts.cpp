@@ -49,6 +49,14 @@ Command routeKey(const KeyEvent& event) {
       default:
         break;
     }
+    // Vim's keys move through the fields too. Other letters do nothing here,
+    // so a stray keystroke never swaps the contact for a search.
+    if (!event.ctrl && !event.textInput) {
+      if (event.key == Key::J) return Command::MoveDown;
+      if (event.key == Key::K) return Command::MoveUp;
+      if (event.key == Key::G) return event.shift ? Command::MoveEnd : Command::MoveHome;
+      if (event.key != Key::Slash && event.key != Key::Question && event.printable) return Command::Ignore;
+    }
   }
 
   if (event.textInput) {
@@ -84,7 +92,7 @@ Command routeKey(const KeyEvent& event) {
     case Key::Question:
       return Command::Help;
     default:
-      // Typing anywhere outside a field starts a new search.
+      // Typing in the list, outside a field, starts a new search.
       return event.printable && !event.ctrl ? Command::TypeToSearch : Command::Ignore;
   }
 }
@@ -98,7 +106,9 @@ QList<BindingHelp> bindingHelp() {
       {find, QStringLiteral("Up  Down"), QStringLiteral("Move through contacts or fields")},
       {find, QStringLiteral("Enter"), QStringLiteral("Open the selected contact, or copy the selected field")},
       {find, QStringLiteral("Esc  or  Backspace"), QStringLiteral("Back to the list, or clear the search")},
-      {find, QStringLiteral("/"), QStringLiteral("Focus search")},
+      {find, QStringLiteral("/"), QStringLiteral("Search, from the list or a contact")},
+      {contact, QStringLiteral("j  k"), QStringLiteral("Move through the fields, like Up and Down")},
+      {contact, QStringLiteral("g  G"), QStringLiteral("First or last field")},
       {contact, QStringLiteral("Super+C"), QStringLiteral("Copy the selected field")},
       {contact, QStringLiteral("Ctrl+Enter"), QStringLiteral("Email the selected address")},
       {contact, QStringLiteral("Ctrl+E"), QStringLiteral("Edit the selected contact")},
