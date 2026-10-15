@@ -43,7 +43,6 @@ Then ask in plain words:
 - "What phone formats do I have, how consistent are they, and what could make them more consistent?"
 - "Find contacts that look like duplicates."
 - "Which contacts have no email or phone number?"
-- "Show me the contacts whose names are in all caps or all lowercase, so we can fix them."
 
 Every add, edit, or delete is confirmed first. Asking for a change is not agreeing to it: the agent looks the person up, says exactly what will change, including any label or other choice it would make, and changes nothing until you say yes. Looking people up needs no confirmation. The skill is instructions the agent follows, so for a hard guarantee, have your agent ask permission before it runs `peeps add`, `peeps update`, or `peeps delete`. In Claude Code, that is an `ask` rule in its permission settings.
 
