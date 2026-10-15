@@ -35,10 +35,15 @@ When Peeps opens, it links the skill into the skills folder of each agent set up
 
 Then ask in plain words:
 
-- "Add the person from this email signature."
-- "What's Maya Okafor's work number?"
+- "Here's a photo of a business card. Add them if I don't have them already."
+- "Maya just texted me her new address: … Update her contact."
+- "I'm in Chicago next week. Who do I know there?"
 - "Who do I know at Northwind, and whose birthday is this month?"
-- "Put every phone number in the +1 format."
+- "Make a vCard for Maya so I can text it to someone."
+- "What phone formats do I have, how consistent are they, and what could make them more consistent?"
+- "Find contacts that look like duplicates."
+- "Which contacts have no email or phone number?"
+- "Fix names that are in all caps or all lowercase."
 
 Every add, edit, or delete is confirmed first. Asking for a change is not agreeing to it: the agent looks the person up, says exactly what will change, including any label or other choice it would make, and changes nothing until you say yes. Looking people up needs no confirmation. The skill is instructions the agent follows, so for a hard guarantee, have your agent ask permission before it runs `peeps add`, `peeps update`, or `peeps delete`. In Claude Code, that is an `ask` rule in its permission settings.
 

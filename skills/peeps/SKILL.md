@@ -36,6 +36,10 @@ peeps list --json | jq '.contacts[]'    # everyone: id, name, email, phone, orga
 peeps export people/c123 > maya.vcf     # a vCard
 ```
 
+Search matches names, emails, phones, companies, titles, notes, and addresses,
+so `peeps search chicago` finds the people with a Chicago address, and
+`peeps search meetup` finds the ones whose notes mention it.
+
 An ID is a resource name (`people/c123`), a unique full name, or a unique
 email. Part of a name, such as a first name, is not an ID, and neither is a full
 name two people share: the command exits 1 and lists the contacts it could
