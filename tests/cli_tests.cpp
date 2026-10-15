@@ -1,6 +1,7 @@
 #include "tests.h"
 
 #include "cli.h"
+#include "skill.h"
 
 #include <QDateTime>
 #include <QDir>
@@ -103,10 +104,11 @@ void CliTests::helpAndCommands() {
   const auto commands = run({QStringLiteral("commands"), QStringLiteral("--json")}, session, true);
   QCOMPARE(commands.code, contacts::kCliOk);
   const QJsonArray listed = objectOf(commands).value(QStringLiteral("commands")).toArray();
-  QCOMPARE(listed.size(), 8);
+  QCOMPARE(listed.size(), 9);
   QCOMPARE(listed.at(0).toObject().value(QStringLiteral("name")).toString(), QStringLiteral("list"));
   QCOMPARE(listed.at(3).toObject().value(QStringLiteral("name")).toString(), QStringLiteral("export"));
   QCOMPARE(listed.at(7).toObject().value(QStringLiteral("name")).toString(), QStringLiteral("sync"));
+  QCOMPARE(listed.at(8).toObject().value(QStringLiteral("name")).toString(), QStringLiteral("skill"));
 }
 
 void CliTests::usageAndVersion() {
@@ -402,6 +404,63 @@ void CliTests::partialNamesListCandidates() {
   QVERIFY(one.err.contains(QStringLiteral("This contact matches it")));
   QCOMPARE(run({QStringLiteral("show"), QStringLiteral("Maya Okafor")}, session).code, contacts::kCliOk);
   QCOMPARE(run({QStringLiteral("show"), QStringLiteral("nobody")}, session).code, contacts::kCliNotFound);
+}
+
+void CliTests::skillLinks() {
+  QTemporaryDir root;
+  QVERIFY(root.isValid());
+  const QString home = root.path() + QStringLiteral("/home");
+  const QString prefix = root.path() + QStringLiteral("/usr");
+  QVERIFY(QDir().mkpath(prefix + QStringLiteral("/bin")));
+  QVERIFY(contacts::installedSkillDir(prefix + QStringLiteral("/bin")).isEmpty());
+  const QString skill = prefix + QStringLiteral("/share/peeps/skills/peeps");
+  QVERIFY(QDir().mkpath(skill));
+  QFile file(skill + QStringLiteral("/SKILL.md"));
+  QVERIFY(file.open(QIODevice::WriteOnly));
+  file.close();
+  QCOMPARE(contacts::installedSkillDir(prefix + QStringLiteral("/bin")), skill);
+
+  // Only agents that are set up get a link.
+  QVERIFY(QDir().mkpath(home + QStringLiteral("/.claude")));
+  QVERIFY(QDir().mkpath(home + QStringLiteral("/.agents/skills/peeps")));
+  QVERIFY(QDir().mkpath(home + QStringLiteral("/.pi/agent/skills")));
+  QVERIFY(QFile::link(QStringLiteral("/old/share/peeps/skills/peeps"), home + QStringLiteral("/.pi/agent/skills/peeps")));
+  const QStringList folders = contacts::agentSkillFolders(home);
+  QCOMPARE(folders, QStringList({home + QStringLiteral("/.claude/skills"), home + QStringLiteral("/.pi/agent/skills"),
+                                 home + QStringLiteral("/.agents/skills")}));
+  QCOMPARE(contacts::agentSkillFolders(home, root.path(), {}).first(), root.path() + QStringLiteral("/skills"));
+
+  // A stale link is replaced. A real folder of the same name is left alone.
+  const auto linked = contacts::linkSkill(skill, folders);
+  QVERIFY(linked.error.isEmpty());
+  QCOMPARE(linked.changed.size(), 2);
+  QCOMPARE(linked.skipped, QStringList({home + QStringLiteral("/.agents/skills/peeps")}));
+  QCOMPARE(QFileInfo(home + QStringLiteral("/.claude/skills/peeps")).symLinkTarget(), skill);
+  QCOMPARE(QFileInfo(home + QStringLiteral("/.pi/agent/skills/peeps")).symLinkTarget(), skill);
+  QVERIFY(contacts::linkSkill(skill, folders).error.isEmpty());
+
+  const auto removed = contacts::unlinkSkill(folders);
+  QCOMPARE(removed.changed.size(), 2);
+  QVERIFY(!QFileInfo(home + QStringLiteral("/.claude/skills/peeps")).isSymLink());
+  QVERIFY(QFileInfo(home + QStringLiteral("/.agents/skills/peeps")).isDir());
+}
+
+void CliTests::skillCoversEveryCommand() {
+  QFile file(QStringLiteral(PEEPS_SOURCE_DIR "/skills/peeps/SKILL.md"));
+  QVERIFY(file.open(QIODevice::ReadOnly));
+  const QString skill = QString::fromUtf8(file.readAll());
+  QVERIFY(skill.startsWith(QStringLiteral("---\nname: peeps\n")));
+  contacts::CliSession session;
+  const auto catalog = run({QStringLiteral("commands"), QStringLiteral("--json")}, session);
+  for (const QJsonValue& row : objectOf(catalog).value(QStringLiteral("commands")).toArray()) {
+    const QString name = row.toObject().value(QStringLiteral("name")).toString();
+    if (name == QLatin1String("skill")) continue;
+    QVERIFY2(skill.contains(QStringLiteral("peeps ") + name) || skill.contains(QLatin1Char('`') + name + QLatin1Char('`')),
+             qPrintable(name + QStringLiteral(" is missing from the skill")));
+  }
+  for (const char* flag : {"--add-email", "--add-phone", "--add-url", "--add-address", "--data", "--yes"}) {
+    QVERIFY2(skill.contains(QLatin1String(flag)), flag);
+  }
 }
 
 void CliTests::syncRefreshesTheCache() {

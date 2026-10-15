@@ -34,6 +34,7 @@ qt_add_library(peeps_core STATIC
   src/search.cpp src/search.h
   src/secrets.cpp src/secrets.h
   src/shortcuts.cpp src/shortcuts.h
+  src/skill.cpp src/skill.h
   src/store.cpp src/store.h
   src/theme.cpp src/theme.h
   src/vcard.cpp src/vcard.h
@@ -62,6 +63,8 @@ install(FILES dist/org.omelia.Peeps.desktop
   DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
 install(FILES dist/org.omelia.Peeps.svg
   DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps)
+# The agent skill. peeps skill install links it for each AI agent.
+install(DIRECTORY skills/peeps DESTINATION ${CMAKE_INSTALL_DATADIR}/peeps/skills)
 
 option(BUILD_TESTING "Build the tests" ON)
 if(BUILD_TESTING)
@@ -70,6 +73,7 @@ if(BUILD_TESTING)
   qt_add_executable(peeps-tests
     tests/main.cpp tests/tests.cpp tests/cli_tests.cpp tests/tests.h)
   target_link_libraries(peeps-tests PRIVATE peeps_core Qt6::Test)
+  target_compile_definitions(peeps-tests PRIVATE PEEPS_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
   add_test(NAME peeps-tests COMMAND peeps-tests)
   set_tests_properties(peeps-tests PROPERTIES ENVIRONMENT QT_QPA_PLATFORM=offscreen)
 

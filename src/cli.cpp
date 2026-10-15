@@ -3,6 +3,7 @@
 #include "blockingnam.h"
 #include "oauth.h"
 #include "search.h"
+#include "skill.h"
 #include "vcard.h"
 #include "version.h"
 
@@ -24,7 +25,7 @@ namespace {
 
 enum class Take { No, Yes, Error };
 
-const char* kCommands[] = {"list", "search", "show", "export", "add", "update", "delete", "sync", "help", "commands", "version"};
+const char* kCommands[] = {"list", "search", "show", "export", "add", "update", "delete", "sync", "skill", "help", "commands", "version"};
 
 bool isCommand(const QString& text) {
   for (const char* command : kCommands) {
@@ -59,6 +60,7 @@ QString overview() {
       "  peeps update ID FLAGS\n"
       "  peeps delete ID --yes\n"
       "  peeps sync [--full]\n"
+      "  peeps skill install|remove\n"
       "  peeps commands\n"
       "  peeps help [COMMAND]\n"
       "\n"
@@ -180,6 +182,18 @@ QString commandHelp(const QString& command) {
         "\n"
         "Without --full, only changes since the last sync are downloaded.\n");
   }
+  if (command == QLatin1String("skill")) {
+    return QStringLiteral(
+        "Link the Peeps skill for AI agents, so Claude Code, Codex, pi, and\n"
+        "others know how to use peeps. make install runs install for you.\n"
+        "\n"
+        "  peeps skill install\n"
+        "  peeps skill remove\n"
+        "\n"
+        "The skill is installed with Peeps. install links it as peeps in the\n"
+        "skills folder of each agent set up here: ~/.claude, ~/.codex,\n"
+        "~/.pi/agent, and ~/.agents. remove takes those links away.\n");
+  }
   if (command == QLatin1String("commands")) {
     return QStringLiteral("List the commands.\n\n  contacts commands [--json]\n");
   }
@@ -201,6 +215,7 @@ const CommandRow kCatalog[] = {
     {"update", "Change a contact on Google"},
     {"delete", "Delete a contact on Google"},
     {"sync", "Refresh the local cache from Google"},
+    {"skill", "Link the agent skill for AI agents"},
 };
 
 QString catalogText(bool json) {
@@ -1431,6 +1446,15 @@ CliResult execute(Parsed parsed, CliSession& session, bool stdoutIsTty) {
     return usage(QStringLiteral("--remove-photo is only for update."));
   }
 
+  if (command == QLatin1String("skill")) {
+    const QString action = parsed.positionals.size() == 1 ? parsed.positionals.first() : QString();
+    if (action != QLatin1String("install") && action != QLatin1String("remove")) {
+      return usage(QStringLiteral("Use peeps skill install or peeps skill remove."));
+    }
+    if (!session.skill) return finish(kCliFailed, {}, QStringLiteral("This peeps cannot link the skill."));
+    return session.skill(action, json);
+  }
+
   if (command == QLatin1String("commands")) {
     if (!parsed.positionals.isEmpty()) return usage(QStringLiteral("commands takes no arguments."));
     return finish(kCliOk, catalogText(json));
@@ -1634,6 +1658,47 @@ CliResult runCli(const QStringList& args, CliSession& session, bool stdoutIsTty)
   return execute(parsed, session, stdoutIsTty);
 }
 
+namespace {
+
+CliResult runSkill(const QString& action, const CliLaunch& launch, bool json) {
+  const QStringList folders =
+      agentSkillFolders(launch.home, qEnvironmentVariable("CLAUDE_CONFIG_DIR"), qEnvironmentVariable("CODEX_HOME"));
+  SkillLinks links;
+  if (action == QLatin1String("install")) {
+    const QString skill = installedSkillDir(launch.binDir);
+    if (skill.isEmpty()) {
+      return finish(kCliFailed, {}, QStringLiteral("This peeps has no skill installed beside it. Run make install."));
+    }
+    links = linkSkill(skill, folders);
+  } else {
+    links = unlinkSkill(folders);
+  }
+  if (!links.error.isEmpty()) return finish(kCliFailed, {}, links.error);
+  if (json) {
+    QJsonObject object;
+    object.insert(action == QLatin1String("install") ? QStringLiteral("linked") : QStringLiteral("removed"),
+                  QJsonArray::fromStringList(links.changed));
+    object.insert(QStringLiteral("skipped"), QJsonArray::fromStringList(links.skipped));
+    return finish(kCliOk, QString::fromUtf8(QJsonDocument(object).toJson(QJsonDocument::Compact)));
+  }
+  QString out;
+  if (folders.isEmpty()) {
+    out = QStringLiteral("No AI agents found. Peeps looks for ~/.claude, ~/.codex, ~/.pi/agent, and ~/.agents.\n");
+  } else if (links.changed.isEmpty()) {
+    out = action == QLatin1String("install") ? QString() : QStringLiteral("The Peeps skill was not linked.\n");
+  } else {
+    out = action == QLatin1String("install") ? QStringLiteral("Linked the Peeps skill for your AI agents:\n")
+                                             : QStringLiteral("Removed the Peeps skill links:\n");
+    for (const QString& link : links.changed) out += QStringLiteral("  ") + link + QLatin1Char('\n');
+  }
+  for (const QString& link : links.skipped) {
+    out += QStringLiteral("Left %1 alone, since it is not a Peeps link.\n").arg(link);
+  }
+  return finish(kCliOk, out);
+}
+
+}  // namespace
+
 CliResult runContactsCommand(const QStringList& args, const CliLaunch& launch) {
   const Parsed parsed = parseArgs(args);
   if (parsed.stop) return parsed.early;
@@ -1647,6 +1712,7 @@ CliResult runContactsCommand(const QStringList& args, const CliLaunch& launch) {
     session.syncToken = snapshot.syncToken;
     session.syncedAt = snapshot.syncedAt;
   }
+  session.skill = [&](const QString& action, bool json) { return runSkill(action, launch, json); };
   session.save = [&](const QList<Contact>& contacts, const QString& syncToken, QString& error) {
     return writePrivateFile(launch.paths.cacheFile, writeCacheJson(contacts, syncToken, session.syncedAt), error);
   };

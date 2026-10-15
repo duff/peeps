@@ -38,6 +38,8 @@ install: all
 		rm -f "$(APPS)/org.omelia.Contacts.desktop" "$(PREFIX)/share/icons/hicolor/scalable/apps/org.omelia.Contacts.svg" \
 			"$(PREFIX)/bin/contacts"
 	-[ -n "$(DESTDIR)" ] || update-desktop-database "$(APPS)" >/dev/null 2>&1 || true
+	@# A package cannot reach your home folder, so there you run peeps skill install.
+	-[ -n "$(DESTDIR)" ] || "$(PREFIX)/bin/peeps" skill install
 
 clean:
 	rm -rf build

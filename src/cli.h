@@ -39,11 +39,16 @@ struct CliSession {
   std::function<PeopleResult(bool full)> syncPeople;
   std::function<WriteResult(const QString& id, const QByteArray& jpeg, bool removePhoto)> photo;
   std::function<bool(const QList<Contact>& contacts, const QString& syncToken, QString& error)> save;
+  // Links ("install") or unlinks ("remove") the agent skill.
+  std::function<CliResult(const QString& action, bool json)> skill;
   std::optional<QByteArray> stdinBytes;
 };
 
 struct CliLaunch {
   AppPaths paths;
+  QString home;
+  // Where the peeps binary is, to find the skill installed beside it.
+  QString binDir;
   OAuthClient client = builtInClient();
   SecretStore* secrets = nullptr;
   HttpClient* http = nullptr;

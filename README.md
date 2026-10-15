@@ -37,7 +37,7 @@ make test
 make install
 ```
 
-`make install` puts `peeps` in `~/.local/bin` and adds a launcher. The tests use Qt Test and the offscreen platform. `make screenshots` redraws the pictures in this README from a made-up address book, offscreen, without touching your own contacts.
+`make install` puts `peeps` in `~/.local/bin`, adds a launcher, and links the [agent skill](#agents). The tests use Qt Test and the offscreen platform. `make screenshots` redraws the pictures in this README from a made-up address book, offscreen, without touching your own contacts.
 
 A build from source needs a Google OAuth client of your own before it can connect. Setting one up takes a few minutes, and [Google](#google) has the steps. A packaged Peeps has its client built in, so there you only choose Connect.
 
@@ -53,6 +53,8 @@ make install PREFIX=/usr DESTDIR="$pkgdir"
 ```
 
 The Makefile wraps CMake, so a package can also call `cmake` with `CMAKE_INSTALL_PREFIX`, and `-DBUILD_TESTING=OFF` to skip the tests.
+
+The agent skill installs to `share/peeps/skills/peeps`. A package cannot reach anyone's home folder, so after installing, each person runs `peeps skill install` to link it for their agents.
 
 Peeps signs in through a Google OAuth client that is built into the app, so people only choose Connect. Set `PEEPS_GOOGLE_CLIENT_ID`, and `PEEPS_GOOGLE_CLIENT_SECRET` if the client has one, when you build. A build without them cannot connect to Google. A Desktop client id is not a secret: Google treats an installed app as unable to keep one.
 
@@ -126,6 +128,21 @@ peeps list --json | jq '.contacts[] | {name, email}'
 peeps search ada --jq '.contacts[] | {id, name, score}'
 ```
 
+## Agents
+
+Peeps comes with a skill for AI agents such as Claude Code, Codex, and pi. A skill is a page of instructions an agent reads when a request matches it. This one teaches the `peeps` command, and sets house rules: the agent shows what it will change and waits for a yes before adding, changing, or deleting anyone, and keeps what it reads to the people the request is about.
+
+`make install` links the skill into the skills folder of each agent set up on the machine (`~/.claude`, `~/.codex`, `~/.pi/agent`, and `~/.agents`), the same way Omarchy shares its own skills. With a package, run `peeps skill install` once. `peeps skill remove` takes the links away.
+
+Then ask in plain words:
+
+- "Add the person from this email signature."
+- "What's Maya Okafor's work number?"
+- "Who do I know at Northwind, and whose birthday is this month?"
+- "Put every phone number in the +1 format. Show me the changes first."
+
+What an agent reads from `peeps` goes into that conversation, and so to the agent's AI provider. Peeps itself still talks only to Google.
+
 ## Google
 
 Peeps signs in with a Desktop OAuth client, built in when Peeps is compiled, and the People API scope `https://www.googleapis.com/auth/contacts`. The sign-in redirect is `http://127.0.0.1` on a free port. A Desktop client accepts that loopback address, so you do not register a port or a public URL. The client secret is optional. Peeps uses PKCE.
@@ -163,6 +180,7 @@ The refresh token stays in the login keyring under `org.omelia.peeps`. Disconnec
 | `~/.cache/peeps/photos` | Cached photos |
 | `$XDG_RUNTIME_DIR/peeps` | vCards made for sharing, cleared at logout |
 | Login keyring | The Google refresh token |
+| `~/.claude/skills/peeps` and the like | Links to the agent skill, from `peeps skill install` |
 
 `peeps sync` downloads changes since the last sync. `peeps sync --full` downloads the whole book.
 
