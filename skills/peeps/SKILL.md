@@ -54,12 +54,19 @@ people.
 
 ## Before changing anything
 
-1. Say exactly what will change: who, which fields, old and new values.
-2. Wait for the user to agree. Treat each add, update, or delete this way,
-   unless the user already asked for that exact change.
-3. Delete only when the user asked to delete. `peeps delete ID --yes` is
+A request to add, update, or delete is the proposal, not the agreement. Even
+"add this email to Maya" needs a yes before anything changes.
+
+1. Look up the contact and its current values.
+2. In that same reply, say exactly what will change: who, which fields, old
+   and new values. Include every choice you would otherwise make yourself,
+   such as a label, or which of several matching contacts.
+3. Stop. Apply the change only after the user agrees to that statement in a
+   later message, such as "yes" or "do it". If their reply still leaves a
+   choice you did not state, state it and wait again.
+4. Delete only when the user asked to delete. `peeps delete ID --yes` is
    permanent.
-4. Before adding someone, `peeps search` for them. If they may already be
+5. Before adding someone, `peeps search` for them. If they may already be
    there, ask whether to update that contact instead.
 
 ## Lists: replace or append
@@ -77,7 +84,9 @@ peeps update people/c123 --title "Design lead" --notes "Met at the Omarchy meetu
 peeps update people/c123 --email work=new@northwind.example   # replaces every email
 ```
 
-Labels are words like `home`, `work`, `mobile`, or any custom word. An address
+Labels are words like `home`, `work`, `mobile`, or any custom word. Never
+leave a label blank on your own: when the user did not say one, propose one in
+your statement, or ask. An address
 is `LABEL|STREET|CITY|REGION|POSTAL|COUNTRY`. A birthday is `YYYY-MM-DD`, or
 `MM-DD` without a year.
 
