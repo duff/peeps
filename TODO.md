@@ -27,7 +27,9 @@ Ideas from the October 2026 review, roughly in order of value. None of these are
 - [ ] **Screenshots.** Put a few in the README.
 - [x] **App id.** The window class and desktop file are now `org.omelia.Peeps`.
 - [x] **Google client.** Peeps ships its own client, built in with `PEEPS_GOOGLE_CLIENT_ID`. The account screen no longer asks for one.
-- [ ] **Verification.** Verify omelia.org in Search Console and publish the branding, then submit data access with a demo video and a reason for the contacts scope.
+- [ ] **Verification.** Branding is verified. Data access for the contacts scope was submitted on October 14, 2026 with the demo video (https://youtu.be/WobFZxedkRk). Waiting on Google.
 - [x] **Google branding.** The consent screen's app name is Peeps, with https://omelia.org/peeps and its privacy policy.
 - [ ] **Label boxes.** Show a down-arrow on the email, phone, and address label boxes so they read as choices.
+- [x] **Public repo.** github.com/duff/peeps is public.
 - [x] **README.** It says why Peeps exists and which builds carry a Google client, and no longer has the Hyprland binding example.
+- [ ] **Clipped text.** The Disconnect Google dialog cuts off the bottom of its second line ("account."). Check every dialog and wrapped label at large Omarchy text sizes, and with Ctrl+=, so none clip.
