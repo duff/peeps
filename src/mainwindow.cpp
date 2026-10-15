@@ -450,6 +450,10 @@ qint64 nowUnix() { return QDateTime::currentSecsSinceEpoch(); }
 // The footer names the last sync once it is this many seconds old.
 constexpr qint64 kStaleAfter = 60 * 60;
 
+// Coming back to the window syncs, unless the last sync was this recent, so
+// flipping between windows does not send a stream of requests.
+constexpr qint64 kFocusSyncAfter = 10;
+
 // An x in the theme's quiet text color, brighter while pressed.
 QIcon clearIcon(const Palette& palette, int size, qreal ratio) {
   QIcon icon;
@@ -1526,7 +1530,7 @@ void MainWindow::changeEvent(QEvent* event) {
     return;
   }
   if (qEnvironmentVariableIsSet("PEEPS_NO_SYNC")) return;
-  if (lastSyncAt_ == 0 || nowUnix() - lastSyncAt_ >= 60) runSync(false, false);
+  if (lastSyncAt_ == 0 || nowUnix() - lastSyncAt_ >= kFocusSyncAfter) runSync(false, false);
   focusSyncTimer_->start();
 }
 
