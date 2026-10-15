@@ -106,7 +106,7 @@ Share this contact sits with Edit and Delete at the end of a contact. It writes 
 
 With no arguments, `peeps` opens the window. A command stays in the terminal, which is how a person or an agent lists, searches, exports, and changes the same contacts. `peeps help` lists every command, and `peeps <command> --help` shows that command's flags. A terminal prints text. A pipe prints JSON. `--json` and `--text` force either one.
 
-List, search, show, and export read the cache only. Add, update, delete, and sync talk to Google, then write the cache again. Omitted fields on an update stay as they are. Repeatable flags such as `--email` replace that whole list. `--data` accepts the same JSON object that `peeps show --json` prints, which is the way to set an address, a date, or anything a flag does not cover.
+List, search, show, and export read the cache only. Add, update, delete, and sync talk to Google, then write the cache again. Omitted fields on an update stay as they are. Repeatable flags such as `--email` replace that whole list, while `--add-email`, `--add-phone`, `--add-url`, and `--add-address` append to it. `--data` accepts the same JSON object that `peeps show --json` prints, which is the way to set an address, a date, or anything a flag does not cover.
 
 ```bash
 peeps search lovelace

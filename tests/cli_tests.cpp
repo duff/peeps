@@ -348,6 +348,44 @@ void CliTests::jsonDataRoundTrip() {
   QVERIFY(badField.err.contains(QStringLiteral("Unknown field")));
 }
 
+void CliTests::addFlagsAppend() {
+  contacts::CliSession session;
+  session.signedIn = true;
+  auto ada = sample(QStringLiteral("people/c1"), QStringLiteral("Ada"), QStringLiteral("Lovelace"), QStringLiteral("ada@example.com"));
+  ada.phones.append({QStringLiteral("+1 312-555-0100"), QStringLiteral("Mobile"), QStringLiteral("mobile")});
+  session.contacts = {ada};
+  contacts::Contact sent;
+  session.update = [&](const contacts::Contact& next) {
+    sent = next;
+    contacts::WriteResult result;
+    result.contact = next;
+    return result;
+  };
+  const auto added = run({QStringLiteral("update"), QStringLiteral("people/c1"), QStringLiteral("--add-email"),
+                          QStringLiteral("home=ada@home.example"), QStringLiteral("--add-email"), QStringLiteral("ADA@example.com"),
+                          QStringLiteral("--add-phone"), QStringLiteral("work=(312) 555-0100"), QStringLiteral("--add-address"),
+                          QStringLiteral("home|12 St James's Square|London||SW1Y 4LB|United Kingdom")},
+                         session);
+  QCOMPARE(added.code, contacts::kCliOk);
+  // The first email stays. One already there, in any case, is not added twice.
+  QCOMPARE(sent.emails.size(), 2);
+  QCOMPARE(sent.emails.at(0).value, QStringLiteral("ada@example.com"));
+  QCOMPARE(sent.emails.at(1).value, QStringLiteral("ada@home.example"));
+  // The same number written another way is the same phone.
+  QCOMPARE(sent.phones.size(), 1);
+  QCOMPARE(sent.addresses.size(), 1);
+  QCOMPARE(sent.addresses.first().city, QStringLiteral("London"));
+
+  // --email still replaces the whole list.
+  session.contacts = {sent};
+  const auto replaced = run({QStringLiteral("update"), QStringLiteral("people/c1"), QStringLiteral("--email"),
+                             QStringLiteral("work=ada@engine.example")},
+                            session);
+  QCOMPARE(replaced.code, contacts::kCliOk);
+  QCOMPARE(sent.emails.size(), 1);
+  QCOMPARE(sent.emails.first().value, QStringLiteral("ada@engine.example"));
+}
+
 void CliTests::syncRefreshesTheCache() {
   contacts::CliSession session;
   session.signedIn = true;

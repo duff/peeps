@@ -81,7 +81,8 @@ QString overview() {
 QString fieldHelp() {
   return QStringLiteral(
       "Fields you leave out stay as they are. Repeatable flags replace that\n"
-      "whole list, and an empty value clears it. --data is applied first.\n"
+      "whole list, and an empty value clears it. The --add- flags keep the\n"
+      "list and append, skipping a value it already has. --data is applied first.\n"
       "\n"
       "  --given TEXT\n"
       "  --family TEXT\n"
@@ -107,6 +108,10 @@ QString fieldHelp() {
       "  --sip LABEL=URI\n"
       "  --custom LABEL=VALUE\n"
       "  --address LABEL|STREET|CITY|REGION|POSTAL|COUNTRY\n"
+      "  --add-email LABEL=ADDRESS   Appended to the emails already there\n"
+      "  --add-phone LABEL=NUMBER    Appended to the phones already there\n"
+      "  --add-url LABEL=URL\n"
+      "  --add-address LABEL|STREET|CITY|REGION|POSTAL|COUNTRY\n"
       "  --data FILE                 JSON from show. FILE - reads stdin\n"
       "  --photo FILE\n"
       "  --remove-photo\n");
@@ -243,6 +248,11 @@ struct Patch {
   QStringList sips;
   QStringList customs;
   QStringList addresses;
+  // --add-email and the like keep what the contact has and append.
+  QStringList addEmails;
+  QStringList addPhones;
+  QStringList addUrls;
+  QStringList addAddresses;
   QList<PostalAddress> addressValues;
   bool emailsSet = false;
   bool phonesSet = false;
@@ -1022,6 +1032,30 @@ Contact editedContact(const Contact& base, const Patch& patch, QString& error) {
   } else if (patch.addressValuesSet) {
     draft.addresses = patch.addressValues;
   }
+  const auto appendNew = [](QList<LabeledValue>& list, const QList<LabeledValue>& added, auto same) {
+    for (const LabeledValue& value : added) {
+      const bool known = std::any_of(list.cbegin(), list.cend(),
+                                     [&](const LabeledValue& existing) { return same(existing.value, value.value); });
+      if (!known) list.append(value);
+    }
+  };
+  const auto sameText = [](const QString& a, const QString& b) { return a.trimmed().compare(b.trimmed(), Qt::CaseInsensitive) == 0; };
+  // +1 312-555-0100 and (312) 555-0100 are one phone, with and without the country code.
+  const auto samePhone = [](const QString& a, const QString& b) {
+    const QString x = digitsOnly(a);
+    const QString y = digitsOnly(b);
+    const QString& shorter = x.size() <= y.size() ? x : y;
+    const QString& longer = x.size() <= y.size() ? y : x;
+    return x == y || (shorter.size() >= 7 && longer.endsWith(shorter));
+  };
+  appendNew(draft.emails, labeledList(LabelField::Email, patch.addEmails), sameText);
+  appendNew(draft.phones, labeledList(LabelField::Phone, patch.addPhones), samePhone);
+  appendNew(draft.urls, labeledList(LabelField::Other, patch.addUrls), sameText);
+  for (const QString& spec : patch.addAddresses) {
+    const auto address = parseAddress(spec, error);
+    if (!address) return {};
+    if (!address->isEmpty() && !draft.addresses.contains(*address)) draft.addresses.append(*address);
+  }
   if (patch.otherOrganizationsSet) draft.otherOrganizations = patch.otherOrganizations;
   if (patch.eventsSet) draft.events = patch.events;
   if (patch.imsSet) draft.ims = patch.ims;
@@ -1129,6 +1163,10 @@ void overlayFlags(Patch& base, const Patch& flags) {
     base.ims = flags.ims;
     base.imsSet = true;
   }
+  base.addEmails += flags.addEmails;
+  base.addPhones += flags.addPhones;
+  base.addUrls += flags.addUrls;
+  base.addAddresses += flags.addAddresses;
   if (!flags.photoPath.isEmpty()) base.photoPath = flags.photoPath;
   if (flags.removePhoto) base.removePhoto = true;
   base.dataPath = flags.dataPath;
@@ -1253,6 +1291,16 @@ Parsed parseArgs(const QStringList& args) {
     if (repeat("--sip", parsed.patch.sips, parsed.patch.sipsSet) || failed) continue;
     if (repeat("--custom", parsed.patch.customs, parsed.patch.customsSet) || failed) continue;
     if (repeat("--address", parsed.patch.addresses, parsed.patch.addressesSet) || failed) continue;
+    auto append = [&](const char* name, QStringList& specs) {
+      if (!match(name)) return false;
+      specs.append(value);
+      parsed.patch.any = true;
+      return true;
+    };
+    if (append("--add-email", parsed.patch.addEmails) || failed) continue;
+    if (append("--add-phone", parsed.patch.addPhones) || failed) continue;
+    if (append("--add-url", parsed.patch.addUrls) || failed) continue;
+    if (append("--add-address", parsed.patch.addAddresses) || failed) continue;
     if (match("--data") || failed) {
       if (!failed) parsed.patch.dataPath = value;
       continue;
