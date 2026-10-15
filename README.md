@@ -5,7 +5,7 @@ A keyboard-first address book for Omarchy, for the contacts you keep in Google.
 - **Instant search.** Peeps searches a copy of your contacts on this computer, so finding someone never waits on the network.
 - **The same book on your phone.** Edits go straight to Google, so they show up on an iPhone, an Android phone, or a Mac that uses Google Contacts.
 - **At home in Omarchy.** It takes the current theme, text size, and font, and follows them when they change.
-- **Keyboard first, and scriptable.** Search, copy, and email without the mouse. The `peeps` command lists, searches, and edits the same contacts, with JSON for scripts and agents.
+- **Keyboard first, and scriptable.** Search, copy, and email without the mouse. The `peeps` command lists, searches, and edits the same contacts, with JSON for scripts, and a [skill](#agents) teaches AI agents to use it.
 
 Your contacts travel only between this computer and Google. There is no Peeps server, and no analytics or tracking. The [privacy policy](https://omelia.org/peeps/privacy) has the details.
 
@@ -104,6 +104,21 @@ Share this contact sits with Edit and Delete at the end of a contact. It writes 
 | Copy as text | Name, email, phone, and address as plain text |
 | Save vCard… | A `.vcf` file wherever you choose, Downloads by default |
 
+## Agents
+
+Peeps comes with a skill for AI agents such as Claude Code, Codex, and pi. A skill is a page of instructions an agent reads when a request matches it. This one teaches the `peeps` command, and sets house rules: the agent shows what it will change and waits for a yes before adding, changing, or deleting anyone, and keeps what it reads to the people the request is about.
+
+`make install` links the skill into the skills folder of each agent set up on the machine (`~/.claude`, `~/.codex`, `~/.pi/agent`, and `~/.agents`), the same way Omarchy shares its own skills. With a package, run `peeps skill install` once. `peeps skill remove` takes the links away.
+
+Then ask in plain words:
+
+- "Add the person from this email signature."
+- "What's Maya Okafor's work number?"
+- "Who do I know at Northwind, and whose birthday is this month?"
+- "Put every phone number in the +1 format. Show me the changes first."
+
+What an agent reads from `peeps` goes into that conversation, and so to the agent's AI provider. Peeps itself still talks only to Google.
+
 ## Command line
 
 With no arguments, `peeps` opens the window. A command stays in the terminal, which is how a person or an agent lists, searches, exports, and changes the same contacts. `peeps help` lists every command, and `peeps <command> --help` shows that command's flags. A terminal prints text. A pipe prints JSON. `--json` and `--text` force either one.
@@ -127,21 +142,6 @@ An id is a Google resource name (`people/c123`), a unique full name, or a unique
 peeps list --json | jq '.contacts[] | {name, email}'
 peeps search ada --json | jq '.contacts[] | {id, name, score}'
 ```
-
-## Agents
-
-Peeps comes with a skill for AI agents such as Claude Code, Codex, and pi. A skill is a page of instructions an agent reads when a request matches it. This one teaches the `peeps` command, and sets house rules: the agent shows what it will change and waits for a yes before adding, changing, or deleting anyone, and keeps what it reads to the people the request is about.
-
-`make install` links the skill into the skills folder of each agent set up on the machine (`~/.claude`, `~/.codex`, `~/.pi/agent`, and `~/.agents`), the same way Omarchy shares its own skills. With a package, run `peeps skill install` once. `peeps skill remove` takes the links away.
-
-Then ask in plain words:
-
-- "Add the person from this email signature."
-- "What's Maya Okafor's work number?"
-- "Who do I know at Northwind, and whose birthday is this month?"
-- "Put every phone number in the +1 format. Show me the changes first."
-
-What an agent reads from `peeps` goes into that conversation, and so to the agent's AI provider. Peeps itself still talks only to Google.
 
 ## Google
 
