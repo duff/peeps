@@ -10,6 +10,7 @@
 #include "store.h"
 #include "theme.h"
 
+#include <QElapsedTimer>
 #include <QMainWindow>
 
 #include <functional>
@@ -120,6 +121,7 @@ class MainWindow : public QMainWindow {
   AppPaths paths_;
   OAuthClient client_ = builtInClient();
   AppSettings settings_;
+  QElapsedTimer lastRowClick_;
   OAuthTokens tokens_;
   QString syncToken_;
   QString syncError_;

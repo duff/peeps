@@ -577,8 +577,20 @@ void MainWindow::buildUi() {
   connect(list_->selectionModel(), &QItemSelectionModel::currentChanged, this, [this] {
     if (detailOpen_) renderDetail();
   });
-  connect(list_, &QListView::activated, this, [this] { openSelected(); });
-  connect(fieldList_, &QListView::activated, this, [this] { activateField(); });
+  // A contact opens, and a field does what its cue says, on one click. The
+  // second click of a double click is ignored, so it neither repeats the
+  // action nor lands on a field of the contact that just opened.
+  const auto firstClick = [this] {
+    if (lastRowClick_.isValid() && lastRowClick_.elapsed() < QApplication::doubleClickInterval()) return false;
+    lastRowClick_.start();
+    return true;
+  };
+  connect(list_, &QListView::clicked, this, [this, firstClick] {
+    if (firstClick()) openSelected();
+  });
+  connect(fieldList_, &QListView::clicked, this, [this, firstClick] {
+    if (firstClick()) activateField();
+  });
   connect(menuButton_, &QPushButton::clicked, this, [this] {
     const QSize size = menu_->sizeHint();
     menu_->popup(menuButton_->mapToGlobal(QPoint(menuButton_->width() - size.width(), menuButton_->height())));
