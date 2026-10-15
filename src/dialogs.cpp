@@ -234,6 +234,15 @@ class Panel : public QDialog {
   }
 
  protected:
+  // A wrapped label needs the height for the width the panel ends up with.
+  // Wayland sizes the window from the size hint alone, which cuts off a
+  // second line, so the panel fixes its own size before it is mapped.
+  void showEvent(QShowEvent* event) override {
+    const int width = std::max(minimumWidth(), sizeHint().width());
+    setFixedSize(width, layout()->totalHeightForWidth(width));
+    QDialog::showEvent(event);
+  }
+
   void keyPressEvent(QKeyEvent* event) override {
     if (routeKey(eventFrom(event, surface_)) == Command::Cancel) {
       reject();
@@ -290,10 +299,9 @@ class HelpBox : public Panel {
         if (row > 0) grid->setRowMinimumHeight(row++, metrics().space(8));
         grid->addWidget(sectionHeading(group), row++, 0, 1, 2);
       }
+      // One line per binding, so the list reads as a table.
       grid->addWidget(labelNamed(binding.keys, QStringLiteral("accent")), row, 0);
-      auto* action = labelNamed(binding.action, QStringLiteral("secondary"));
-      action->setWordWrap(true);
-      grid->addWidget(action, row++, 1);
+      grid->addWidget(labelNamed(binding.action, QStringLiteral("secondary")), row++, 1);
     }
     root_->addLayout(grid);
     auto* close = kindButton(QStringLiteral("Close"), QStringLiteral("outline"));

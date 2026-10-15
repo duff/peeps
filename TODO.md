@@ -32,4 +32,4 @@ Ideas from the October 2026 review, roughly in order of value. None of these are
 - [ ] **Label boxes.** Show a down-arrow on the email, phone, and address label boxes so they read as choices.
 - [x] **Public repo.** github.com/duff/peeps is public.
 - [x] **README.** It says why Peeps exists and which builds carry a Google client, and no longer has the Hyprland binding example.
-- [ ] **Clipped text.** The Disconnect Google dialog cuts off the bottom of its second line ("account."). Check every dialog and wrapped label at large Omarchy text sizes, and with Ctrl+=, so none clip.
+- [x] **Clipped text.** Dialogs size themselves for their wrapped text, so a second line no longer gets cut off on Wayland, and Keybindings shows one line per binding.
