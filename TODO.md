@@ -29,7 +29,7 @@ Ideas from the October 2026 review, roughly in order of value. None of these are
 - [x] **Google client.** Peeps ships its own client, built in with `PEEPS_GOOGLE_CLIENT_ID`. The account screen no longer asks for one.
 - [ ] **Verification.** Branding is verified. Data access for the contacts scope was submitted on October 14, 2026 with the demo video (https://youtu.be/WobFZxedkRk). Waiting on Google.
 - [x] **Google branding.** The consent screen's app name is Peeps, with https://omelia.org/peeps and its privacy policy.
-- [ ] **Label boxes.** Show a down-arrow on the email, phone, and address label boxes so they read as choices.
+- [x] **Label boxes.** The email, phone, and address label boxes show a down-arrow, so they read as choices.
 - [x] **Public repo.** github.com/duff/peeps is public.
 - [x] **README.** It says why Peeps exists and which builds carry a Google client, and no longer has the Hyprland binding example.
 - [x] **Clipped text.** Dialogs size themselves for their wrapped text, so a second line no longer gets cut off on Wayland, and Keybindings shows one line per binding.

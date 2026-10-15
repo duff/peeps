@@ -15,11 +15,14 @@
 #include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
+#include <QPainter>
 #include <QPixmap>
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QScrollArea>
+#include <QStyle>
+#include <QStyleOptionComboBox>
 #include <QTextCursor>
 #include <QTimer>
 #include <QVBoxLayout>
@@ -149,6 +152,8 @@ DateValue dateFromEditor(const QString& text, const DateValue& original) {
 }
 
 // The wheel scrolls the form. A label box changes only once it has focus.
+// The stylesheet leaves no arrow, so the box draws its own in the text color,
+// which says it is a choice and follows the theme.
 class LabelBox : public QComboBox {
  public:
   using QComboBox::QComboBox;
@@ -157,6 +162,25 @@ class LabelBox : public QComboBox {
   void wheelEvent(QWheelEvent* event) override {
     if (hasFocus()) QComboBox::wheelEvent(event);
     else event->ignore();
+  }
+
+  void paintEvent(QPaintEvent* event) override {
+    QComboBox::paintEvent(event);
+    QStyleOptionComboBox option;
+    initStyleOption(&option);
+    const QRect area = style()->subControlRect(QStyle::CC_ComboBox, &option, QStyle::SC_ComboBoxArrow, this);
+    const qreal half = metrics().space(4);
+    const QPointF center = QRectF(area).center() - QPointF(metrics().space(4), 0);
+    QColor color = palette().color(QPalette::Text);
+    if (!hasFocus()) color.setAlphaF(0.6);
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::Antialiasing);
+    QPen pen(color, std::max(1.0, metrics().space(1) * 1.5));
+    pen.setCapStyle(Qt::RoundCap);
+    pen.setJoinStyle(Qt::RoundJoin);
+    painter.setPen(pen);
+    const QPointF chevron[] = {center + QPointF(-half, -half / 2), center + QPointF(0, half / 2), center + QPointF(half, -half / 2)};
+    painter.drawPolyline(chevron, 3);
   }
 };
 
