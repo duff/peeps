@@ -23,7 +23,7 @@ Ideas from the October 2026 review, roughly in order of value. None of these are
 
 ## Before a public release
 
-- [ ] **License.** Add a LICENSE file.
+- [x] **License.** MIT, like Omarchy.
 - [ ] **Screenshots.** Put a few in the README.
 - [x] **App id.** The window class and desktop file are now `org.omelia.Peeps`.
 - [x] **Google client.** Peeps ships its own client, built in with `PEEPS_GOOGLE_CLIENT_ID`. The account screen no longer asks for one.
