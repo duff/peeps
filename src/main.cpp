@@ -42,7 +42,15 @@ int main(int argc, char** argv) {
     return result.code;
   }
 
+  // Omarchy sets QT_QPA_PLATFORMTHEME=gtk3 for every app. Peeps paints itself
+  // and only needs a file picker, and the portal theme shows the one the user
+  // set up (GTK's on stock Omarchy) without loading GTK into Peeps, which costs
+  // about 40 ms and 25 MB on every launch. Qt reads the variable only here, so
+  // it goes straight back for programs Peeps opens.
+  const QByteArray platformTheme = qgetenv("QT_QPA_PLATFORMTHEME");
+  if (platformTheme == "gtk3") qputenv("QT_QPA_PLATFORMTHEME", "xdgdesktopportal");
   QApplication app(argc, argv);
+  if (platformTheme == "gtk3") qputenv("QT_QPA_PLATFORMTHEME", platformTheme);
   describeApp();
   // The Wayland app id, which Hyprland shows as the window class. It matches
   // the desktop file, so the launcher finds the window's name and icon.
