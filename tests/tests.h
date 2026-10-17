@@ -52,6 +52,7 @@ class GoogleTests : public QObject {
   void savedPhotoIsVisibleImmediately();
   void downloadedPhotoIsVisibleImmediately();
   void uploadsPhotosAtFullQuality();
+  void drawsPhotosFromASizedCopy();
   void oldCacheRequestsFullSync();
   void cacheKeepsSyncTime();
   void syncedAgoReads();

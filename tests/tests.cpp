@@ -661,6 +661,44 @@ void GoogleTests::uploadsPhotosAtFullQuality() {
   QVERIFY(contacts::photoUploadBytes("not an image").isEmpty());
 }
 
+void GoogleTests::drawsPhotosFromASizedCopy() {
+  QTemporaryDir dir;
+  QVERIFY(dir.isValid());
+  QImage source(400, 300, QImage::Format_RGB32);
+  for (int y = 0; y < source.height(); ++y) {
+    for (int x = 0; x < source.width(); ++x) source.setPixel(x, y, qRgb(x % 256, y % 256, (x * y) % 256));
+  }
+  const QByteArray jpeg = encoded(source, "JPEG");
+  const QString url = QStringLiteral("https://lh3.googleusercontent.com/contacts/abc=s100");
+  const QString id = QStringLiteral("people/c1");
+  QPixmap first;
+  {
+    contacts::PhotoStore store(dir.path());
+    store.remember(id, url, jpeg);
+    first = store.imageFor(id, url, 40, 2);
+  }
+  QVERIFY(!first.isNull());
+  QVERIFY(QFile::exists(dir.filePath(QStringLiteral("people_c1@80.png"))));
+  QImage expected = contacts::decodePhoto(jpeg)
+                       .scaled(80, 80, Qt::KeepAspectRatio, Qt::SmoothTransformation)
+                       .convertToFormat(QImage::Format_RGB32);
+  expected.setDevicePixelRatio(2);
+  QCOMPARE(first.toImage().convertToFormat(QImage::Format_RGB32), expected);
+
+  // A new store has nothing in memory, so it draws from the copy on disk.
+  contacts::PhotoStore again(dir.path());
+  const QPixmap second = again.imageFor(id, url, 40, 2);
+  QCOMPARE(second.devicePixelRatio(), 2.0);
+  QCOMPARE(second.toImage().convertToFormat(QImage::Format_RGB32), expected);
+
+  // A new photo takes the old one's copies with it.
+  QImage blue(50, 50, QImage::Format_RGB32);
+  blue.fill(Qt::blue);
+  again.remember(id, url, encoded(blue, "JPEG"));
+  QVERIFY(!QFile::exists(dir.filePath(QStringLiteral("people_c1@80.png"))));
+  QCOMPARE(again.imageFor(id, url, 40, 2).size(), QSize(50, 50));
+}
+
 void GoogleTests::oldCacheRequestsFullSync() {
   const auto fresh = contacts::readCacheJson(R"({"version":1,"sync_token":"old","contacts":[]})");
   QVERIFY(fresh.ok());

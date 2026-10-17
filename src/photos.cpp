@@ -101,12 +101,13 @@ QString PhotoStore::filePath(const QString& resourceName) const {
   return directory_ + QLatin1Char('/') + safeName(resourceName);
 }
 
-QImage PhotoStore::loadFull(const QString& resourceName, const QString& url) const {
-  const QString path = filePath(resourceName);
-  QFile marker(path + QStringLiteral(".fetch"));
-  if (!marker.open(QIODevice::ReadOnly)) return {};
-  if (QString::fromUtf8(marker.readAll()) != photoFetchUrl(url)) return {};
-  return QImage(path);
+QString PhotoStore::sizedPath(const QString& resourceName, int edge) const {
+  return filePath(resourceName) + QStringLiteral("@%1.png").arg(edge);
+}
+
+bool PhotoStore::current(const QString& resourceName, const QString& url) const {
+  QFile marker(filePath(resourceName) + QStringLiteral(".fetch"));
+  return marker.open(QIODevice::ReadOnly) && QString::fromUtf8(marker.readAll()) == photoFetchUrl(url);
 }
 
 QPixmap PhotoStore::imageFor(const QString& resourceName, const QString& url, int logicalSize, qreal devicePixelRatio) {
@@ -116,26 +117,41 @@ QPixmap PhotoStore::imageFor(const QString& resourceName, const QString& url, in
   const auto cached = memory_.constFind(key);
   if (cached != memory_.cend() && !cached->isNull()) return *cached;
 
-  const QImage full = loadFull(resourceName, url);
-  if (full.isNull()) {
+  if (!current(resourceName, url)) {
     enqueue(resourceName, url);
     return {};
   }
   const int requested = qRound(logicalSize * devicePixelRatio);
-  const int longest = std::max(full.width(), full.height());
-  const int edge = std::min(requested, std::max(1, longest));
-  const QImage scaled = full.scaled(edge, edge, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-  QPixmap pixmap = QPixmap::fromImage(scaled);
+  // A lossless copy at exactly this size, scaled from the original once. It
+  // draws the same pixels as scaling the original, without decoding a photo
+  // that can be 3200 pixels across each time the contact opens.
+  const QString sized = sizedPath(resourceName, requested);
+  QImage image(sized);
+  if (image.isNull()) {
+    QFile file(filePath(resourceName));
+    const QImage full = file.open(QIODevice::ReadOnly) ? decodePhoto(file.readAll()) : QImage();
+    if (full.isNull()) {
+      // The download passed the header check but does not decode.
+      discard(resourceName);
+      failed_.insert(resourceName);
+      return {};
+    }
+    const int longest = std::max(full.width(), full.height());
+    const int edge = std::min(requested, std::max(1, longest));
+    image = full.scaled(edge, edge, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    // PNG is lossless at any level, and a light one writes several times faster.
+    QSaveFile copy(sized);
+    if (copy.open(QIODevice::WriteOnly) && image.save(&copy, "PNG", 80)) copy.commit();
+  }
+  QPixmap pixmap = QPixmap::fromImage(image);
   pixmap.setDevicePixelRatio(devicePixelRatio);
   memory_.insert(key, pixmap);
   return pixmap;
 }
 
 QByteArray PhotoStore::originalBytes(const QString& resourceName, const QString& url) const {
-  const QString path = filePath(resourceName);
-  QFile marker(path + QStringLiteral(".fetch"));
-  if (!marker.open(QIODevice::ReadOnly) || QString::fromUtf8(marker.readAll()) != photoFetchUrl(url)) return {};
-  QFile file(path);
+  if (!current(resourceName, url)) return {};
+  QFile file(filePath(resourceName));
   return file.open(QIODevice::ReadOnly) ? file.readAll() : QByteArray();
 }
 
@@ -144,13 +160,7 @@ void PhotoStore::remember(const QString& resourceName, const QString& url, const
   failed_.remove(resourceName);
   queuedUrls_.remove(resourceName);
   queue_.removeAll(resourceName);
-  const QString path = filePath(resourceName);
-  QDir().mkpath(directory_);
-  QSaveFile file(path);
-  if (!(file.open(QIODevice::WriteOnly) && file.write(bytes) == bytes.size() && file.commit())) return;
-  writeFetchMarker(path, url);
-  dropMemory(resourceName);
-  emit updated(resourceName);
+  if (store(resourceName, url, bytes)) emit updated(resourceName);
 }
 
 void PhotoStore::forget(const QString& resourceName) {
@@ -158,16 +168,34 @@ void PhotoStore::forget(const QString& resourceName) {
   failed_.remove(resourceName);
   queuedUrls_.remove(resourceName);
   queue_.removeAll(resourceName);
+  discard(resourceName);
+  emit updated(resourceName);
+}
+
+// The original and its marker, written so that no copy of the photo it
+// replaces is left to be drawn.
+bool PhotoStore::store(const QString& resourceName, const QString& url, const QByteArray& bytes) {
+  const QString path = filePath(resourceName);
+  QDir().mkpath(directory_);
+  dropSized(resourceName);
+  QSaveFile file(path);
+  if (!(file.open(QIODevice::WriteOnly) && file.write(bytes) == bytes.size() && file.commit())) return false;
+  writeFetchMarker(path, url);
+  dropMemory(resourceName);
+  return true;
+}
+
+void PhotoStore::discard(const QString& resourceName) {
   QFile::remove(filePath(resourceName));
   QFile::remove(filePath(resourceName) + QStringLiteral(".fetch"));
   QFile::remove(filePath(resourceName) + QStringLiteral(".url"));
+  dropSized(resourceName);
   dropMemory(resourceName);
-  emit updated(resourceName);
 }
 
 void PhotoStore::enqueue(const QString& resourceName, const QString& url) {
   if (failed_.contains(resourceName) || queuedUrls_.contains(resourceName)) return;
-  if (!loadFull(resourceName, url).isNull()) return;
+  if (current(resourceName, url)) return;
   queuedUrls_.insert(resourceName, url);
   queue_.append(resourceName);
   pump();
@@ -199,27 +227,27 @@ void PhotoStore::dropMemory(const QString& resourceName) {
   }
 }
 
+void PhotoStore::dropSized(const QString& resourceName) const {
+  QDir dir(directory_);
+  for (const QString& name : dir.entryList({safeName(resourceName) + QStringLiteral("@*.png")}, QDir::Files)) {
+    dir.remove(name);
+  }
+}
+
 void PhotoStore::finished(QNetworkReply* reply, const QString& resourceName, const QString& url) {
   reply->deleteLater();
   --active_;
   queuedUrls_.remove(resourceName);
   const QByteArray bytes = reply->readAll();
   const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-  QImage image;
-  const bool ok = reply->error() == QNetworkReply::NoError && status < 400 && image.loadFromData(bytes) && !image.isNull();
-  if (!ok) failed_.insert(resourceName);
-  if (ok) {
-    const QString path = filePath(resourceName);
-    QDir().mkpath(directory_);
-    QSaveFile file(path);
-    if (file.open(QIODevice::WriteOnly) && file.write(bytes) == bytes.size() && file.commit()) {
-      writeFetchMarker(path, url);
-      dropMemory(resourceName);
-      emit updated(resourceName);
-    } else {
-      failed_.insert(resourceName);
-    }
-  }
+  // Only the header is read here. The one full decode happens when the photo
+  // is drawn, and a file that fails it is thrown away there.
+  QBuffer buffer;
+  buffer.setData(bytes);
+  buffer.open(QIODevice::ReadOnly);
+  const bool ok = reply->error() == QNetworkReply::NoError && status < 400 && QImageReader(&buffer).canRead();
+  if (ok && store(resourceName, url, bytes)) emit updated(resourceName);
+  else failed_.insert(resourceName);
   pump();
 }
 

@@ -489,7 +489,6 @@ MainWindow::MainWindow() : secrets_(makeSecretStore()) {
   fontFamily_ = monospaceFamily();
   photos_ = new PhotoStore(paths_.photoDir, this);
   connect(photos_, &PhotoStore::updated, this, [this](const QString& id) {
-    list_->viewport()->update();
     const Contact* contact = selected();
     if (contact == nullptr || contact->resourceName != id) return;
     if (detailOpen_ && !editing_) renderDetail();

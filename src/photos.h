@@ -47,9 +47,13 @@ class PhotoStore : public QObject {
   void enqueue(const QString& resourceName, const QString& url);
   void pump();
   void finished(QNetworkReply* reply, const QString& resourceName, const QString& url);
+  bool store(const QString& resourceName, const QString& url, const QByteArray& bytes);
+  void discard(const QString& resourceName);
   void dropMemory(const QString& resourceName);
+  void dropSized(const QString& resourceName) const;
   QString filePath(const QString& resourceName) const;
-  QImage loadFull(const QString& resourceName, const QString& url) const;
+  QString sizedPath(const QString& resourceName, int edge) const;
+  bool current(const QString& resourceName, const QString& url) const;
 
   QString directory_;
   QString token_;
