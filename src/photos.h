@@ -6,7 +6,6 @@
 #include <QImage>
 #include <QObject>
 #include <QPixmap>
-#include <QSet>
 #include <QString>
 
 #include <optional>
@@ -61,7 +60,8 @@ class PhotoStore : public QObject {
   QHash<QString, QPixmap> memory_;
   QStringList queue_;
   QHash<QString, QString> queuedUrls_;
-  QSet<QString> failed_;
+  // Photos that did not download this session, with their URLs for a retry.
+  QHash<QString, QString> failed_;
   int active_ = 0;
 };
 

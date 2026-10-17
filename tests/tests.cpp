@@ -699,6 +699,57 @@ void GoogleTests::drawsPhotosFromASizedCopy() {
   QCOMPARE(again.imageFor(id, url, 40, 2).size(), QSize(50, 50));
 }
 
+void GoogleTests::retriesFailedPhotoWithNewToken() {
+  QTemporaryDir dir;
+  QVERIFY(dir.isValid());
+  QImage source(16, 16, QImage::Format_RGB32);
+  source.fill(Qt::green);
+  const QByteArray jpeg = encoded(source, "JPEG");
+  QTcpServer server;
+  QVERIFY(server.listen(QHostAddress::LocalHost));
+  int requests = 0;
+  connect(&server, &QTcpServer::newConnection, &server, [&] {
+    while (QTcpSocket* socket = server.nextPendingConnection()) {
+      connect(socket, &QTcpSocket::readyRead, socket, [&, socket] {
+        if (socket->property("sent").toBool()) {
+          socket->readAll();
+          return;
+        }
+        socket->setProperty("sent", true);
+        socket->readAll();
+        ++requests;
+        const bool refuse = requests == 1;
+        const QByteArray body = refuse ? QByteArray() : jpeg;
+        socket->write(QByteArray("HTTP/1.1 ") + (refuse ? "403 Forbidden" : "200 OK") +
+                      "\r\nContent-Type: image/jpeg\r\nContent-Length: " + QByteArray::number(body.size()) +
+                      "\r\nConnection: close\r\n\r\n" + body);
+        socket->disconnectFromHost();
+      });
+    }
+  });
+
+  const QString url = QStringLiteral("http://%1:%2/face").arg(server.serverAddress().toString()).arg(server.serverPort());
+  const QString id = QStringLiteral("people/c1");
+  contacts::PhotoStore store(dir.path());
+  store.setAccessToken(QStringLiteral("old"));
+  QPixmap shown;
+  connect(&store, &contacts::PhotoStore::updated, &store, [&](const QString& resourceName) {
+    shown = store.imageFor(resourceName, url, 32, 1);
+  });
+  QVERIFY(store.imageFor(id, url, 32, 1).isNull());
+  QTRY_COMPARE_WITH_TIMEOUT(requests, 1, 3000);
+  QTest::qWait(200);
+  // The same token is not asked again.
+  QVERIFY(store.imageFor(id, url, 32, 1).isNull());
+  store.setAccessToken(QStringLiteral("old"));
+  QTest::qWait(200);
+  QCOMPARE(requests, 1);
+  // A new one is.
+  store.setAccessToken(QStringLiteral("new"));
+  QTRY_VERIFY_WITH_TIMEOUT(!shown.isNull(), 3000);
+  QCOMPARE(requests, 2);
+}
+
 void GoogleTests::oldCacheRequestsFullSync() {
   const auto fresh = contacts::readCacheJson(R"({"version":1,"sync_token":"old","contacts":[]})");
   QVERIFY(fresh.ok());

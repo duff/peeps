@@ -53,6 +53,7 @@ class GoogleTests : public QObject {
   void downloadedPhotoIsVisibleImmediately();
   void uploadsPhotosAtFullQuality();
   void drawsPhotosFromASizedCopy();
+  void retriesFailedPhotoWithNewToken();
   void oldCacheRequestsFullSync();
   void cacheKeepsSyncTime();
   void syncedAgoReads();

@@ -16,6 +16,7 @@
 #include <QUrl>
 
 #include <algorithm>
+#include <utility>
 
 namespace contacts {
 
@@ -95,7 +96,13 @@ PhotoStore::PhotoStore(QString directory, QObject* parent) : QObject(parent), di
   QDir().mkpath(directory_);
 }
 
-void PhotoStore::setAccessToken(const QString& token) { token_ = token; }
+void PhotoStore::setAccessToken(const QString& token) {
+  if (token == token_) return;
+  token_ = token;
+  // A photo refused under the old token may load under this one.
+  const QHash<QString, QString> retry = std::exchange(failed_, {});
+  for (auto it = retry.cbegin(); it != retry.cend(); ++it) enqueue(it.key(), it.value());
+}
 
 QString PhotoStore::filePath(const QString& resourceName) const {
   return directory_ + QLatin1Char('/') + safeName(resourceName);
@@ -133,7 +140,7 @@ QPixmap PhotoStore::imageFor(const QString& resourceName, const QString& url, in
     if (full.isNull()) {
       // The download passed the header check but does not decode.
       discard(resourceName);
-      failed_.insert(resourceName);
+      failed_.insert(resourceName, url);
       return {};
     }
     const int longest = std::max(full.width(), full.height());
@@ -247,7 +254,7 @@ void PhotoStore::finished(QNetworkReply* reply, const QString& resourceName, con
   buffer.open(QIODevice::ReadOnly);
   const bool ok = reply->error() == QNetworkReply::NoError && status < 400 && QImageReader(&buffer).canRead();
   if (ok && store(resourceName, url, bytes)) emit updated(resourceName);
-  else failed_.insert(resourceName);
+  else failed_.insert(resourceName, url);
   pump();
 }
 
