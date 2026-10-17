@@ -74,6 +74,13 @@ QString safeName(const QString& resourceName) {
   return name;
 }
 
+// Photos are as private as the contacts, so only this user may open the folder,
+// including one an older Peeps made open to everyone.
+void makePrivateDir(const QString& path) {
+  QDir().mkpath(path);
+  QFile::setPermissions(path, QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ExeOwner);
+}
+
 QString cacheKey(const QString& resourceName, int logicalSize, qreal devicePixelRatio) {
   return resourceName + QStringLiteral("@%1@%2").arg(logicalSize).arg(devicePixelRatio, 0, 'f', 2);
 }
@@ -93,7 +100,7 @@ void writeFetchMarker(const QString& imagePath, const QString& url) {
 PhotoStore::PhotoStore(QString directory, QObject* parent) : QObject(parent), directory_(std::move(directory)) {
   network_ = new QNetworkAccessManager(this);
   network_->setTransferTimeout(30000);
-  QDir().mkpath(directory_);
+  makePrivateDir(directory_);
 }
 
 void PhotoStore::setAccessToken(const QString& token) {
@@ -183,7 +190,7 @@ void PhotoStore::forget(const QString& resourceName) {
 // replaces is left to be drawn.
 bool PhotoStore::store(const QString& resourceName, const QString& url, const QByteArray& bytes) {
   const QString path = filePath(resourceName);
-  QDir().mkpath(directory_);
+  makePrivateDir(directory_);
   dropSized(resourceName);
   QSaveFile file(path);
   if (!(file.open(QIODevice::WriteOnly) && file.write(bytes) == bytes.size() && file.commit())) return false;

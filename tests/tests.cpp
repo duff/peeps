@@ -701,6 +701,25 @@ void GoogleTests::drawsPhotosFromASizedCopy() {
   QCOMPARE(again.imageFor(id, url, 40, 2).size(), QSize(50, 50));
 }
 
+void GoogleTests::keepsPhotosPrivate() {
+  QTemporaryDir dir;
+  QVERIFY(dir.isValid());
+  const QFileDevice::Permissions ownerOnly = QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ExeOwner;
+  const QFileDevice::Permissions anyone = QFileDevice::ReadGroup | QFileDevice::WriteGroup | QFileDevice::ExeGroup |
+                                          QFileDevice::ReadOther | QFileDevice::WriteOther | QFileDevice::ExeOther;
+  const QString made = dir.filePath(QStringLiteral("cache/peeps/photos"));
+  contacts::PhotoStore store(made);
+  QCOMPARE(QFileInfo(made).permissions() & (ownerOnly | anyone), ownerOnly);
+
+  // A folder an older Peeps left open to everyone is closed again.
+  const QString open = dir.filePath(QStringLiteral("open"));
+  QVERIFY(QDir().mkpath(open));
+  QVERIFY(QFile::setPermissions(open, ownerOnly | QFileDevice::ReadGroup | QFileDevice::ExeGroup |
+                                          QFileDevice::ReadOther | QFileDevice::ExeOther));
+  contacts::PhotoStore older(open);
+  QCOMPARE(QFileInfo(open).permissions() & (ownerOnly | anyone), ownerOnly);
+}
+
 void GoogleTests::retriesFailedPhotoWithNewToken() {
   QTemporaryDir dir;
   QVERIFY(dir.isValid());
