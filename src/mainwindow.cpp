@@ -687,6 +687,7 @@ void MainWindow::loadLocal() {
     if (snapshot.ok()) {
       syncToken_ = snapshot.syncToken;
       syncedAt_ = snapshot.syncedAt;
+      cacheSyncedAt_ = snapshot.syncedAt;
       index_.replaceAll(snapshot.contacts);
     }
   }
@@ -1478,6 +1479,7 @@ void MainWindow::setBusy(bool busy) {
 void MainWindow::saveCache() {
   QString error;
   if (!writePrivateFile(paths_.cacheFile, writeCacheJson(index_.all(), syncToken_, syncedAt_), error)) toast(error, true);
+  else cacheSyncedAt_ = syncedAt_;
 }
 
 void MainWindow::setTextSizeOffset(int offset) {
@@ -1660,13 +1662,23 @@ void MainWindow::runSync(bool forceFull, bool announce) {
           return;
         }
         syncError_.clear();
-        index_.replaceAll(syncToken.isEmpty() ? applyFullSync(fetched->people)
-                                              : applyIncrementalSync(index_.all(), fetched->people));
         if (!fetched->syncToken.isEmpty()) syncToken_ = fetched->syncToken;
         syncedAt_ = nowUnix();
+        // Most syncs bring nothing new. Then the index, the list, and the open
+        // contact stay as they are, and the cache on disk catches up once an
+        // hour. Its older token is safe: Google replays the changes since that
+        // token, and there were none.
+        if (!syncToken.isEmpty() && fetched->people.isEmpty()) {
+          if (syncedAt_ - cacheSyncedAt_ >= kStaleAfter) saveCache();
+          updateChrome();
+          if (announce) toast(QStringLiteral("Synced %1 contacts").arg(index_.size()));
+          return;
+        }
+        index_.replaceAll(syncToken.isEmpty() ? applyFullSync(fetched->people)
+                                              : applyIncrementalSync(index_.all(), fetched->people));
         saveCache();
+        // Selecting the row again redraws an open contact.
         refilter();
-        if (detailOpen_ && !editing_) renderDetail();
         if (announce) toast(QStringLiteral("Synced %1 contacts").arg(index_.size()));
       });
 }

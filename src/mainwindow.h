@@ -148,6 +148,8 @@ class MainWindow : public QMainWindow {
   qint64 lastSyncAt_ = 0;
   // When the cache last matched Google, for "Synced 3 hours ago".
   qint64 syncedAt_ = 0;
+  // The same, as last written to the cache on disk.
+  qint64 cacheSyncedAt_ = 0;
   // Google revoked or expired the sign-in, so only Reconnect helps.
   bool signInExpired_ = false;
 
