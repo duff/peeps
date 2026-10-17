@@ -13,13 +13,28 @@
 namespace contacts {
 namespace {
 
+// Empty values are left out. The reader treats a missing key as empty, and
+// most fields of most contacts are, so the cache is about half the size to
+// write and to read.
+void put(QJsonObject& object, const QString& key, const QString& value) {
+  if (!value.isEmpty()) object.insert(key, value);
+}
+
+void put(QJsonObject& object, const QString& key, const QJsonArray& value) {
+  if (!value.isEmpty()) object.insert(key, value);
+}
+
+void put(QJsonObject& object, const QString& key, const QJsonObject& value) {
+  if (!value.isEmpty()) object.insert(key, value);
+}
+
 QJsonArray labeledJson(const QList<LabeledValue>& values) {
   QJsonArray array;
   for (const auto& value : values) {
     QJsonObject object;
-    object.insert(QStringLiteral("value"), value.value);
-    object.insert(QStringLiteral("label"), value.label);
-    if (!value.type.isEmpty()) object.insert(QStringLiteral("type"), value.type);
+    put(object, QStringLiteral("value"), value.value);
+    put(object, QStringLiteral("label"), value.label);
+    put(object, QStringLiteral("type"), value.type);
     array.append(object);
   }
   return array;
@@ -63,16 +78,16 @@ QJsonArray addressJson(const QList<PostalAddress>& addresses) {
   QJsonArray array;
   for (const auto& address : addresses) {
     QJsonObject object;
-    object.insert(QStringLiteral("type"), address.type);
-    object.insert(QStringLiteral("label"), address.label);
-    object.insert(QStringLiteral("street"), address.street);
-    object.insert(QStringLiteral("extended"), address.extended);
-    object.insert(QStringLiteral("po_box"), address.poBox);
-    object.insert(QStringLiteral("city"), address.city);
-    object.insert(QStringLiteral("region"), address.region);
-    object.insert(QStringLiteral("postal_code"), address.postalCode);
-    object.insert(QStringLiteral("country"), address.country);
-    object.insert(QStringLiteral("formatted"), address.formatted);
+    put(object, QStringLiteral("type"), address.type);
+    put(object, QStringLiteral("label"), address.label);
+    put(object, QStringLiteral("street"), address.street);
+    put(object, QStringLiteral("extended"), address.extended);
+    put(object, QStringLiteral("po_box"), address.poBox);
+    put(object, QStringLiteral("city"), address.city);
+    put(object, QStringLiteral("region"), address.region);
+    put(object, QStringLiteral("postal_code"), address.postalCode);
+    put(object, QStringLiteral("country"), address.country);
+    put(object, QStringLiteral("formatted"), address.formatted);
     array.append(object);
   }
   return array;
@@ -103,9 +118,9 @@ QJsonArray orgJson(const QList<Organization>& orgs) {
   QJsonArray array;
   for (const auto& org : orgs) {
     QJsonObject object;
-    object.insert(QStringLiteral("name"), org.name);
-    object.insert(QStringLiteral("title"), org.title);
-    object.insert(QStringLiteral("department"), org.department);
+    put(object, QStringLiteral("name"), org.name);
+    put(object, QStringLiteral("title"), org.title);
+    put(object, QStringLiteral("department"), org.department);
     array.append(object);
   }
   return array;
@@ -129,9 +144,9 @@ QJsonArray eventJson(const QList<DatedEvent>& events) {
   QJsonArray array;
   for (const auto& event : events) {
     QJsonObject object;
-    object.insert(QStringLiteral("type"), event.type);
-    object.insert(QStringLiteral("label"), event.label);
-    object.insert(QStringLiteral("date"), dateJson(event.date));
+    put(object, QStringLiteral("type"), event.type);
+    put(object, QStringLiteral("label"), event.label);
+    put(object, QStringLiteral("date"), dateJson(event.date));
     array.append(object);
   }
   return array;
@@ -155,10 +170,10 @@ QJsonArray imJson(const QList<ImClient>& ims) {
   QJsonArray array;
   for (const auto& im : ims) {
     QJsonObject object;
-    object.insert(QStringLiteral("username"), im.username);
-    object.insert(QStringLiteral("protocol"), im.protocol);
-    object.insert(QStringLiteral("type"), im.type);
-    object.insert(QStringLiteral("label"), im.label);
+    put(object, QStringLiteral("username"), im.username);
+    put(object, QStringLiteral("protocol"), im.protocol);
+    put(object, QStringLiteral("type"), im.type);
+    put(object, QStringLiteral("label"), im.label);
     array.append(object);
   }
   return array;
@@ -261,35 +276,35 @@ QByteArray writeCacheJson(const QList<Contact>& contacts, const QString& syncTok
   QJsonArray array;
   for (const auto& contact : contacts) {
     QJsonObject object;
-    object.insert(QStringLiteral("resource_name"), contact.resourceName);
-    object.insert(QStringLiteral("etag"), contact.etag);
-    object.insert(QStringLiteral("prefix"), contact.prefix);
-    object.insert(QStringLiteral("given_name"), contact.givenName);
-    object.insert(QStringLiteral("middle_name"), contact.middleName);
-    object.insert(QStringLiteral("family_name"), contact.familyName);
-    object.insert(QStringLiteral("suffix"), contact.suffix);
-    object.insert(QStringLiteral("phonetic_given"), contact.phoneticGiven);
-    object.insert(QStringLiteral("phonetic_middle"), contact.phoneticMiddle);
-    object.insert(QStringLiteral("phonetic_family"), contact.phoneticFamily);
-    object.insert(QStringLiteral("nickname"), contact.nickname);
-    object.insert(QStringLiteral("file_as"), contact.fileAs);
-    object.insert(QStringLiteral("organization"), contact.organization);
-    object.insert(QStringLiteral("title"), contact.title);
-    object.insert(QStringLiteral("department"), contact.department);
-    object.insert(QStringLiteral("other_organizations"), orgJson(contact.otherOrganizations));
-    object.insert(QStringLiteral("occupation"), contact.occupation);
-    object.insert(QStringLiteral("notes"), contact.notes);
-    object.insert(QStringLiteral("photo_url"), contact.photoUrl);
-    object.insert(QStringLiteral("birthday"), dateJson(contact.birthday));
-    object.insert(QStringLiteral("emails"), labeledJson(contact.emails));
-    object.insert(QStringLiteral("phones"), labeledJson(contact.phones));
-    object.insert(QStringLiteral("addresses"), addressJson(contact.addresses));
-    object.insert(QStringLiteral("urls"), labeledJson(contact.urls));
-    object.insert(QStringLiteral("relations"), labeledJson(contact.relations));
-    object.insert(QStringLiteral("events"), eventJson(contact.events));
-    object.insert(QStringLiteral("ims"), imJson(contact.ims));
-    object.insert(QStringLiteral("sips"), labeledJson(contact.sips));
-    object.insert(QStringLiteral("customs"), labeledJson(contact.customs));
+    put(object, QStringLiteral("resource_name"), contact.resourceName);
+    put(object, QStringLiteral("etag"), contact.etag);
+    put(object, QStringLiteral("prefix"), contact.prefix);
+    put(object, QStringLiteral("given_name"), contact.givenName);
+    put(object, QStringLiteral("middle_name"), contact.middleName);
+    put(object, QStringLiteral("family_name"), contact.familyName);
+    put(object, QStringLiteral("suffix"), contact.suffix);
+    put(object, QStringLiteral("phonetic_given"), contact.phoneticGiven);
+    put(object, QStringLiteral("phonetic_middle"), contact.phoneticMiddle);
+    put(object, QStringLiteral("phonetic_family"), contact.phoneticFamily);
+    put(object, QStringLiteral("nickname"), contact.nickname);
+    put(object, QStringLiteral("file_as"), contact.fileAs);
+    put(object, QStringLiteral("organization"), contact.organization);
+    put(object, QStringLiteral("title"), contact.title);
+    put(object, QStringLiteral("department"), contact.department);
+    put(object, QStringLiteral("other_organizations"), orgJson(contact.otherOrganizations));
+    put(object, QStringLiteral("occupation"), contact.occupation);
+    put(object, QStringLiteral("notes"), contact.notes);
+    put(object, QStringLiteral("photo_url"), contact.photoUrl);
+    put(object, QStringLiteral("birthday"), dateJson(contact.birthday));
+    put(object, QStringLiteral("emails"), labeledJson(contact.emails));
+    put(object, QStringLiteral("phones"), labeledJson(contact.phones));
+    put(object, QStringLiteral("addresses"), addressJson(contact.addresses));
+    put(object, QStringLiteral("urls"), labeledJson(contact.urls));
+    put(object, QStringLiteral("relations"), labeledJson(contact.relations));
+    put(object, QStringLiteral("events"), eventJson(contact.events));
+    put(object, QStringLiteral("ims"), imJson(contact.ims));
+    put(object, QStringLiteral("sips"), labeledJson(contact.sips));
+    put(object, QStringLiteral("customs"), labeledJson(contact.customs));
     array.append(object);
   }
   QJsonObject root;
