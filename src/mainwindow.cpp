@@ -856,16 +856,29 @@ void MainWindow::reloadTheme() {
 
 void MainWindow::refilter() {
   const QString keep = selected() ? selected()->resourceName : QString();
-  const auto hits = index_.query(search_->text());
+  // A sync that changes contacts redraws the list under someone scrolling it.
+  // For the same search, the row at the top stays at the top, and a selection
+  // that was on screen stays on screen.
+  const QString query = search_->text();
+  const QString top = query == listedQuery_ ? model_->idAt(list_->indexAt(QPoint(0, 0)).row()) : QString();
+  const bool selectionShown = list_->viewport()->rect().intersects(list_->visualRect(list_->currentIndex()));
+  listedQuery_ = query;
+  const auto hits = index_.query(query);
   QList<ContactListModel::Row> rows;
   rows.reserve(hits.size());
   int select = 0;
+  int topRow = -1;
   for (const auto& hit : hits) {
     if (!keep.isEmpty() && hit.contact->resourceName == keep) select = static_cast<int>(rows.size());
+    if (!top.isEmpty() && hit.contact->resourceName == top) topRow = static_cast<int>(rows.size());
     rows.append({hit.contact->resourceName, hit.name, hit.subtitle});
   }
   model_->setRows(std::move(rows));
   if (model_->rowCount() > 0) list_->setCurrentIndex(model_->index(select, 0));
+  if (topRow >= 0) {
+    list_->scrollTo(model_->index(topRow, 0), QAbstractItemView::PositionAtTop);
+    if (selectionShown) list_->scrollTo(list_->currentIndex());
+  }
   if (!editing_ && selected() == nullptr) detailOpen_ = false;
   applyView();
 }

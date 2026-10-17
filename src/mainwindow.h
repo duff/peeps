@@ -150,6 +150,8 @@ class MainWindow : public QMainWindow {
   qint64 syncedAt_ = 0;
   // The same, as last written to the cache on disk.
   qint64 cacheSyncedAt_ = 0;
+  // The search the list shows, so a redraw for the same one keeps its scroll.
+  QString listedQuery_;
   // Google revoked or expired the sign-in, so only Reconnect helps.
   bool signInExpired_ = false;
 
