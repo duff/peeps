@@ -83,6 +83,7 @@ class MainWindow : public QMainWindow {
   // These return true when something was copied or an email was started.
   bool activateField();
   bool copyCurrentField();
+  void copyPhoto(const QByteArray& original);
   bool sendSelectedEmail();
   void countShortcut(int& uses);
   void saveSettings();
@@ -132,6 +133,9 @@ class MainWindow : public QMainWindow {
   // The running sync started by itself, so the footer does not announce it.
   bool quietSync_ = false;
   bool closing_ = false;
+  // A photo copy still being prepared gives way to a later copy of anything.
+  quint64 photoCopies_ = 0;
+  quint64 clipboardChanges_ = 0;
   bool detailOpen_ = false;
   bool editing_ = false;
   bool editingNew_ = false;

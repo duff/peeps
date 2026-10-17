@@ -15,6 +15,7 @@
 #include "vcard.h"
 
 #include <QBuffer>
+#include <QClipboard>
 #include <QDir>
 #include <QApplication>
 #include <QImage>
@@ -39,6 +40,7 @@
 #include <QTemporaryDir>
 #include <QMimeData>
 
+#include <functional>
 #include <memory>
 
 #include <unistd.h>
@@ -1560,6 +1562,78 @@ void LayoutTests::copyNamesTheField() {
   QCOMPARE(toastText(), QStringLiteral("Copied mobile phone"));
   QVERIFY(copyLabel(QStringLiteral("Home")));
   QCOMPARE(toastText(), QStringLiteral("Copied home address"));
+
+  if (oldData.isNull()) qunsetenv("XDG_DATA_HOME");
+  else qputenv("XDG_DATA_HOME", oldData);
+  if (oldCache.isNull()) qunsetenv("XDG_CACHE_HOME");
+  else qputenv("XDG_CACHE_HOME", oldCache);
+  if (oldConfig.isNull()) qunsetenv("XDG_CONFIG_HOME");
+  else qputenv("XDG_CONFIG_HOME", oldConfig);
+}
+
+void LayoutTests::copiesThePhotoAtFullSize() {
+  QTemporaryDir dir;
+  QVERIFY(dir.isValid());
+  const QByteArray oldData = qgetenv("XDG_DATA_HOME");
+  const QByteArray oldCache = qgetenv("XDG_CACHE_HOME");
+  const QByteArray oldConfig = qgetenv("XDG_CONFIG_HOME");
+  qputenv("XDG_DATA_HOME", dir.filePath(QStringLiteral("data")).toUtf8());
+  qputenv("XDG_CACHE_HOME", dir.filePath(QStringLiteral("cache")).toUtf8());
+  qputenv("XDG_CONFIG_HOME", dir.filePath(QStringLiteral("config")).toUtf8());
+  qputenv("PEEPS_NO_SYNC", "1");
+
+  contacts::Contact contact = sampleContact(QStringLiteral("people/ada"), QStringLiteral("Ada"), QStringLiteral("Lovelace"),
+                                            QStringLiteral("ada@example.com"), {}, {});
+  contact.photoUrl = QStringLiteral("https://lh3.googleusercontent.com/contacts/ada=s100");
+  QImage source(1800, 1200, QImage::Format_RGB32);
+  source.fill(Qt::darkMagenta);
+  const QByteArray jpeg = encoded(source, "JPEG");
+  contacts::PhotoStore(dir.filePath(QStringLiteral("cache/peeps/photos"))).remember(contact.resourceName, contact.photoUrl, jpeg);
+
+  contacts::MainWindow window;
+  window.resize(1000, 700);
+  window.show();
+  QVERIFY(QTest::qWaitForWindowExposed(&window));
+  window.setContacts({contact});
+  QApplication::processEvents();
+  QTest::keyClick(&window, Qt::Key_Return);
+  QApplication::processEvents();
+  QListView* fields = nullptr;
+  for (auto* view : window.findChildren<QListView*>()) {
+    if (view->isVisible()) fields = view;
+  }
+  QVERIFY(fields != nullptr);
+  const auto toastText = [&]() {
+    for (auto* label : window.findChildren<QLabel*>()) {
+      if (label->parentWidget() != nullptr && label->parentWidget()->objectName() == QLatin1String("toast")) return label->text();
+    }
+    return QString();
+  };
+  const auto copyRow = [&](const std::function<bool(const QModelIndex&)>& wanted) {
+    for (int i = 0; i < fields->model()->rowCount(); ++i) {
+      const QModelIndex index = fields->model()->index(i, 0);
+      if (!wanted(index)) continue;
+      fields->setCurrentIndex(index);
+      fields->setFocus();
+      QTest::keyClick(&window, Qt::Key_C, Qt::ControlModifier);
+      return true;
+    }
+    return false;
+  };
+  const auto photo = [](const QModelIndex& index) { return !index.data(Qt::DecorationRole).value<QPixmap>().isNull(); };
+
+  QVERIFY(copyRow(photo));
+  QTRY_COMPARE_WITH_TIMEOUT(toastText(), QStringLiteral("Copied photo"), 5000);
+  const QMimeData* copied = QGuiApplication::clipboard()->mimeData();
+  QVERIFY(copied != nullptr);
+  QCOMPARE(copied->data(QStringLiteral("image/jpeg")), jpeg);
+  QCOMPARE(QImage::fromData(copied->data(QStringLiteral("image/png")), "PNG").size(), source.size());
+
+  // A copy made while the PNG is still being prepared wins.
+  QVERIFY(copyRow(photo));
+  QVERIFY(copyRow([](const QModelIndex& index) { return index.data(Qt::UserRole).toString() == QLatin1String("Work"); }));
+  QTest::qWait(1000);
+  QCOMPARE(QGuiApplication::clipboard()->text(), QStringLiteral("ada@example.com"));
 
   if (oldData.isNull()) qunsetenv("XDG_DATA_HOME");
   else qputenv("XDG_DATA_HOME", oldData);

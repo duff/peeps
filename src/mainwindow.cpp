@@ -11,6 +11,7 @@
 
 #include <QAction>
 #include <QApplication>
+#include <QBuffer>
 #include <QClipboard>
 #include <QCloseEvent>
 #include <QDateTime>
@@ -28,6 +29,7 @@
 #include <QMimeData>
 #include <QMouseEvent>
 #include <QIcon>
+#include <QImageReader>
 #include <QPainter>
 #include <QPixmap>
 #include <QPlainTextEdit>
@@ -488,6 +490,7 @@ MainWindow::MainWindow() : secrets_(makeSecretStore()) {
                             qEnvironmentVariable("XDG_CACHE_HOME"));
   fontFamily_ = monospaceFamily();
   photos_ = new PhotoStore(paths_.photoDir, this);
+  connect(QGuiApplication::clipboard(), &QClipboard::dataChanged, this, [this] { ++clipboardChanges_; });
   connect(photos_, &PhotoStore::updated, this, [this](const QString& id) {
     const Contact* contact = selected();
     if (contact == nullptr || contact->resourceName != id) return;
@@ -1162,14 +1165,12 @@ bool MainWindow::copyCurrentField() {
   const FieldAction action = FieldDelegate::action(index);
   if (action == FieldAction::CopyPhoto) {
     const Contact* contact = selected();
-    const QImage image =
-        contact == nullptr ? QImage() : decodePhoto(photos_->originalBytes(contact->resourceName, contact->photoUrl));
-    if (image.isNull()) {
+    const QByteArray original = contact == nullptr ? QByteArray() : photos_->originalBytes(contact->resourceName, contact->photoUrl);
+    if (original.isEmpty()) {
       toast(QStringLiteral("The photo isn’t downloaded yet."), true);
       return false;
     }
-    QGuiApplication::clipboard()->setImage(image);
-    toast(QStringLiteral("Copied photo"));
+    copyPhoto(original);
     return true;
   }
   if (action != FieldAction::Copy) return false;
@@ -1178,6 +1179,45 @@ bool MainWindow::copyCurrentField() {
   QGuiApplication::clipboard()->setText(value);
   toast(copiedNotice(index));
   return true;
+}
+
+// The clipboard gets the photo at full size: the original file as it is, and
+// a lossless PNG for apps that only paste PNG. Omarchy's clipboard history asks
+// for the PNG the moment it is offered, and an offered QImage is encoded on
+// this thread for each request, which froze the window for seconds on a large
+// photo. So the PNG is made once, on a worker, before the copy is offered.
+void MainWindow::copyPhoto(const QByteArray& original) {
+  const quint64 copy = ++photoCopies_;
+  const quint64 clipboardBefore = clipboardChanges_;
+  runInBackground([this, original, copy, clipboardBefore] {
+    QBuffer source;
+    source.setData(original);
+    source.open(QIODevice::ReadOnly);
+    QImageReader reader(&source);
+    const QString type = QStringLiteral("image/") + QString::fromLatin1(reader.format());
+    const QImage image = decodePhoto(original);
+    QByteArray png;
+    QBuffer buffer(&png);
+    buffer.open(QIODevice::WriteOnly);
+    // PNG is lossless at any level, and a light one encodes a 3200 pixel
+    // photo in half a second instead of more than two.
+    if (image.isNull() || !image.save(&buffer, "PNG", 80)) png.clear();
+    QMetaObject::invokeMethod(
+        this,
+        [this, original, png, type, copy, clipboardBefore] {
+          if (closing_ || copy != photoCopies_ || clipboardChanges_ != clipboardBefore) return;
+          if (png.isEmpty()) {
+            toast(QStringLiteral("Could not copy that photo."), true);
+            return;
+          }
+          auto* data = new QMimeData;
+          data->setData(QStringLiteral("image/png"), png);
+          if (type != QLatin1String("image/png")) data->setData(type, original);
+          QGuiApplication::clipboard()->setMimeData(data);
+          toast(QStringLiteral("Copied photo"));
+        },
+        Qt::QueuedConnection);
+  });
 }
 
 // A shortcut used from the keyboard counts toward retiring its hint. The

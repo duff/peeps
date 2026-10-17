@@ -80,6 +80,7 @@ class LayoutTests : public QObject {
   void notesWrapInsteadOfEllipsis();
   void blankPhoneTypeStaysBlank();
   void copyNamesTheField();
+  void copiesThePhotoAtFullSize();
   void editorTracksChanges();
 };
 
