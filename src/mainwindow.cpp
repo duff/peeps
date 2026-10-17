@@ -1702,12 +1702,14 @@ void MainWindow::runSave(const Contact& contact, bool isNew, const QByteArray& p
     toast(QStringLiteral("Connect a Google account before saving."), true);
     return;
   }
-  // An edit shows at once and rolls back if Google refuses it.
+  // An edit shows at once and rolls back if Google refuses it. The cache on
+  // disk waits for Google's answer: an edit is never sent again, so one written
+  // early and then lost with the window would stay in the cache, and no sync
+  // would correct it.
   std::optional<Contact> previous;
   if (!isNew && !contact.resourceName.isEmpty()) {
     if (const Contact* existing = index_.find(contact.resourceName)) previous = *existing;
     index_.upsert(contact);
-    saveCache();
     refilter();
     selectId(contact.resourceName);
   }
@@ -1744,7 +1746,6 @@ void MainWindow::runSave(const Contact& contact, bool isNew, const QByteArray& p
         if (!error.isEmpty()) {
           if (previous) {
             index_.upsert(*previous);
-            saveCache();
             refilter();
             selectId(previous->resourceName);
           }
