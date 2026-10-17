@@ -7,6 +7,7 @@
 #include <QFile>
 #include <QFileDialog>
 #include <QImage>
+#include <QImageReader>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
@@ -18,20 +19,36 @@
 
 namespace contacts {
 
-QByteArray photoUploadBytes(const QImage& image) {
+QImage decodePhoto(const QByteArray& bytes) {
+  QBuffer buffer;
+  buffer.setData(bytes);
+  buffer.open(QIODevice::ReadOnly);
+  QImageReader reader(&buffer);
+  reader.setAutoTransform(true);
+  return reader.read();
+}
+
+QByteArray photoUploadBytes(const QByteArray& original) {
+  QBuffer buffer;
+  buffer.setData(original);
+  buffer.open(QIODevice::ReadOnly);
+  QImageReader reader(&buffer);
+  // A JPEG that relies on its orientation tag would be re-encoded without it
+  // and show up sideways, so only an upright one goes as it is.
+  const bool uprightJpeg = reader.format() == "jpeg" && reader.transformation() == QImageIOHandler::TransformationNone;
+  reader.setAutoTransform(true);
+  const QImage image = reader.read();
   if (image.isNull()) return {};
-  QImage working = image;
-  const int longest = std::max(working.width(), working.height());
-  if (longest > 1024) working = working.scaled(1024, 1024, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-  QImage flat(working.size(), QImage::Format_RGB32);
+  if (uprightJpeg) return original;
+  QImage flat(image.size(), QImage::Format_RGB32);
   flat.fill(Qt::white);
   QPainter painter(&flat);
-  painter.drawImage(0, 0, working);
+  painter.drawImage(0, 0, image);
   painter.end();
   QByteArray bytes;
-  QBuffer buffer(&bytes);
-  buffer.open(QIODevice::WriteOnly);
-  if (!flat.save(&buffer, "JPEG", 85)) return {};
+  QBuffer out(&bytes);
+  out.open(QIODevice::WriteOnly);
+  if (!flat.save(&out, "JPEG", 100)) return {};
   return bytes;
 }
 
@@ -40,9 +57,9 @@ std::optional<QByteArray> choosePhotoBytes(QWidget* parent) {
       parent, QStringLiteral("Choose a photo"), QString(),
       QStringLiteral("Images (*.png *.jpg *.jpeg *.webp *.gif *.bmp)"));
   if (path.isEmpty()) return std::nullopt;
-  const QByteArray bytes = photoUploadBytes(QImage(path));
-  if (bytes.isEmpty()) return QByteArray();
-  return bytes;
+  QFile file(path);
+  if (!file.open(QIODevice::ReadOnly)) return QByteArray();
+  return photoUploadBytes(file.readAll());
 }
 
 namespace {
@@ -114,8 +131,12 @@ QPixmap PhotoStore::imageFor(const QString& resourceName, const QString& url, in
   return pixmap;
 }
 
-QImage PhotoStore::originalImage(const QString& resourceName, const QString& url) const {
-  return loadFull(resourceName, url);
+QByteArray PhotoStore::originalBytes(const QString& resourceName, const QString& url) const {
+  const QString path = filePath(resourceName);
+  QFile marker(path + QStringLiteral(".fetch"));
+  if (!marker.open(QIODevice::ReadOnly) || QString::fromUtf8(marker.readAll()) != photoFetchUrl(url)) return {};
+  QFile file(path);
+  return file.open(QIODevice::ReadOnly) ? file.readAll() : QByteArray();
 }
 
 void PhotoStore::remember(const QString& resourceName, const QString& url, const QByteArray& bytes) {

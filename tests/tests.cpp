@@ -571,7 +571,7 @@ void GoogleTests::savedPhotoIsVisibleImmediately() {
   });
   store.remember(id, url, jpeg);
   QVERIFY(!shown.isNull());
-  QCOMPARE(store.originalImage(id, url).size(), source.size());
+  QCOMPARE(store.originalBytes(id, url), jpeg);
 }
 
 void GoogleTests::downloadedPhotoIsVisibleImmediately() {
@@ -616,7 +616,49 @@ void GoogleTests::downloadedPhotoIsVisibleImmediately() {
   QVERIFY(store.imageFor(id, url, 32, 1).isNull());
   QTRY_VERIFY_WITH_TIMEOUT(!shown.isNull(), 3000);
   QCOMPARE(requests, 1);
-  QCOMPARE(store.originalImage(id, url).size(), source.size());
+  QCOMPARE(store.originalBytes(id, url), jpeg);
+}
+
+namespace {
+
+QByteArray encoded(const QImage& image, const char* format) {
+  QByteArray bytes;
+  QBuffer buffer(&bytes);
+  buffer.open(QIODevice::WriteOnly);
+  image.save(&buffer, format, 92);
+  return bytes;
+}
+
+// A JPEG with an EXIF orientation tag, the way phones save a turned photo.
+QByteArray withOrientation(const QByteArray& jpeg, quint16 orientation) {
+  QByteArray tiff("MM\x00\x2a\x00\x00\x00\x08\x00\x01\x01\x12\x00\x03\x00\x00\x00\x01", 18);
+  tiff += char(orientation >> 8);
+  tiff += char(orientation & 0xff);
+  tiff += QByteArray(6, '\0');
+  const QByteArray app1 = QByteArray("Exif\0\0", 6) + tiff;
+  QByteArray segment("\xff\xe1", 2);
+  segment += char((app1.size() + 2) >> 8);
+  segment += char((app1.size() + 2) & 0xff);
+  return jpeg.left(2) + segment + app1 + jpeg.mid(2);
+}
+
+}  // namespace
+
+void GoogleTests::uploadsPhotosAtFullQuality() {
+  QImage wide(2400, 1600, QImage::Format_RGB32);
+  wide.fill(Qt::darkGreen);
+  const QByteArray jpeg = encoded(wide, "JPEG");
+  // An upright JPEG goes byte for byte, with no size cap.
+  QCOMPARE(contacts::photoUploadBytes(jpeg), jpeg);
+  // Anything else becomes a JPEG at its full size.
+  QCOMPARE(contacts::decodePhoto(contacts::photoUploadBytes(encoded(wide, "PNG"))).size(), wide.size());
+  // A photo that relies on its orientation tag is turned upright.
+  const QByteArray tagged = withOrientation(jpeg, 6);
+  QCOMPARE(contacts::decodePhoto(tagged).size(), QSize(1600, 2400));
+  const QByteArray upright = contacts::photoUploadBytes(tagged);
+  QVERIFY(upright != tagged);
+  QCOMPARE(QImage::fromData(upright).size(), QSize(1600, 2400));
+  QVERIFY(contacts::photoUploadBytes("not an image").isEmpty());
 }
 
 void GoogleTests::oldCacheRequestsFullSync() {
@@ -1840,13 +1882,19 @@ void GoogleTests::writesVCards() {
 
   QImage image(64, 64, QImage::Format_RGB32);
   image.fill(Qt::darkCyan);
-  const QByteArray pictured = contacts::contactVCard(ada, contacts::photoUploadBytes(image));
+  QByteArray png;
+  QBuffer pngBuffer(&png);
+  QVERIFY(pngBuffer.open(QIODevice::WriteOnly));
+  QVERIFY(image.save(&pngBuffer, "PNG"));
+  const QByteArray jpeg = contacts::photoUploadBytes(png);
+  QVERIFY(!jpeg.isEmpty());
+  const QByteArray pictured = contacts::contactVCard(ada, jpeg);
   QVERIFY(pictured.contains("\r\nPHOTO;ENCODING=b;TYPE=JPEG:"));
   // Long lines fold at 75 bytes with a leading space, and unfold to the same bytes.
   for (const QByteArray& line : pictured.split('\n')) QVERIFY2(line.size() <= 76, line.constData());
   QByteArray unfolded = pictured;
   unfolded.replace("\r\n ", "");
-  QVERIFY(unfolded.contains("PHOTO;ENCODING=b;TYPE=JPEG:" + contacts::photoUploadBytes(image).toBase64() + "\r\n"));
+  QVERIFY(unfolded.contains("PHOTO;ENCODING=b;TYPE=JPEG:" + jpeg.toBase64() + "\r\n"));
 
   contacts::Contact accented;
   accented.givenName = QString(40, QChar(0x00E9));

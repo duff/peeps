@@ -1163,7 +1163,8 @@ bool MainWindow::copyCurrentField() {
   const FieldAction action = FieldDelegate::action(index);
   if (action == FieldAction::CopyPhoto) {
     const Contact* contact = selected();
-    const QImage image = contact == nullptr ? QImage() : photos_->originalImage(contact->resourceName, contact->photoUrl);
+    const QImage image =
+        contact == nullptr ? QImage() : decodePhoto(photos_->originalBytes(contact->resourceName, contact->photoUrl));
     if (image.isNull()) {
       toast(QStringLiteral("The photo isn’t downloaded yet."), true);
       return false;
@@ -1329,7 +1330,7 @@ QString MainWindow::writeCard(const Contact& contact) {
   QString dir = QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation);
   dir = dir.isEmpty() ? QFileInfo(paths_.photoDir).absolutePath() + QStringLiteral("/cards") : dir + QStringLiteral("/peeps");
   const QString path = dir + QLatin1Char('/') + cardFileName(contact.displayName());
-  const QByteArray jpeg = photoUploadBytes(photos_->originalImage(contact.resourceName, contact.photoUrl));
+  const QByteArray jpeg = photoUploadBytes(photos_->originalBytes(contact.resourceName, contact.photoUrl));
   QString error;
   if (!writePrivateFile(path, contactVCard(contact, jpeg), error)) {
     toast(error, true);
@@ -1363,7 +1364,7 @@ void MainWindow::shareSelected() {
                                                       QStringLiteral("vCard (*.vcf)"));
     if (path.isEmpty()) return;
     QString error;
-    const QByteArray jpeg = photoUploadBytes(photos_->originalImage(contact.resourceName, contact.photoUrl));
+    const QByteArray jpeg = photoUploadBytes(photos_->originalBytes(contact.resourceName, contact.photoUrl));
     if (!writePrivateFile(path, contactVCard(contact, jpeg), error)) toast(error, true);
     else toast(QStringLiteral("Saved %1").arg(QFileInfo(path).fileName()));
     return;

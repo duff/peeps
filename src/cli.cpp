@@ -2,17 +2,16 @@
 
 #include "blockingnam.h"
 #include "oauth.h"
+#include "photos.h"
 #include "search.h"
 #include "skill.h"
 #include "vcard.h"
 #include "version.h"
 
-#include <QBuffer>
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
-#include <QImage>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -999,18 +998,9 @@ std::optional<QByteArray> readInput(const CliSession& session, const QString& pa
 }
 
 QByteArray jpegBytes(const QString& path, QString& error) {
-  QImage image;
-  if (!image.load(path) || image.isNull()) {
-    error = QStringLiteral("Could not read that image.");
-    return {};
-  }
-  QByteArray bytes;
-  QBuffer buffer(&bytes);
-  buffer.open(QIODevice::WriteOnly);
-  if (!image.save(&buffer, "JPEG", 90) || bytes.isEmpty()) {
-    error = QStringLiteral("Could not read that image.");
-    return {};
-  }
+  QFile file(path);
+  const QByteArray bytes = file.open(QIODevice::ReadOnly) ? photoUploadBytes(file.readAll()) : QByteArray();
+  if (bytes.isEmpty()) error = QStringLiteral("Could not read that image.");
   return bytes;
 }
 

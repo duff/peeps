@@ -563,8 +563,7 @@ struct ContactEditor::Form {
       showError(QStringLiteral("Could not read that image."));
       return;
     }
-    QImage image;
-    image.loadFromData(*chosen);
+    const QImage image = decodePhoto(*chosen);
     photoBytes = *chosen;
     removePhotoFlag = false;
     showPixmap(QPixmap::fromImage(image));

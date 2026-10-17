@@ -17,7 +17,12 @@ class QWidget;
 
 namespace contacts {
 
-QByteArray photoUploadBytes(const QImage& image);
+// Decodes with the photo's orientation applied, so a phone picture is upright.
+QImage decodePhoto(const QByteArray& bytes);
+// The bytes Peeps uploads and puts in a vCard, at full quality. An upright
+// JPEG goes as it is, byte for byte. Anything else is turned upright, laid on
+// white, and encoded as a quality 100 JPEG at its full size.
+QByteArray photoUploadBytes(const QByteArray& original);
 std::optional<QByteArray> choosePhotoBytes(QWidget* parent);
 
 // Downloads the original contact photo and keeps those bytes on disk.
@@ -30,7 +35,8 @@ class PhotoStore : public QObject {
 
   void setAccessToken(const QString& token);
   QPixmap imageFor(const QString& resourceName, const QString& url, int logicalSize, qreal devicePixelRatio);
-  QImage originalImage(const QString& resourceName, const QString& url) const;
+  // The original file as Google sent it. Empty until it has downloaded.
+  QByteArray originalBytes(const QString& resourceName, const QString& url) const;
   void remember(const QString& resourceName, const QString& url, const QByteArray& bytes);
   void forget(const QString& resourceName);
 
