@@ -974,6 +974,18 @@ void GoogleTests::retriesOnceAfterUnauthorized() {
   QCOMPARE(refreshes, 1);
   QCOMPARE(result.syncToken, QStringLiteral("s"));
   QCOMPARE(http.urls.size(), 2);
+
+  // An incremental sync sends its token on every page, not just the first.
+  ScriptedHttp paged;
+  paged.script.append({200, R"({"connections":[],"nextPageToken":"p2"})", {}, {}});
+  paged.script.append({200, R"({"connections":[],"nextSyncToken":"s2"})", {}, {}});
+  const auto incremental = contacts::fetchConnections(paged, token, QStringLiteral("s1"), [] { return QString(); });
+  QVERIFY(incremental.ok());
+  QCOMPARE(incremental.syncToken, QStringLiteral("s2"));
+  QCOMPARE(paged.urls.size(), 2);
+  QVERIFY(paged.urls.at(0).contains(QStringLiteral("syncToken=s1")));
+  QVERIFY(paged.urls.at(1).contains(QStringLiteral("pageToken=p2")));
+  QVERIFY(paged.urls.at(1).contains(QStringLiteral("syncToken=s1")));
 }
 
 void GoogleTests::createReadsResource() {

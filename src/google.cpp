@@ -552,10 +552,10 @@ HttpResponse authorizedRequest(HttpClient& http, QString& accessToken, const Ref
 PeopleResult fetchConnections(HttpClient& http, QString& accessToken, const QString& syncToken, const RefreshFn& refresh) {
   PeopleResult result;
   QString pageToken;
-  bool first = true;
   do {
-    const QString url = connectionsUrl(pageToken, first ? syncToken : QString());
-    first = false;
+    // Each page repeats every parameter of the first call, the sync token
+    // included, as the People API requires of a paged request.
+    const QString url = connectionsUrl(pageToken, syncToken);
     const HttpResponse response = authorizedRequest(http, accessToken, refresh, QStringLiteral("GET"), url, {});
     if (response.status == 0) {
       result.error = response.error.isEmpty() ? QStringLiteral("Could not reach Google Contacts.") : response.error;
