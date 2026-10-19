@@ -169,7 +169,7 @@ Sizes follow the Omarchy shell. The theme's `shell.toml` sets the base text size
 
 ## Install
 
-Most people will install Peeps from the AUR. The package has Peeps' Google client built in, so after installing you only open Menu → Google account and choose Connect. Opening Peeps also sets up the [agent skill](#agents). The package is coming once Google finishes verifying Peeps.
+Most people will install Peeps from the AUR. The package has Peeps' Google client built in, so after installing you only open Menu → Google account and choose Connect. Opening Peeps also sets up the [agent skill](#agents). The package is coming soon.
 
 ### Building it yourself
 
