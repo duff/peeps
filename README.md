@@ -198,6 +198,8 @@ The agent skill installs to `share/peeps/skills/peeps`. A package cannot reach a
 
 Peeps signs in through a Google OAuth client that is built into the app, so people only choose Connect. Set `PEEPS_GOOGLE_CLIENT_ID`, and `PEEPS_GOOGLE_CLIENT_SECRET` if the client has one, when you build. A build without them cannot connect to Google. A Desktop client id is not a secret: Google treats an installed app as unable to keep one.
 
+`make release` builds what a GitHub release of Peeps carries: `release/peeps-<version>-<arch>-linux.tar.gz`, a `usr/` tree with the client from `local.mk` built in, and `release/SHA256SUMS`. It runs the tests first and wants a clean working tree, so the tarball matches a commit. The version comes from `src/version.h`, and the release's tag is that version with a `v` in front.
+
 ## License
 
 Peeps is released under the [MIT License](LICENSE).
