@@ -13,7 +13,7 @@ Your contacts travel only between this computer and Google. There is no Peeps se
 
 ## Why Peeps
 
-My family came to Omarchy from Macs. We all have iPhones, and our contacts lived in iCloud. After the switch we still wanted one address book that we could read and edit on the phones and on the Omarchy desktop. Google Contacts made the most sense as the place for it: an iPhone syncs with it from Settings, Android uses it already, and it has a real API. That left us needing an Omarchy app for Google Contacts, and Peeps is that app.
+My family came to Omarchy from Macs. We have iPhones, and our contacts lived in iCloud. After the switch we still wanted one address book that we could read and edit on the phones and on the Omarchy desktop. Google Contacts made the most sense as the place for it: an iPhone syncs with it from Settings, Android uses it already, and it has a real API. That left us needing an Omarchy app for Google Contacts, and Peeps is that app.
 
 ## Is this for you?
 
