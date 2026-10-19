@@ -197,9 +197,9 @@ QString commandHelp(const QString& command) {
         "links them now and lets Peeps keep them.\n");
   }
   if (command == QLatin1String("commands")) {
-    return QStringLiteral("List the commands.\n\n  contacts commands [--json]\n");
+    return QStringLiteral("List the commands.\n\n  peeps commands [--json]\n");
   }
-  if (command == QLatin1String("version")) return QStringLiteral("Print the version.\n\n  contacts --version\n");
+  if (command == QLatin1String("version")) return QStringLiteral("Print the version.\n\n  peeps --version\n");
   return overview();
 }
 
