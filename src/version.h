@@ -2,6 +2,6 @@
 
 namespace contacts {
 
-inline constexpr char kVersion[] = "0.1.0";
+inline constexpr char kVersion[] = "1.0.0";
 
 }  // namespace contacts

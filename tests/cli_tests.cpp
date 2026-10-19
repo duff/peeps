@@ -2,6 +2,7 @@
 
 #include "cli.h"
 #include "skill.h"
+#include "version.h"
 
 #include <QDateTime>
 #include <QDir>
@@ -115,7 +116,7 @@ void CliTests::usageAndVersion() {
   contacts::CliSession session;
   const auto version = run({QStringLiteral("--version")}, session, true);
   QCOMPARE(version.code, contacts::kCliOk);
-  QCOMPARE(version.out, QStringLiteral("peeps 0.1.0\n"));
+  QCOMPARE(version.out, QStringLiteral("peeps ") + QLatin1String(contacts::kVersion) + QLatin1Char('\n'));
 
   const auto missing = run({QStringLiteral("--json")}, session, true);
   QCOMPARE(missing.code, contacts::kCliUsage);
