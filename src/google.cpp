@@ -284,6 +284,18 @@ QJsonArray labeledArray(const QList<LabeledValue>& values, LabelField field) {
 
 QString bearer(const QString& token) { return QStringLiteral("Bearer ") + token; }
 
+// Google answers an expired sync token with a 400 whose details carry
+// EXPIRED_SYNC_TOKEN. 410 is what its documentation once said.
+bool syncTokenExpired(const HttpResponse& response) {
+  if (response.status == 410) return true;
+  if (response.status != 400) return false;
+  const QJsonObject error = QJsonDocument::fromJson(response.body).object().value(QLatin1String("error")).toObject();
+  for (const QJsonValue& detail : error.value(QLatin1String("details")).toArray()) {
+    if (jsonString(detail.toObject(), "reason") == QLatin1String("EXPIRED_SYNC_TOKEN")) return true;
+  }
+  return false;
+}
+
 }  // namespace
 
 QString googleErrorMessage(const QByteArray& body, int status) {
@@ -561,7 +573,7 @@ PeopleResult fetchConnections(HttpClient& http, QString& accessToken, const QStr
       result.error = response.error.isEmpty() ? QStringLiteral("Could not reach Google Contacts.") : response.error;
       return result;
     }
-    if (response.status == 410) {
+    if (syncTokenExpired(response)) {
       result.error = QStringLiteral("sync-token-expired");
       return result;
     }

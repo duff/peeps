@@ -1138,6 +1138,20 @@ void GoogleTests::retriesOnceAfterUnauthorized() {
   QVERIFY(paged.urls.at(0).contains(QStringLiteral("syncToken=s1")));
   QVERIFY(paged.urls.at(1).contains(QStringLiteral("pageToken=p2")));
   QVERIFY(paged.urls.at(1).contains(QStringLiteral("syncToken=s1")));
+
+  // A week after the full sync, Google refuses the token, and the caller
+  // starts over without one.
+  ScriptedHttp expired;
+  expired.script.append({400, R"({"error":{"code":400,"message":"Sync token is expired. Clear local cache and retry call without the sync token.",
+    "status":"FAILED_PRECONDITION","details":[{"@type":"type.googleapis.com/google.rpc.ErrorInfo","reason":"EXPIRED_SYNC_TOKEN",
+    "domain":"people.googleapis.com"}]}})", {}, {}});
+  QCOMPARE(contacts::fetchConnections(expired, token, QStringLiteral("s1"), {}).error, QStringLiteral("sync-token-expired"));
+  expired.script.append({410, {}, {}, {}});
+  QCOMPARE(contacts::fetchConnections(expired, token, QStringLiteral("s1"), {}).error, QStringLiteral("sync-token-expired"));
+  // Any other refusal is reported as Google words it.
+  expired.script.append({400, R"({"error":{"code":400,"message":"Request contains an invalid argument.","status":"INVALID_ARGUMENT"}})", {}, {}});
+  QCOMPARE(contacts::fetchConnections(expired, token, QStringLiteral("s1"), {}).error,
+           QStringLiteral("Request contains an invalid argument."));
 }
 
 void GoogleTests::createReadsResource() {
