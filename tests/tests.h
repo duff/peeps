@@ -55,6 +55,8 @@ class GoogleTests : public QObject {
   void drawsPhotosFromASizedCopy();
   void keepsPhotosPrivate();
   void retriesFailedPhotoWithNewToken();
+  void syncsEveryPhotoInTheBook();
+  void storeSyncsEveryPhotoInTheBook();
   void oldCacheRequestsFullSync();
   void cacheKeepsSyncTime();
   void syncedAgoReads();

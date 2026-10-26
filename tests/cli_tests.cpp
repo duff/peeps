@@ -528,6 +528,13 @@ void CliTests::syncRefreshesTheCache() {
     result.syncToken = QStringLiteral("next");
     return result;
   };
+  QStringList photosFor;
+  contacts::PhotoSync photos{2, 1};
+  session.syncPhotos = [&](const QList<contacts::Contact>& contacts) {
+    photosFor.clear();
+    for (const contacts::Contact& contact : contacts) photosFor.append(contact.resourceName);
+    return photos;
+  };
   const auto synced = run({QStringLiteral("sync"), QStringLiteral("--json")}, session, true);
   QCOMPARE(synced.code, contacts::kCliOk);
   QCOMPARE(calls, QList<bool>({false, true}));
@@ -536,6 +543,11 @@ void CliTests::syncRefreshesTheCache() {
   QCOMPARE(session.contacts.size(), 1);
   QCOMPARE(session.contacts.first().givenName, QStringLiteral("Grace"));
   QVERIFY(objectOf(synced).value(QStringLiteral("full")).toBool());
+  // The photos follow the synced book, and one that failed is a warning.
+  QCOMPARE(photosFor, QStringList({QStringLiteral("people/c9")}));
+  QCOMPARE(objectOf(synced).value(QStringLiteral("photos_downloaded")).toInt(), 2);
+  QCOMPARE(objectOf(synced).value(QStringLiteral("photos_failed")).toInt(), 1);
+  QVERIFY(synced.err.contains(QStringLiteral("1 photo did not download.")));
 
   calls.clear();
   session.syncPeople = [&](bool full) {
@@ -547,10 +559,12 @@ void CliTests::syncRefreshesTheCache() {
     result.syncToken = QStringLiteral("full-token");
     return result;
   };
+  photos = {1, 0};
   const auto full = run({QStringLiteral("sync"), QStringLiteral("--full")}, session, true);
   QCOMPARE(full.code, contacts::kCliOk);
   QCOMPARE(calls, QList<bool>({true}));
-  QVERIFY(full.out.contains(QStringLiteral("Synced 1 contact.")));
+  QVERIFY(full.out.contains(QStringLiteral("Synced 1 contact. Downloaded 1 photo.")));
+  QVERIFY(full.err.isEmpty());
 }
 
 void CliTests::liveCacheAndGoogle() {

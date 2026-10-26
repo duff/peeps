@@ -3,6 +3,7 @@
 #include "contact.h"
 #include "google.h"
 #include "http.h"
+#include "photos.h"
 #include "secrets.h"
 #include "store.h"
 
@@ -37,6 +38,8 @@ struct CliSession {
   std::function<WriteResult(const Contact&)> update;
   std::function<QString(const QString& id)> remove;
   std::function<PeopleResult(bool full)> syncPeople;
+  // Brings the photo folder in line with the synced contacts.
+  std::function<PhotoSync(const QList<Contact>& contacts)> syncPhotos;
   std::function<WriteResult(const QString& id, const QByteArray& jpeg, bool removePhoto)> photo;
   std::function<bool(const QList<Contact>& contacts, const QString& syncToken, QString& error)> save;
   // Links ("install") or unlinks ("remove") the agent skill.

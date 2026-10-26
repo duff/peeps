@@ -24,6 +24,18 @@ QImage decodePhoto(const QByteArray& bytes);
 QByteArray photoUploadBytes(const QByteArray& original);
 std::optional<QByteArray> choosePhotoBytes(QWidget* parent);
 
+struct PhotoSync {
+  int downloaded = 0;
+  int failed = 0;
+};
+
+// Makes `directory` hold every contact's photo as Google has it: downloads
+// each one that is missing or has changed, one at a time, and deletes those
+// of contacts that are gone or no longer have a photo. Other programs read
+// the folder, so it follows the whole book, not just the photos on screen.
+PhotoSync syncPhotos(HttpClient& http, const QString& accessToken, const QString& directory,
+                     const QList<Contact>& contacts);
+
 // Downloads the original contact photo and keeps those bytes on disk.
 // `logicalSize` is the on-screen size in pixels; the returned pixmap is
 // rendered at the screen's device pixel ratio so it stays sharp.
@@ -38,18 +50,19 @@ class PhotoStore : public QObject {
   QByteArray originalBytes(const QString& resourceName, const QString& url) const;
   void remember(const QString& resourceName, const QString& url, const QByteArray& bytes);
   void forget(const QString& resourceName);
+  // What syncPhotos() does, in the background. A photo on screen goes first.
+  void sync(const QList<Contact>& contacts);
 
  signals:
   void updated(const QString& resourceName);
 
  private:
-  void enqueue(const QString& resourceName, const QString& url);
+  void enqueue(const QString& resourceName, const QString& url, bool urgent);
   void pump();
   void finished(QNetworkReply* reply, const QString& resourceName, const QString& url);
   bool store(const QString& resourceName, const QString& url, const QByteArray& bytes);
   void discard(const QString& resourceName);
   void dropMemory(const QString& resourceName);
-  void dropSized(const QString& resourceName) const;
   QString filePath(const QString& resourceName) const;
   QString sizedPath(const QString& resourceName, int edge) const;
   bool current(const QString& resourceName, const QString& url) const;
@@ -59,6 +72,8 @@ class PhotoStore : public QObject {
   QNetworkAccessManager* network_ = nullptr;
   QHash<QString, QPixmap> memory_;
   QStringList queue_;
+  // Photos waiting or downloading. A download whose entry is gone or has
+  // another URL by the time it lands is thrown away.
   QHash<QString, QString> queuedUrls_;
   // Photos that did not download this session, with their URLs for a retry.
   QHash<QString, QString> failed_;

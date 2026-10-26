@@ -771,6 +771,139 @@ void GoogleTests::retriesFailedPhotoWithNewToken() {
   QCOMPARE(requests, 2);
 }
 
+void GoogleTests::syncsEveryPhotoInTheBook() {
+  QTemporaryDir dir;
+  QVERIFY(dir.isValid());
+  QImage source(16, 16, QImage::Format_RGB32);
+  source.fill(Qt::cyan);
+  const QByteArray jpeg = encoded(source, "JPEG");
+  const QString photos = dir.filePath(QStringLiteral("photos"));
+  const QString google = QStringLiteral("https://lh3.googleusercontent.com/contacts/");
+  // Ada's photo is here already and Grace's is not. Alan's photo and Bea's
+  // whole contact are gone from Google.
+  contacts::Contact ada = person(QStringLiteral("people/c1"), QStringLiteral("Ada"), QStringLiteral("Lovelace"));
+  ada.photoUrl = google + QStringLiteral("ada=s100");
+  contacts::Contact grace = person(QStringLiteral("people/c2"), QStringLiteral("Grace"), QStringLiteral("Hopper"));
+  grace.photoUrl = google + QStringLiteral("grace=s100");
+  const contacts::Contact alan = person(QStringLiteral("people/c3"), QStringLiteral("Alan"), QStringLiteral("Turing"));
+  {
+    contacts::PhotoStore store(photos);
+    store.remember(ada.resourceName, ada.photoUrl, jpeg);
+    store.remember(alan.resourceName, google + QStringLiteral("alan=s100"), jpeg);
+    store.remember(QStringLiteral("people/c4"), google + QStringLiteral("bea=s100"), jpeg);
+    QVERIFY(!store.imageFor(QStringLiteral("people/c4"), google + QStringLiteral("bea=s100"), 20, 1).isNull());
+  }
+  writeFile(photos + QStringLiteral("/notes.txt"), QStringLiteral("not a photo"));
+
+  ScriptedHttp http;
+  http.script.append({200, jpeg, {}, {}});
+  const contacts::PhotoSync synced = contacts::syncPhotos(http, QStringLiteral("token"), photos, {ada, grace, alan});
+  QCOMPARE(synced.downloaded, 1);
+  QCOMPARE(synced.failed, 0);
+  QCOMPARE(http.urls, QStringList({google + QStringLiteral("grace=s0")}));
+  QCOMPARE(QDir(photos).entryList(QDir::Files, QDir::Name),
+           QStringList({QStringLiteral("notes.txt"), QStringLiteral("people_c1"), QStringLiteral("people_c1.fetch"),
+                        QStringLiteral("people_c2"), QStringLiteral("people_c2.fetch")}));
+  QFile downloaded(photos + QStringLiteral("/people_c2"));
+  QVERIFY(downloaded.open(QIODevice::ReadOnly));
+  QCOMPARE(downloaded.readAll(), jpeg);
+  // Nothing changed, so nothing downloads.
+  http.urls.clear();
+  QCOMPARE(contacts::syncPhotos(http, QStringLiteral("token"), photos, {ada, grace}).downloaded, 0);
+  QVERIFY(http.urls.isEmpty());
+
+  // Changed photos download again, but once Google is out of reach the rest
+  // wait for the next sync instead of a timeout each.
+  ada.photoUrl = google + QStringLiteral("ada2=s100");
+  grace.photoUrl = google + QStringLiteral("grace2=s100");
+  http.script = {{0, {}, QStringLiteral("Host not found"), {}}};
+  const contacts::PhotoSync offline = contacts::syncPhotos(http, QStringLiteral("token"), photos, {ada, grace});
+  QCOMPARE(offline.failed, 2);
+  QCOMPARE(http.urls.size(), 1);
+  // A refusal or a file that is not an image counts as a failure too.
+  http.script = {{404, {}, {}, {}}, {200, QByteArray("not an image"), {}, {}}};
+  QCOMPARE(contacts::syncPhotos(http, QStringLiteral("token"), photos, {ada, grace}).failed, 2);
+  http.script = {{200, jpeg, {}, {}}, {200, jpeg, {}, {}}};
+  QCOMPARE(contacts::syncPhotos(http, QStringLiteral("token"), photos, {ada, grace}).downloaded, 2);
+}
+
+void GoogleTests::storeSyncsEveryPhotoInTheBook() {
+  QTemporaryDir dir;
+  QVERIFY(dir.isValid());
+  QImage source(16, 16, QImage::Format_RGB32);
+  source.fill(Qt::magenta);
+  const QByteArray jpeg = encoded(source, "JPEG");
+  // Each photo arrives a moment after it is asked for, so a sync can change
+  // its mind while one is on the way.
+  QTcpServer server;
+  QVERIFY(server.listen(QHostAddress::LocalHost));
+  int requests = 0;
+  connect(&server, &QTcpServer::newConnection, &server, [&] {
+    while (QTcpSocket* socket = server.nextPendingConnection()) {
+      connect(socket, &QTcpSocket::readyRead, socket, [&, socket] {
+        if (socket->property("sent").toBool()) {
+          socket->readAll();
+          return;
+        }
+        socket->setProperty("sent", true);
+        const bool refuse = socket->readAll().startsWith("GET /refused");
+        ++requests;
+        QTimer::singleShot(200, socket, [socket, jpeg, refuse] {
+          const QByteArray body = refuse ? QByteArray() : jpeg;
+          socket->write(QByteArray("HTTP/1.1 ") + (refuse ? "403 Forbidden" : "200 OK") +
+                        "\r\nContent-Type: image/jpeg\r\nContent-Length: " + QByteArray::number(body.size()) +
+                        "\r\nConnection: close\r\n\r\n" + body);
+          socket->disconnectFromHost();
+        });
+      });
+    }
+  });
+  const QString base = QStringLiteral("http://%1:%2/").arg(server.serverAddress().toString()).arg(server.serverPort());
+  contacts::Contact ada = person(QStringLiteral("people/c1"), QStringLiteral("Ada"), QStringLiteral("Lovelace"));
+  ada.photoUrl = base + QStringLiteral("ada");
+  contacts::Contact grace = person(QStringLiteral("people/c2"), QStringLiteral("Grace"), QStringLiteral("Hopper"));
+  grace.photoUrl = base + QStringLiteral("grace");
+
+  contacts::PhotoStore store(dir.path());
+  QStringList updated;
+  connect(&store, &contacts::PhotoStore::updated, &store, [&](const QString& resourceName) { updated.append(resourceName); });
+  // Neither photo has been on screen, and both download.
+  store.sync({ada, grace});
+  QTRY_COMPARE_WITH_TIMEOUT(updated.size(), 2, 3000);
+  QCOMPARE(store.originalBytes(grace.resourceName, grace.photoUrl), jpeg);
+  QCOMPARE(requests, 2);
+
+  // A refused photo is not asked for again on the next sync, but a new photo
+  // of hers is.
+  grace.photoUrl = base + QStringLiteral("refused");
+  store.sync({ada, grace});
+  QTRY_COMPARE_WITH_TIMEOUT(requests, 3, 3000);
+  QTest::qWait(400);
+  store.sync({ada, grace});
+  QTest::qWait(400);
+  QCOMPARE(requests, 3);
+  grace.photoUrl = base + QStringLiteral("grace2");
+  store.sync({ada, grace});
+  QTRY_COMPARE_WITH_TIMEOUT(updated.size(), 3, 3000);
+  QCOMPARE(requests, 4);
+
+  // Grace's next photo is still on the way when she leaves the book, and it
+  // does not come back when it lands.
+  grace.photoUrl = base + QStringLiteral("grace3");
+  store.sync({ada, grace});
+  store.sync({ada});
+  QVERIFY(!QFile::exists(dir.filePath(QStringLiteral("people_c2"))));
+  QTRY_COMPARE_WITH_TIMEOUT(requests, 5, 3000);
+  QTest::qWait(400);
+  QVERIFY(!QFile::exists(dir.filePath(QStringLiteral("people_c2"))));
+  QCOMPARE(updated.size(), 3);
+  QVERIFY(QFile::exists(dir.filePath(QStringLiteral("people_c1"))));
+
+  // Nobody, as after Disconnect, leaves nothing behind.
+  store.sync({});
+  QVERIFY(QDir(dir.path()).entryList(QDir::Files).isEmpty());
+}
+
 void GoogleTests::oldCacheRequestsFullSync() {
   const auto fresh = contacts::readCacheJson(R"({"version":1,"sync_token":"old","contacts":[]})");
   QVERIFY(fresh.ok());

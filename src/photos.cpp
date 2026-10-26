@@ -12,7 +12,9 @@
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QPainter>
+#include <QRegularExpression>
 #include <QSaveFile>
+#include <QSet>
 #include <QUrl>
 
 #include <algorithm>
@@ -95,7 +97,90 @@ void writeFetchMarker(const QString& imagePath, const QString& url) {
   marker.close();
 }
 
+// Each contact's original is named for its resource name, people_c123, with
+// its marker and sized copies beside it as people_c123.fetch and
+// people_c123@240.png.
+QString photoFile(const QString& directory, const QString& resourceName) {
+  return directory + QLatin1Char('/') + safeName(resourceName);
+}
+
+bool photoCurrent(const QString& directory, const QString& resourceName, const QString& url) {
+  QFile marker(photoFile(directory, resourceName) + QStringLiteral(".fetch"));
+  return marker.open(QIODevice::ReadOnly) && QString::fromUtf8(marker.readAll()) == photoFetchUrl(url);
+}
+
+void removeSized(const QString& directory, const QString& resourceName) {
+  QDir dir(directory);
+  for (const QString& name : dir.entryList({safeName(resourceName) + QStringLiteral("@*.png")}, QDir::Files)) {
+    dir.remove(name);
+  }
+}
+
+// The original and its marker, written so that no copy of the photo it
+// replaces is left to be drawn.
+bool writePhoto(const QString& directory, const QString& resourceName, const QString& url, const QByteArray& bytes) {
+  const QString path = photoFile(directory, resourceName);
+  makePrivateDir(directory);
+  removeSized(directory, resourceName);
+  QSaveFile file(path);
+  if (!(file.open(QIODevice::WriteOnly) && file.write(bytes) == bytes.size() && file.commit())) return false;
+  writeFetchMarker(path, url);
+  return true;
+}
+
+// Only the header is read here. The one full decode happens when the photo
+// is drawn, and a file that fails it is thrown away there.
+bool looksLikeImage(const QByteArray& bytes) {
+  QBuffer buffer;
+  buffer.setData(bytes);
+  buffer.open(QIODevice::ReadOnly);
+  return QImageReader(&buffer).canRead();
+}
+
+// Deletes every file of the contacts whose safe names are not in `keep`.
+void prunePhotos(const QString& directory, const QSet<QString>& keep) {
+  static const QRegularExpression suffix(QStringLiteral("[.@].*$"));
+  QDir dir(directory);
+  for (const QString& name : dir.entryList({QStringLiteral("people_*")}, QDir::Files)) {
+    if (!keep.contains(QString(name).remove(suffix))) dir.remove(name);
+  }
+}
+
+QSet<QString> photoNames(const QList<Contact>& contacts) {
+  QSet<QString> names;
+  for (const Contact& contact : contacts) {
+    if (!contact.resourceName.isEmpty() && !contact.photoUrl.isEmpty()) names.insert(safeName(contact.resourceName));
+  }
+  return names;
+}
+
 }  // namespace
+
+PhotoSync syncPhotos(HttpClient& http, const QString& accessToken, const QString& directory,
+                     const QList<Contact>& contacts) {
+  PhotoSync result;
+  makePrivateDir(directory);
+  QList<QPair<QString, QString>> headers;
+  if (!accessToken.isEmpty()) headers.append({QStringLiteral("Authorization"), QStringLiteral("Bearer ") + accessToken});
+  bool unreachable = false;
+  for (const Contact& contact : contacts) {
+    if (contact.resourceName.isEmpty() || contact.photoUrl.isEmpty()) continue;
+    if (photoCurrent(directory, contact.resourceName, contact.photoUrl)) continue;
+    // Once Google is out of reach, each photo left would wait out a timeout.
+    if (unreachable) {
+      ++result.failed;
+      continue;
+    }
+    const HttpResponse response = http.request(QStringLiteral("GET"), photoFetchUrl(contact.photoUrl), headers, {});
+    unreachable = response.status == 0;
+    const bool ok = response.status > 0 && response.status < 400 && looksLikeImage(response.body) &&
+                    writePhoto(directory, contact.resourceName, contact.photoUrl, response.body);
+    if (ok) ++result.downloaded;
+    else ++result.failed;
+  }
+  prunePhotos(directory, photoNames(contacts));
+  return result;
+}
 
 PhotoStore::PhotoStore(QString directory, QObject* parent) : QObject(parent), directory_(std::move(directory)) {
   network_ = new QNetworkAccessManager(this);
@@ -108,20 +193,17 @@ void PhotoStore::setAccessToken(const QString& token) {
   token_ = token;
   // A photo refused under the old token may load under this one.
   const QHash<QString, QString> retry = std::exchange(failed_, {});
-  for (auto it = retry.cbegin(); it != retry.cend(); ++it) enqueue(it.key(), it.value());
+  for (auto it = retry.cbegin(); it != retry.cend(); ++it) enqueue(it.key(), it.value(), false);
 }
 
-QString PhotoStore::filePath(const QString& resourceName) const {
-  return directory_ + QLatin1Char('/') + safeName(resourceName);
-}
+QString PhotoStore::filePath(const QString& resourceName) const { return photoFile(directory_, resourceName); }
 
 QString PhotoStore::sizedPath(const QString& resourceName, int edge) const {
   return filePath(resourceName) + QStringLiteral("@%1.png").arg(edge);
 }
 
 bool PhotoStore::current(const QString& resourceName, const QString& url) const {
-  QFile marker(filePath(resourceName) + QStringLiteral(".fetch"));
-  return marker.open(QIODevice::ReadOnly) && QString::fromUtf8(marker.readAll()) == photoFetchUrl(url);
+  return photoCurrent(directory_, resourceName, url);
 }
 
 QPixmap PhotoStore::imageFor(const QString& resourceName, const QString& url, int logicalSize, qreal devicePixelRatio) {
@@ -132,7 +214,7 @@ QPixmap PhotoStore::imageFor(const QString& resourceName, const QString& url, in
   if (cached != memory_.cend() && !cached->isNull()) return *cached;
 
   if (!current(resourceName, url)) {
-    enqueue(resourceName, url);
+    enqueue(resourceName, url, true);
     return {};
   }
   const int requested = qRound(logicalSize * devicePixelRatio);
@@ -186,15 +268,27 @@ void PhotoStore::forget(const QString& resourceName) {
   emit updated(resourceName);
 }
 
-// The original and its marker, written so that no copy of the photo it
-// replaces is left to be drawn.
+void PhotoStore::sync(const QList<Contact>& contacts) {
+  for (const Contact& contact : contacts) {
+    if (!contact.resourceName.isEmpty() && !contact.photoUrl.isEmpty()) enqueue(contact.resourceName, contact.photoUrl, false);
+  }
+  const QSet<QString> keep = photoNames(contacts);
+  const auto gone = [&keep](const QString& resourceName) { return !keep.contains(safeName(resourceName)); };
+  for (auto it = queuedUrls_.begin(); it != queuedUrls_.end();) {
+    if (!gone(it.key())) {
+      ++it;
+      continue;
+    }
+    queue_.removeAll(it.key());
+    it = queuedUrls_.erase(it);
+  }
+  failed_.removeIf([&gone](QHash<QString, QString>::iterator it) { return gone(it.key()); });
+  memory_.removeIf([&gone](QHash<QString, QPixmap>::iterator it) { return gone(it.key().section(QLatin1Char('@'), 0, 0)); });
+  prunePhotos(directory_, keep);
+}
+
 bool PhotoStore::store(const QString& resourceName, const QString& url, const QByteArray& bytes) {
-  const QString path = filePath(resourceName);
-  makePrivateDir(directory_);
-  dropSized(resourceName);
-  QSaveFile file(path);
-  if (!(file.open(QIODevice::WriteOnly) && file.write(bytes) == bytes.size() && file.commit())) return false;
-  writeFetchMarker(path, url);
+  if (!writePhoto(directory_, resourceName, url, bytes)) return false;
   dropMemory(resourceName);
   return true;
 }
@@ -203,15 +297,22 @@ void PhotoStore::discard(const QString& resourceName) {
   QFile::remove(filePath(resourceName));
   QFile::remove(filePath(resourceName) + QStringLiteral(".fetch"));
   QFile::remove(filePath(resourceName) + QStringLiteral(".url"));
-  dropSized(resourceName);
+  removeSized(directory_, resourceName);
   dropMemory(resourceName);
 }
 
-void PhotoStore::enqueue(const QString& resourceName, const QString& url) {
-  if (failed_.contains(resourceName) || queuedUrls_.contains(resourceName)) return;
+void PhotoStore::enqueue(const QString& resourceName, const QString& url, bool urgent) {
+  // A photo that failed waits for a new token, unless Google has a new one.
+  if (failed_.value(resourceName) == url) return;
+  if (queuedUrls_.contains(resourceName)) {
+    // The photo someone opened goes ahead of the rest of the book.
+    if (urgent && queue_.removeOne(resourceName)) queue_.prepend(resourceName);
+    return;
+  }
   if (current(resourceName, url)) return;
   queuedUrls_.insert(resourceName, url);
-  queue_.append(resourceName);
+  if (urgent) queue_.prepend(resourceName);
+  else queue_.append(resourceName);
   pump();
 }
 
@@ -241,25 +342,19 @@ void PhotoStore::dropMemory(const QString& resourceName) {
   }
 }
 
-void PhotoStore::dropSized(const QString& resourceName) const {
-  QDir dir(directory_);
-  for (const QString& name : dir.entryList({safeName(resourceName) + QStringLiteral("@*.png")}, QDir::Files)) {
-    dir.remove(name);
-  }
-}
-
 void PhotoStore::finished(QNetworkReply* reply, const QString& resourceName, const QString& url) {
   reply->deleteLater();
   --active_;
-  queuedUrls_.remove(resourceName);
+  // A photo saved, removed, or synced away meanwhile wins over this one.
+  const auto queued = queuedUrls_.constFind(resourceName);
+  if (queued == queuedUrls_.cend() || *queued != url) {
+    pump();
+    return;
+  }
+  queuedUrls_.erase(queued);
   const QByteArray bytes = reply->readAll();
   const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-  // Only the header is read here. The one full decode happens when the photo
-  // is drawn, and a file that fails it is thrown away there.
-  QBuffer buffer;
-  buffer.setData(bytes);
-  buffer.open(QIODevice::ReadOnly);
-  const bool ok = reply->error() == QNetworkReply::NoError && status < 400 && QImageReader(&buffer).canRead();
+  const bool ok = reply->error() == QNetworkReply::NoError && status < 400 && looksLikeImage(bytes);
   if (ok && store(resourceName, url, bytes)) emit updated(resourceName);
   else failed_.insert(resourceName, url);
   pump();

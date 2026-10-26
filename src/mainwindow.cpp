@@ -1479,6 +1479,7 @@ void MainWindow::openAccount() {
   signInExpired_ = false;
   index_.replaceAll({});
   saveCache();
+  photos_->sync({});
   refilter();
   toast(QStringLiteral("Disconnected"));
 }
@@ -1680,9 +1681,11 @@ void MainWindow::runSync(bool forceFull, bool announce) {
         // Most syncs bring nothing new. Then the index, the list, and the open
         // contact stay as they are, and the cache on disk catches up once an
         // hour. Its older token is safe: Google replays the changes since that
-        // token, and there were none.
+        // token, and there were none. The photo folder catches up all the
+        // same, which matters on the first sync after Peeps opens.
         if (!syncToken.isEmpty() && fetched->people.isEmpty()) {
           if (syncedAt_ - cacheSyncedAt_ >= kStaleAfter) saveCache();
+          photos_->sync(index_.all());
           updateChrome();
           if (announce) toast(QStringLiteral("Synced %1 contacts").arg(index_.size()));
           return;
@@ -1690,6 +1693,7 @@ void MainWindow::runSync(bool forceFull, bool announce) {
         index_.replaceAll(syncToken.isEmpty() ? applyFullSync(fetched->people)
                                               : applyIncrementalSync(index_.all(), fetched->people));
         saveCache();
+        photos_->sync(index_.all());
         // Selecting the row again redraws an open contact.
         refilter();
         if (announce) toast(QStringLiteral("Synced %1 contacts").arg(index_.size()));

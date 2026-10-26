@@ -180,7 +180,9 @@ QString commandHelp(const QString& command) {
         "\n"
         "  peeps sync [--full]\n"
         "\n"
-        "Without --full, only changes since the last sync are downloaded.\n");
+        "Without --full, only changes since the last sync are downloaded.\n"
+        "Every contact's photo is kept in ~/.cache/peeps/photos as well: a new\n"
+        "or changed one downloads, and one Google no longer has is deleted.\n");
   }
   if (command == QLatin1String("skill")) {
     return QStringLiteral(
@@ -1513,14 +1515,28 @@ CliResult execute(Parsed parsed, CliSession& session, bool stdoutIsTty) {
     session.syncedAt = QDateTime::currentSecsSinceEpoch();
     QString error;
     if (!persist(session, error)) return finish(kCliFailed, {}, error);
+    const PhotoSync photos = session.syncPhotos ? session.syncPhotos(session.contacts) : PhotoSync{};
+    // The contacts are in, so a photo that did not download is a warning,
+    // and the next sync tries it again.
+    const QString photoWarning =
+        photos.failed == 0 ? QString()
+                           : QStringLiteral("%1 did not download. The next sync tries again.")
+                                 .arg(photos.failed == 1 ? QStringLiteral("1 photo") : QStringLiteral("%1 photos").arg(photos.failed));
     if (json) {
       QJsonObject object;
       object.insert(QStringLiteral("count"), session.contacts.size());
       object.insert(QStringLiteral("full"), full);
-      return finish(kCliOk, jsonText(object));
+      object.insert(QStringLiteral("photos_downloaded"), photos.downloaded);
+      object.insert(QStringLiteral("photos_failed"), photos.failed);
+      return finish(kCliOk, jsonText(object), photoWarning);
     }
     const QString noun = session.contacts.size() == 1 ? QStringLiteral("contact") : QStringLiteral("contacts");
-    return finish(kCliOk, QStringLiteral("Synced %1 %2.").arg(session.contacts.size()).arg(noun));
+    QString out = QStringLiteral("Synced %1 %2.").arg(session.contacts.size()).arg(noun);
+    if (photos.downloaded > 0) {
+      out += photos.downloaded == 1 ? QStringLiteral(" Downloaded 1 photo.")
+                                    : QStringLiteral(" Downloaded %1 photos.").arg(photos.downloaded);
+    }
+    return finish(kCliOk, out, photoWarning);
   }
 
   if (command == QLatin1String("delete")) {
@@ -1779,6 +1795,9 @@ CliResult runContactsCommand(const QStringList& args, const CliLaunch& launch) {
           return google->call([&](HttpClient& client, QString& access, const RefreshFn& refresh) {
             return fetchConnections(client, access, full ? QString() : session.syncToken, refresh);
           });
+        };
+        session.syncPhotos = [&](const QList<Contact>& contacts) {
+          return contacts::syncPhotos(*http, google->tokens().accessToken, launch.paths.photoDir, contacts);
         };
       }
     }

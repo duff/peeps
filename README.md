@@ -154,12 +154,12 @@ The refresh token stays in the login keyring under `org.omelia.peeps`. Disconnec
 | --- | --- |
 | `~/.local/share/peeps/contacts.json` | The cache search reads |
 | `~/.config/peeps/settings.json` | Peeps' own text size |
-| `~/.cache/peeps/photos` | Cached photos |
+| `~/.cache/peeps/photos` | Every contact's photo, the original Google has, named for its id (`people_c123`) |
 | `$XDG_RUNTIME_DIR/peeps` | vCards made for sharing, cleared at logout |
 | Login keyring | The Google refresh token |
 | `~/.claude/skills/peeps` and the like | Links to the agent skill, made when Peeps opens |
 
-`peeps sync` downloads changes since the last sync. `peeps sync --full` downloads the whole book.
+`peeps sync` downloads changes since the last sync. `peeps sync --full` downloads the whole book. Either one also downloads each photo that is new or has changed and deletes those Google no longer has, so the photo folder matches Google for other programs to read. The window does the same whenever it syncs, and Disconnect empties the folder.
 
 ## Theme and text size
 
