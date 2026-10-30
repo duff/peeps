@@ -31,7 +31,7 @@ read the result.
 
 ```bash
 peeps search maya --json                # {"query","total","count","contacts":[{"id","name","email","phone","organization","score"}]}
-peeps show people/c123 --json           # every field of one contact
+peeps show people/c123 --json           # every field of one contact, plus "age" when the birthday has a year
 peeps list --json | jq '.contacts[]'    # everyone: id, name, email, phone, organization
 peeps export people/c123 > maya.vcf     # a vCard
 ```

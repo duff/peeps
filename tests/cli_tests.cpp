@@ -316,6 +316,7 @@ void CliTests::jsonDataRoundTrip() {
   address.city = QStringLiteral("London");
   contact.addresses.append(address);
   contact.customs.append({QStringLiteral("Ann"), QStringLiteral("Spouse"), {}});
+  contact.birthday = {1815, 12, 10, {}};
   session.contacts = {contact};
   contacts::Contact sent;
   session.update = [&](const contacts::Contact& next) {
@@ -327,6 +328,10 @@ void CliTests::jsonDataRoundTrip() {
 
   const auto shown = run({QStringLiteral("show"), QStringLiteral("people/c1"), QStringLiteral("--json")}, session, true);
   QCOMPARE(shown.code, contacts::kCliOk);
+  const QString age = contact.birthday.ageOn(QDate::currentDate());
+  QCOMPARE(objectOf(shown).value(QStringLiteral("age")).toInt(), age.toInt());
+  QVERIFY(run({QStringLiteral("show"), QStringLiteral("people/c1")}, session, true).out.contains(QStringLiteral("Age").leftJustified(16) + age));
+  // The age is read-only, so the printed object goes back in as it is.
   QJsonObject patch = objectOf(shown);
   patch.insert(QStringLiteral("notes"), QStringLiteral("From JSON"));
   const QByteArray body = QJsonDocument(patch).toJson(QJsonDocument::Compact);
@@ -343,6 +348,7 @@ void CliTests::jsonDataRoundTrip() {
   QCOMPARE(sent.emails.first().value, QStringLiteral("ada@example.com"));
   QCOMPARE(sent.customs.first().label, QStringLiteral("Spouse"));
   QCOMPARE(sent.customs.first().value, QStringLiteral("Ann"));
+  QCOMPARE(sent.birthday, contact.birthday);
 
   session.stdinBytes = QByteArrayLiteral("{\"nope\":1}");
   const auto badField = run({QStringLiteral("update"), QStringLiteral("people/c1"), QStringLiteral("--data"), QStringLiteral("-")},

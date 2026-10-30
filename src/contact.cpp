@@ -111,6 +111,23 @@ QString DateValue::isoText() const {
   return year > 0 ? QStringLiteral("%1-%2").arg(year, 4, 10, QLatin1Char('0')).arg(monthDay) : monthDay;
 }
 
+std::optional<int> DateValue::yearsOn(const QDate& today) const {
+  const QDate born(year, month, day);
+  if (year <= 0 || !born.isValid() || born > today) return std::nullopt;
+  // Someone born on February 29 turns a year older on March 1 in other years.
+  const bool hadBirthday = today.month() > month || (today.month() == month && today.day() >= day);
+  return today.year() - year - (hadBirthday ? 0 : 1);
+}
+
+QString DateValue::ageOn(const QDate& today) const {
+  const std::optional<int> years = yearsOn(today);
+  if (!years) return {};
+  if (*years > 0) return QString::number(*years);
+  const int months = (today.year() - year) * 12 + today.month() - month - (today.day() < day ? 1 : 0);
+  if (months <= 0) return QStringLiteral("Under a month");
+  return months == 1 ? QStringLiteral("1 month") : QStringLiteral("%1 months").arg(months);
+}
+
 bool PostalAddress::isEmpty() const {
   return street.trimmed().isEmpty() && extended.trimmed().isEmpty() && poBox.trimmed().isEmpty() && city.trimmed().isEmpty() &&
          region.trimmed().isEmpty() && postalCode.trimmed().isEmpty() && country.trimmed().isEmpty() && formatted.trimmed().isEmpty();

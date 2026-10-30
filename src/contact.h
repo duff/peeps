@@ -1,7 +1,10 @@
 #pragma once
 
+#include <QDate>
 #include <QList>
 #include <QString>
+
+#include <optional>
 
 namespace contacts {
 
@@ -27,6 +30,12 @@ struct DateValue {
   QString display() const;
   // "1815-12-10", or "12-10" without a year, for typing and for JSON.
   QString isoText() const;
+  // Whole years from this date to `today`. Nothing without a full date, or
+  // for a date still to come.
+  std::optional<int> yearsOn(const QDate& today) const;
+  // The age of someone born on this date, for reading: "42", or "5 months"
+  // in their first year. Empty when yearsOn() is.
+  QString ageOn(const QDate& today) const;
 };
 
 struct PostalAddress {

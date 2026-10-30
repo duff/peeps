@@ -26,6 +26,7 @@ class SearchTests : public QObject {
   Q_OBJECT
  private slots:
   void displayNameAndInitials();
+  void countsAgeFromBirthday();
   void postalAddressBreaksAfterTheStreet();
   void plainTextSkipsThePhoto();
   void draftValidation();

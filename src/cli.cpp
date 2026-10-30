@@ -142,7 +142,8 @@ QString commandHelp(const QString& command) {
         "\n"
         "  peeps show ID [--json]\n"
         "\n"
-        "JSON is the object --data accepts, plus id, name, etag, and photo_url.\n");
+        "JSON is the object --data accepts, plus id, name, etag, photo_url, and\n"
+        "age, the whole years since a birthday that has a year, or null.\n");
   }
   if (command == QLatin1String("export")) {
     return QStringLiteral(
@@ -639,6 +640,7 @@ bool applyJson(const QJsonObject& object, Patch& patch, QString& error) {
                              QStringLiteral("etag"),
                              QStringLiteral("name"),
                              QStringLiteral("photo_url"),
+                             QStringLiteral("age"),
                              QStringLiteral("prefix"),
                              QStringLiteral("given_name"),
                              QStringLiteral("middle_name"),
@@ -719,6 +721,8 @@ QJsonObject contactJson(const Contact& contact) {
   object.insert(QStringLiteral("other_organizations"), organizations);
   object.insert(QStringLiteral("notes"), contact.notes);
   object.insert(QStringLiteral("birthday"), contact.birthday.isoText());
+  const std::optional<int> age = contact.birthday.yearsOn(QDate::currentDate());
+  object.insert(QStringLiteral("age"), age ? QJsonValue(*age) : QJsonValue());
   object.insert(QStringLiteral("photo_url"), contact.photoUrl);
   object.insert(QStringLiteral("emails"), labeledArray(contact.emails));
   object.insert(QStringLiteral("phones"), labeledArray(contact.phones));
@@ -811,6 +815,7 @@ QString contactText(const Contact& contact) {
     appendField(lines, QStringLiteral("Address"), shown);
   }
   appendField(lines, QStringLiteral("Birthday"), contact.birthday.display());
+  appendField(lines, QStringLiteral("Age"), contact.birthday.ageOn(QDate::currentDate()));
   for (const LabeledValue& url : contact.urls) {
     appendField(lines, QStringLiteral("Website"), url.label.isEmpty() ? url.value : url.value + QStringLiteral("  ") + url.label);
   }

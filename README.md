@@ -79,6 +79,8 @@ Launching Peeps again brings the open window forward instead of opening a second
 
 Copying a field names it. A birthday says "Copied birthday". A work address says "Copied work email".
 
+A birthday with a year shows the age beneath it, in months during the first year. `peeps show` prints it too, and `--json` has it as `age` in whole years, or `null` without a birth year.
+
 ### Editing
 
 The editor groups fields the way people look for them. The photo sits beside first name, last name, company, and job title. Email, phone, address, and notes follow, each under its own heading with a `+ Add` line beneath. Nickname, birthday, websites, related people, other companies, and custom fields wait behind More fields, which opens by itself when a contact already has one of them.

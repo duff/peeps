@@ -963,6 +963,8 @@ void MainWindow::renderDetail() {
              EditorFocus{EditorField::Address, i});
   }
   addField(QStringLiteral("Birthday"), shown.birthday.display(), FieldAction::Copy, false, EditorFocus{EditorField::Birthday, 0});
+  addField(QStringLiteral("Age"), shown.birthday.ageOn(QDate::currentDate()), FieldAction::Copy, false,
+           EditorFocus{EditorField::Birthday, 0});
   for (int i = 0; i < shown.urls.size(); ++i) {
     const QString label = labelDisplay(LabelField::Other, shown.urls.at(i));
     addField(label.isEmpty() ? QStringLiteral("Website") : label, shown.urls.at(i).value, FieldAction::Copy, false,

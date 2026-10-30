@@ -315,6 +315,31 @@ void SearchTests::postalAddressBreaksAfterTheStreet() {
   QCOMPARE(formatted.display(), QStringLiteral("Somewhere\nElse"));
 }
 
+void SearchTests::countsAgeFromBirthday() {
+  const QDate today(2026, 10, 30);
+  const auto age = [&](int year, int month, int day) { return contacts::DateValue{year, month, day, {}}.ageOn(today); };
+  QCOMPARE(age(1984, 9, 17), QStringLiteral("42"));
+  // The day before a birthday, and the day of it.
+  QCOMPARE(age(1984, 10, 31), QStringLiteral("41"));
+  QCOMPARE(age(1984, 10, 30), QStringLiteral("42"));
+  QCOMPARE(contacts::DateValue({1984, 10, 31, {}}).yearsOn(today), std::optional<int>(41));
+  // The first year counts months.
+  QCOMPARE(age(2025, 10, 31), QStringLiteral("11 months"));
+  QCOMPARE(age(2026, 9, 30), QStringLiteral("1 month"));
+  QCOMPARE(age(2026, 10, 2), QStringLiteral("Under a month"));
+  QCOMPARE(contacts::DateValue({2026, 10, 2, {}}).yearsOn(today), std::optional<int>(0));
+  // February 29 comes round on March 1 in other years.
+  const contacts::DateValue leap{2000, 2, 29, {}};
+  QCOMPARE(leap.ageOn(QDate(2025, 2, 28)), QStringLiteral("24"));
+  QCOMPARE(leap.ageOn(QDate(2025, 3, 1)), QStringLiteral("25"));
+  QCOMPARE(leap.ageOn(QDate(2024, 2, 29)), QStringLiteral("24"));
+  // No year, a date that does not exist, a date to come, or free text: no age.
+  QCOMPARE(age(0, 9, 17), QString());
+  QCOMPARE(age(1990, 2, 30), QString());
+  QCOMPARE(age(2027, 1, 1), QString());
+  QCOMPARE(contacts::DateValue({0, 0, 0, QStringLiteral("Spring 1990")}).yearsOn(today), std::nullopt);
+}
+
 void SearchTests::displayNameAndInitials() {
   const auto ada = person(QStringLiteral("people/ada"), QStringLiteral("Ada"), QStringLiteral("Lovelace"),
                           QStringLiteral("ada@example.com"));
@@ -1732,6 +1757,9 @@ void LayoutTests::copyNamesTheField() {
   };
   QVERIFY(copyLabel(QStringLiteral("Birthday")));
   QCOMPARE(toastText(), QStringLiteral("Copied birthday"));
+  QVERIFY(copyLabel(QStringLiteral("Age")));
+  QCOMPARE(toastText(), QStringLiteral("Copied age"));
+  QCOMPARE(QGuiApplication::clipboard()->text(), contact.birthday.ageOn(QDate::currentDate()));
   QVERIFY(copyLabel(QStringLiteral("First name")));
   QCOMPARE(toastText(), QStringLiteral("Copied first name"));
   QVERIFY(copyLabel(QStringLiteral("Work")));
