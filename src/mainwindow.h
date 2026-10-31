@@ -23,6 +23,7 @@ class QLabel;
 class QLineEdit;
 class QListView;
 class QMenu;
+class QMimeData;
 class QPushButton;
 class QStandardItemModel;
 class QTcpServer;
@@ -95,6 +96,11 @@ class MainWindow : public QMainWindow {
   void requestCloseEditor();
   void closeEditor();
   void commitEditor();
+  // A photo dragged onto an open contact or the editor. Returns true when it
+  // took the event.
+  bool photoDrag(QEvent* event);
+  QString photoDropHint() const;
+  void takeDroppedPhoto(const QMimeData* data);
   void copyWholeContact();
   void shareSelected();
   QString writeCard(const Contact& contact);
@@ -136,6 +142,8 @@ class MainWindow : public QMainWindow {
   // A photo copy still being prepared gives way to a later copy of anything.
   quint64 photoCopies_ = 0;
   quint64 clipboardChanges_ = 0;
+  // What a photo dragged over the window would do, while one is.
+  QString dropHint_;
   bool detailOpen_ = false;
   bool editing_ = false;
   bool editingNew_ = false;

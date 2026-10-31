@@ -23,6 +23,7 @@
 #include <QTcpServer>
 #include <QTcpSocket>
 #include <QDialog>
+#include <QDropEvent>
 #include <QElapsedTimer>
 #include <QNetworkRequest>
 #include <QUrl>
@@ -686,6 +687,80 @@ void GoogleTests::uploadsPhotosAtFullQuality() {
   QVERIFY(upright != tagged);
   QCOMPARE(QImage::fromData(upright).size(), QSize(1600, 2400));
   QVERIFY(contacts::photoUploadBytes("not an image").isEmpty());
+}
+
+void GoogleTests::takesDroppedPhotos() {
+  QTemporaryDir dir;
+  QVERIFY(dir.isValid());
+  QImage picture(300, 200, QImage::Format_RGB32);
+  picture.fill(Qt::darkMagenta);
+  const QByteArray jpeg = encoded(picture, "JPEG");
+  const QByteArray png = encoded(picture, "PNG");
+  const auto save = [&](const QString& name, const QByteArray& bytes) {
+    const QString path = dir.filePath(name);
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size()) return QString();
+    return path;
+  };
+  const QString jpegPath = save(QStringLiteral("IMG 0001.jpg"), jpeg);
+  const QString pngPath = save(QStringLiteral("shot.png"), png);
+  const QString textPath = save(QStringLiteral("notes.txt"), "not an image");
+  QVERIFY(!jpegPath.isEmpty() && !pngPath.isEmpty() && !textPath.isEmpty());
+
+  QMimeData text;
+  text.setText(QStringLiteral("Cara"));
+  QVERIFY(!contacts::mayHoldPhoto(&text));
+  QVERIFY(!contacts::mayHoldPhoto(nullptr));
+
+  // A photo app may offer one file as a uri list, with its path as text,
+  // and an upright JPEG goes to Google byte for byte.
+  QMimeData offered;
+  offered.setData(QStringLiteral("text/uri-list"), QUrl::fromLocalFile(jpegPath).toEncoded() + "\r\n");
+  offered.setData(QStringLiteral("text/plain"), jpegPath.toUtf8());
+  QVERIFY(contacts::mayHoldPhoto(&offered));
+  const contacts::DroppedPhoto fromList = contacts::droppedPhoto(&offered);
+  QVERIFY2(fromList.error.isEmpty(), qPrintable(fromList.error));
+  QCOMPARE(fromList.bytes, jpeg);
+
+  // Anything else becomes a JPEG at its full size. Of several files, the
+  // first is the photo.
+  QMimeData files;
+  files.setUrls({QUrl::fromLocalFile(pngPath), QUrl::fromLocalFile(jpegPath)});
+  const contacts::DroppedPhoto fromPng = contacts::droppedPhoto(&files);
+  QVERIFY2(fromPng.error.isEmpty(), qPrintable(fromPng.error));
+  QCOMPARE(QImage::fromData(fromPng.bytes, "JPEG").size(), picture.size());
+
+  QMimeData notImage;
+  notImage.setUrls({QUrl::fromLocalFile(textPath)});
+  QVERIFY(contacts::mayHoldPhoto(&notImage));
+  QVERIFY(contacts::droppedPhoto(&notImage).bytes.isEmpty());
+  QCOMPARE(contacts::droppedPhoto(&notImage).error, QStringLiteral("Could not read that image."));
+
+  // An app still readying the file hands over nothing in time.
+  QMimeData unready;
+  unready.setData(QStringLiteral("text/uri-list"), QByteArray());
+  QVERIFY(contacts::mayHoldPhoto(&unready));
+  QCOMPARE(contacts::droppedPhoto(&unready).error, QStringLiteral("That photo wasn’t ready. Try again in a moment."));
+
+  QMimeData remote;
+  remote.setUrls({QUrl(QStringLiteral("https://example.com/cara.jpg"))});
+  QVERIFY(contacts::droppedPhoto(&remote).bytes.isEmpty());
+  QVERIFY(contacts::droppedPhoto(&remote).error.contains(QStringLiteral("files on this computer")));
+
+  // The picture itself, with or without a web address beside it, and a JPEG
+  // before any other format.
+  QMimeData image;
+  image.setUrls({QUrl(QStringLiteral("https://example.com/cara.jpg"))});
+  image.setData(QStringLiteral("image/png"), png);
+  image.setData(QStringLiteral("image/jpeg"), jpeg);
+  QVERIFY(contacts::mayHoldPhoto(&image));
+  const contacts::DroppedPhoto fromImage = contacts::droppedPhoto(&image);
+  QVERIFY2(fromImage.error.isEmpty(), qPrintable(fromImage.error));
+  QCOMPARE(fromImage.bytes, jpeg);
+  QMimeData pngOnly;
+  pngOnly.setData(QStringLiteral("image/png"), png);
+  QVERIFY(contacts::mayHoldPhoto(&pngOnly));
+  QCOMPARE(QImage::fromData(contacts::droppedPhoto(&pngOnly).bytes, "JPEG").size(), picture.size());
 }
 
 void GoogleTests::drawsPhotosFromASizedCopy() {
@@ -2271,6 +2346,121 @@ void GoogleTests::writesVCards() {
     QVERIFY(line.size() <= 76);
     QVERIFY(QString::fromUtf8(line).toUtf8() == line);
   }
+}
+
+void LayoutTests::dropsAPhotoOntoAContact() {
+  QTemporaryDir dir;
+  QVERIFY(dir.isValid());
+  const QByteArray oldData = qgetenv("XDG_DATA_HOME");
+  const QByteArray oldCache = qgetenv("XDG_CACHE_HOME");
+  const QByteArray oldConfig = qgetenv("XDG_CONFIG_HOME");
+  qputenv("XDG_DATA_HOME", dir.filePath(QStringLiteral("data")).toUtf8());
+  qputenv("XDG_CACHE_HOME", dir.filePath(QStringLiteral("cache")).toUtf8());
+  qputenv("XDG_CONFIG_HOME", dir.filePath(QStringLiteral("config")).toUtf8());
+  qputenv("PEEPS_NO_SYNC", "1");
+
+  QImage picture(320, 240, QImage::Format_RGB32);
+  picture.fill(Qt::darkCyan);
+  const QByteArray jpeg = encoded(picture, "JPEG");
+  QImage other(200, 300, QImage::Format_RGB32);
+  other.fill(Qt::darkYellow);
+  const auto save = [&](const QString& name, const QByteArray& bytes) {
+    const QString path = dir.filePath(name);
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size()) return QString();
+    return path;
+  };
+  const QString jpegPath = save(QStringLiteral("cara.jpg"), jpeg);
+  const QString pngPath = save(QStringLiteral("other.png"), encoded(other, "PNG"));
+  QVERIFY(!jpegPath.isEmpty() && !pngPath.isEmpty());
+  QMimeData photo;
+  photo.setUrls({QUrl::fromLocalFile(jpegPath)});
+  photo.setText(jpegPath);
+  QMimeData otherPhoto;
+  otherPhoto.setUrls({QUrl::fromLocalFile(pngPath)});
+  otherPhoto.setText(pngPath);
+  QMimeData words;
+  words.setText(QStringLiteral("Engineer"));
+
+  contacts::MainWindow window;
+  window.resize(1000, 700);
+  window.show();
+  QVERIFY(QTest::qWaitForWindowExposed(&window));
+  window.setContacts({sampleContact(QStringLiteral("people/cara"), QStringLiteral("Cara"), QStringLiteral("Two"),
+                                    QStringLiteral("cara@example.com"), {}, {})});
+  QApplication::processEvents();
+  auto* toast = window.findChild<QFrame*>(QStringLiteral("toast"));
+  QVERIFY(toast != nullptr);
+  auto* toastText = toast->findChild<QLabel*>();
+  QVERIFY(toastText != nullptr);
+
+  // Each event goes where Qt would send it: the widget under the pointer
+  // that takes drops, or the window's own area.
+  const auto enter = [](QWidget* target, const QMimeData* data) {
+    QDragEnterEvent event(QPointF(2, target->height() / 2), Qt::CopyAction, data, Qt::LeftButton, Qt::NoModifier);
+    QApplication::sendEvent(target, &event);
+    return event.isAccepted();
+  };
+  const auto leave = [](QWidget* target) {
+    QDragLeaveEvent event;
+    QApplication::sendEvent(target, &event);
+    QApplication::processEvents();
+  };
+  const auto drop = [](QWidget* target, const QMimeData* data) {
+    QDropEvent event(QPointF(2, target->height() / 2), Qt::CopyAction, data, Qt::LeftButton, Qt::NoModifier);
+    QApplication::sendEvent(target, &event);
+    QApplication::processEvents();
+    return event.isAccepted();
+  };
+  QWidget* area = window.centralWidget();
+
+  // The list has no one for a photo to go to.
+  QVERIFY(!enter(area, &photo));
+  QVERIFY(!toast->isVisible());
+
+  QTest::keyClick(&window, Qt::Key_Return);
+  QApplication::processEvents();
+  QVERIFY(window.detailShows(QStringLiteral("cara@example.com")));
+  QVERIFY(enter(area, &photo));
+  QVERIFY(toast->isVisible());
+  QCOMPARE(toastText->text(), QStringLiteral("Drop to use this photo for Cara Two"));
+  leave(area);
+  QVERIFY(!toast->isVisible());
+
+  // Dropped on the contact, it opens the editor with the photo in place.
+  QVERIFY(enter(area, &photo));
+  QVERIFY(drop(area, &photo));
+  QVERIFY(!toast->isVisible());
+  auto* editor = dynamic_cast<contacts::ContactEditor*>(window.findChild<QWidget*>(QStringLiteral("editor")));
+  QVERIFY(editor != nullptr && editor->isVisible());
+  QCOMPARE(editor->photoBytes(), jpeg);
+  QVERIFY(editor->hasChanges());
+  QVERIFY(!window.detailShows(QStringLiteral("cara@example.com")));
+
+  // On the editor, a photo dropped on a field replaces the one in place and
+  // leaves the field alone.
+  auto* given = editor->findChild<QLineEdit*>(QStringLiteral("given"));
+  QVERIFY(given != nullptr);
+  QVERIFY(enter(given, &otherPhoto));
+  QCOMPARE(toastText->text(), QStringLiteral("Drop to use this photo"));
+  QVERIFY(drop(given, &otherPhoto));
+  QCOMPARE(given->text(), QStringLiteral("Cara"));
+  QCOMPARE(contacts::decodePhoto(editor->photoBytes()).size(), other.size());
+
+  // Words still go into a field.
+  auto* title = editor->findChild<QLineEdit*>(QStringLiteral("title-field"));
+  QVERIFY(title != nullptr && title->text().isEmpty());
+  QVERIFY(enter(title, &words));
+  QVERIFY(!toast->isVisible());
+  QVERIFY(drop(title, &words));
+  QCOMPARE(title->text(), QStringLiteral("Engineer"));
+
+  if (oldData.isNull()) qunsetenv("XDG_DATA_HOME");
+  else qputenv("XDG_DATA_HOME", oldData);
+  if (oldCache.isNull()) qunsetenv("XDG_CACHE_HOME");
+  else qputenv("XDG_CACHE_HOME", oldCache);
+  if (oldConfig.isNull()) qunsetenv("XDG_CONFIG_HOME");
+  else qputenv("XDG_CONFIG_HOME", oldConfig);
 }
 
 void LayoutTests::editorTracksChanges() {

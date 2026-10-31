@@ -16,6 +16,7 @@
 #include <QCloseEvent>
 #include <QDateTime>
 #include <QDir>
+#include <QDropEvent>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFileSystemWatcher>
@@ -48,6 +49,7 @@
 
 #include <algorithm>
 #include <optional>
+#include <utility>
 
 namespace contacts {
 
@@ -622,6 +624,9 @@ void MainWindow::buildUi() {
   toastFrame_->hide();
   toastFrame_->installEventFilter(this);
 
+  // Drops anywhere in the window reach eventFilter(), which takes a photo
+  // while a contact or the editor is open.
+  central->setAcceptDrops(true);
   setCentralWidget(central);
 
   focusSyncTimer_ = new QTimer(this);
@@ -719,6 +724,12 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event) {
   if (watched == toastFrame_ && type == QEvent::MouseButtonRelease) {
     toastFrame_->hide();
     return true;
+  }
+  // Text fields take drops of their own, so a photo is caught before them.
+  if (type == QEvent::DragEnter || type == QEvent::DragMove || type == QEvent::DragLeave || type == QEvent::Drop) {
+    auto* widget = qobject_cast<QWidget*>(watched);
+    if (widget != nullptr && widget->window() == this && photoDrag(event)) return true;
+    return QMainWindow::eventFilter(watched, event);
   }
   if (type == QEvent::KeyPress && list_->isVisible() && !delegate_->suppressHover) {
     delegate_->suppressHover = true;
@@ -1369,6 +1380,60 @@ void MainWindow::commitEditor() {
   const bool isNew = editingNew_;
   closeEditor();
   runSave(*contact, isNew, photo, remove);
+}
+
+bool MainWindow::photoDrag(QEvent* event) {
+  if (event->type() == QEvent::DragLeave) {
+    if (dropHint_.isEmpty()) return false;
+    // Going from one field to the next leaves one widget and enters the
+    // other, so the hint waits to see whether the drag left the window.
+    const QString hint = std::exchange(dropHint_, QString());
+    QTimer::singleShot(0, this, [this, hint] {
+      if (dropHint_.isEmpty() && toastLabel_->text() == hint) toastFrame_->hide();
+    });
+    return false;
+  }
+  auto* drag = static_cast<QDropEvent*>(event);
+  const QString hint = photoDropHint();
+  if (hint.isEmpty() || !mayHoldPhoto(drag->mimeData())) return false;
+  drag->setDropAction(Qt::CopyAction);
+  drag->accept();
+  if (event->type() == QEvent::Drop) {
+    if (toastLabel_->text() == dropHint_) toastFrame_->hide();
+    dropHint_.clear();
+    takeDroppedPhoto(drag->mimeData());
+  } else if (dropHint_.isEmpty()) {
+    dropHint_ = hint;
+    toast(hint);
+    // The hint stays while the drag is over the window.
+    toastTimer_->stop();
+  }
+  return true;
+}
+
+// Empty when a photo dropped now would go nowhere.
+QString MainWindow::photoDropHint() const {
+  if (!detailOpen_ || QApplication::activeModalWidget() != nullptr) return {};
+  if (editing_) return editor_ == nullptr ? QString() : QStringLiteral("Drop to use this photo");
+  const Contact* contact = selected();
+  return contact == nullptr ? QString() : QStringLiteral("Drop to use this photo for %1").arg(contact->displayName());
+}
+
+// On the editor the photo takes the place of the one shown. On a contact it
+// opens the editor with the photo in place, so Save sends it, as with any
+// other change.
+void MainWindow::takeDroppedPhoto(const QMimeData* data) {
+  if (!editing_ && busy_) {
+    toast(QStringLiteral("Still working with Google. Drop the photo again in a moment."));
+    return;
+  }
+  const DroppedPhoto photo = droppedPhoto(data);
+  if (!photo.error.isEmpty()) {
+    toast(photo.error, true);
+    return;
+  }
+  if (!editing_) editSelected();
+  if (editing_ && editor_ != nullptr) editor_->setPhoto(photo.bytes);
 }
 
 void MainWindow::copyWholeContact() {

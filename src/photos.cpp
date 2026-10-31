@@ -8,6 +8,7 @@
 #include <QFileDialog>
 #include <QImage>
 #include <QImageReader>
+#include <QMimeData>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
@@ -63,6 +64,56 @@ std::optional<QByteArray> choosePhotoBytes(QWidget* parent) {
   QFile file(path);
   if (!file.open(QIODevice::ReadOnly)) return QByteArray();
   return photoUploadBytes(file.readAll());
+}
+
+namespace {
+
+bool isImageFormat(const QString& format) { return format.startsWith(QLatin1String("image/")); }
+
+}  // namespace
+
+bool mayHoldPhoto(const QMimeData* data) {
+  if (data == nullptr) return false;
+  if (data->hasUrls()) return true;
+  const QStringList formats = data->formats();
+  return std::any_of(formats.begin(), formats.end(), isImageFormat);
+}
+
+DroppedPhoto droppedPhoto(const QMimeData* data) {
+  const QString unreadable = QStringLiteral("Could not read that image.");
+  if (data == nullptr) return {{}, unreadable};
+  bool remote = false;
+  // An app that readies the file once the drag starts may not have it yet.
+  // Qt stops waiting after a moment and reads nothing.
+  bool unready = false;
+  if (data->hasUrls()) {
+    const QList<QUrl> urls = data->urls();
+    unready = urls.isEmpty();
+    for (const QUrl& url : urls) {
+      if (!url.isLocalFile()) {
+        remote = true;
+        continue;
+      }
+      // The first file is the photo, as the editor holds one.
+      QFile file(url.toLocalFile());
+      const QByteArray bytes = file.open(QIODevice::ReadOnly) ? photoUploadBytes(file.readAll()) : QByteArray();
+      if (bytes.isEmpty()) return {{}, unreadable};
+      return {bytes, {}};
+    }
+  }
+  // An app can hand over the picture itself. A JPEG goes first, as one that
+  // is upright goes to Google byte for byte.
+  QStringList formats = data->formats();
+  formats.removeIf([](const QString& format) { return !isImageFormat(format); });
+  std::stable_partition(formats.begin(), formats.end(),
+                        [](const QString& format) { return format == QLatin1String("image/jpeg"); });
+  for (const QString& format : formats) {
+    const QByteArray bytes = photoUploadBytes(data->data(format));
+    if (!bytes.isEmpty()) return {bytes, {}};
+  }
+  if (unready) return {{}, QStringLiteral("That photo wasn’t ready. Try again in a moment.")};
+  if (remote) return {{}, QStringLiteral("Peeps takes photos from files on this computer. Save the image, then drop the file.")};
+  return {{}, unreadable};
 }
 
 namespace {

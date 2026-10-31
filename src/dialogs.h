@@ -65,6 +65,8 @@ class ContactEditor : public QWidget {
   QByteArray photoBytes() const;
   bool removePhoto() const;
   void setPreview(const QPixmap& pixmap);
+  // A new photo, as photoUploadBytes() makes it. Save sends it to Google.
+  void setPhoto(const QByteArray& bytes);
   void focusField();
 
  protected:

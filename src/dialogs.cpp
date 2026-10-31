@@ -563,10 +563,14 @@ struct ContactEditor::Form {
       showError(QStringLiteral("Could not read that image."));
       return;
     }
-    const QImage image = decodePhoto(*chosen);
-    photoBytes = *chosen;
+    takePhoto(*chosen);
+  }
+
+  // A photo chosen or dropped.
+  void takePhoto(const QByteArray& bytes) {
+    photoBytes = bytes;
     removePhotoFlag = false;
-    showPixmap(QPixmap::fromImage(image));
+    showPixmap(QPixmap::fromImage(decodePhoto(bytes)));
     showError({});
     refreshPhotoButtons();
   }
@@ -1217,6 +1221,10 @@ bool ContactEditor::removePhoto() const { return form_->hadPhoto && form_->remov
 void ContactEditor::setPreview(const QPixmap& pixmap) {
   if (form_->removePhotoFlag || !form_->photoBytes.isEmpty()) return;
   form_->showPixmap(pixmap);
+}
+
+void ContactEditor::setPhoto(const QByteArray& bytes) {
+  if (!bytes.isEmpty()) form_->takePhoto(bytes);
 }
 
 void ContactEditor::focusField() { form_->revealFocus(); }

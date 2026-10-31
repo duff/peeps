@@ -87,6 +87,8 @@ The editor groups fields the way people look for them. The photo sits beside fir
 
 Tab moves through the page in reading order, including rows you just added. Enter or Ctrl+S saves. Esc cancels, and asks first if anything changed. Dates are typed as `1815-12-10`, or `12-10` without a year.
 
+To change a photo without the file picker, drag one in from a photo app or a file manager. Dropped anywhere on an open contact, it opens the editor with that photo in place. Dropped on the editor, it takes the place of the photo there. Either way, nothing goes to Google until you save.
+
 ### Sharing a contact
 
 Share this contact sits with Edit and Delete at the end of a contact. It writes a vCard, the format phones and mail apps import, with the photo inside it.

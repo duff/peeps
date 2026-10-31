@@ -53,6 +53,7 @@ class GoogleTests : public QObject {
   void savedPhotoIsVisibleImmediately();
   void downloadedPhotoIsVisibleImmediately();
   void uploadsPhotosAtFullQuality();
+  void takesDroppedPhotos();
   void drawsPhotosFromASizedCopy();
   void keepsPhotosPrivate();
   void retriesFailedPhotoWithNewToken();
@@ -85,6 +86,7 @@ class LayoutTests : public QObject {
   void blankPhoneTypeStaysBlank();
   void copyNamesTheField();
   void copiesThePhotoAtFullSize();
+  void dropsAPhotoOntoAContact();
   void editorTracksChanges();
 };
 

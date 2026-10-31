@@ -10,6 +10,7 @@
 
 #include <optional>
 
+class QMimeData;
 class QNetworkAccessManager;
 class QNetworkReply;
 class QWidget;
@@ -23,6 +24,19 @@ QImage decodePhoto(const QByteArray& bytes);
 // white, and encoded as a quality 100 JPEG at its full size.
 QByteArray photoUploadBytes(const QByteArray& original);
 std::optional<QByteArray> choosePhotoBytes(QWidget* parent);
+
+// True when a drag may carry a photo: files, or an image itself. Only the
+// formats are looked at, as reading another app's data waits on that app,
+// which may still be readying the photo.
+bool mayHoldPhoto(const QMimeData* data);
+
+// The photo a drop carries, as photoUploadBytes() makes it, or why there is
+// none, in words for the window.
+struct DroppedPhoto {
+  QByteArray bytes;
+  QString error;
+};
+DroppedPhoto droppedPhoto(const QMimeData* data);
 
 struct PhotoSync {
   int downloaded = 0;
