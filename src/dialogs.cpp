@@ -432,7 +432,7 @@ bool fieldIsMore(EditorField field) {
     case EditorField::Prefix:
     case EditorField::Middle:
     case EditorField::Suffix:
-    case EditorField::Nickname:
+    case EditorField::Title:
     case EditorField::Department:
     case EditorField::Occupation:
     case EditorField::Birthday:
@@ -1004,8 +1004,8 @@ struct ContactEditor::Form {
     names->setColumnStretch(1, 1);
     names->addWidget(labeled(QStringLiteral("First name"), given), 0, 0);
     names->addWidget(labeled(QStringLiteral("Last name"), family), 0, 1);
-    names->addWidget(labeled(QStringLiteral("Company"), organization), 1, 0);
-    names->addWidget(labeled(QStringLiteral("Job title"), titleEdit), 1, 1);
+    names->addWidget(labeled(QStringLiteral("Nickname"), nickname), 1, 0);
+    names->addWidget(labeled(QStringLiteral("Company"), organization), 1, 1);
     names->setRowStretch(2, 1);
     identity->addLayout(photoColumn);
     identity->addLayout(names, 1);
@@ -1018,7 +1018,7 @@ struct ContactEditor::Form {
     auto* toggle = new QHBoxLayout;
     toggle->setSpacing(metrics().space(10));
     moreButton = kindButton(QStringLiteral("More fields"), QStringLiteral("link"));
-    moreSummary = labelNamed(QStringLiteral("Nickname, birthday, websites, people, and custom fields"), QStringLiteral("caption"));
+    moreSummary = labelNamed(QStringLiteral("Job title, birthday, websites, people, and custom fields"), QStringLiteral("caption"));
     toggle->addWidget(moreButton);
     toggle->addWidget(moreSummary);
     toggle->addStretch(1);
@@ -1037,12 +1037,12 @@ struct ContactEditor::Form {
     names->addWidget(labeled(QStringLiteral("Prefix"), prefix), 0, 0);
     names->addWidget(labeled(QStringLiteral("Middle name"), middle), 0, 1);
     names->addWidget(labeled(QStringLiteral("Suffix"), suffix), 1, 0);
-    names->addWidget(labeled(QStringLiteral("Nickname"), nickname), 1, 1);
 
     QVBoxLayout* work = addSection(more, QStringLiteral("Work details"));
     auto* workGrid = pairGrid(work);
-    workGrid->addWidget(labeled(QStringLiteral("Department"), department), 0, 0);
-    workGrid->addWidget(labeled(QStringLiteral("Occupation"), occupation), 0, 1);
+    workGrid->addWidget(labeled(QStringLiteral("Job title"), titleEdit), 0, 0);
+    workGrid->addWidget(labeled(QStringLiteral("Department"), department), 0, 1);
+    workGrid->addWidget(labeled(QStringLiteral("Occupation"), occupation), 1, 0);
     orgRows = rowsLayout(work, 6);
     addOrgButton = addButton(QStringLiteral("company"));
     work->addWidget(addOrgButton, 0, Qt::AlignLeft);
@@ -1097,11 +1097,11 @@ struct ContactEditor::Form {
     middle = lineEdit(base.middleName, {}, QStringLiteral("middle"));
     family = lineEdit(base.familyName, {}, QStringLiteral("family"));
     suffix = lineEdit(base.suffix, {}, QStringLiteral("suffix"));
-    nickname = lineEdit(base.nickname);
+    nickname = lineEdit(base.nickname, {}, QStringLiteral("nickname"));
     organization = lineEdit(base.organization, {}, QStringLiteral("organization"));
     titleEdit = lineEdit(base.title, {}, QStringLiteral("title-field"));
-    department = lineEdit(base.department);
-    occupation = lineEdit(base.occupation);
+    department = lineEdit(base.department, {}, QStringLiteral("department"));
+    occupation = lineEdit(base.occupation, {}, QStringLiteral("occupation"));
     birthday = lineEdit(base.birthday.isoText(), QStringLiteral("YYYY-MM-DD, or MM-DD without a year"), QStringLiteral("birthday"));
 
     auto* root = new QVBoxLayout(host);

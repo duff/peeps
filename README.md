@@ -83,7 +83,7 @@ A birthday with a year shows the age beneath it, in months during the first year
 
 ### Editing
 
-The editor groups fields the way people look for them. The photo sits beside first name, last name, company, and job title. Email, phone, address, and notes follow, each under its own heading with a `+ Add` line beneath. Nickname, birthday, websites, related people, other companies, and custom fields wait behind More fields, which opens by itself when a contact already has one of them.
+The editor groups fields the way people look for them. The photo sits beside first name, last name, nickname, and company. Email, phone, address, and notes follow, each under its own heading with a `+ Add` line beneath. Job title, birthday, websites, related people, other companies, and custom fields wait behind More fields, which opens by itself when a contact already has one of them.
 
 Tab moves through the page in reading order, including rows you just added. Enter or Ctrl+S saves. Esc cancels, and asks first if anything changed. Dates are typed as `1815-12-10`, or `12-10` without a year.
 

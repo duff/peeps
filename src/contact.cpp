@@ -282,7 +282,7 @@ QString Contact::searchText() const {
 
 bool Contact::hasLessCommonFields() const {
   const bool text = !prefix.trimmed().isEmpty() || !middleName.trimmed().isEmpty() || !suffix.trimmed().isEmpty() ||
-                    !nickname.trimmed().isEmpty() || !department.trimmed().isEmpty() || !occupation.trimmed().isEmpty();
+                    !title.trimmed().isEmpty() || !department.trimmed().isEmpty() || !occupation.trimmed().isEmpty();
   return text || !birthday.isEmpty() || !otherOrganizations.isEmpty() || !urls.isEmpty() || !relations.isEmpty() ||
          !events.isEmpty() || !customs.isEmpty();
 }

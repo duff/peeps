@@ -1629,15 +1629,26 @@ void LayoutTests::companyWithoutAPersonalName() {
   auto* photo = editor->findChild<QLabel*>(QStringLiteral("photo"));
   auto* given = editor->findChild<QLineEdit*>(QStringLiteral("given"));
   auto* family = editor->findChild<QLineEdit*>(QStringLiteral("family"));
+  auto* nickname = editor->findChild<QLineEdit*>(QStringLiteral("nickname"));
+  auto* company = editor->findChild<QLineEdit*>(QStringLiteral("organization"));
   auto* jobTitle = editor->findChild<QLineEdit*>(QStringLiteral("title-field"));
-  QVERIFY(photo != nullptr && given != nullptr && family != nullptr && jobTitle != nullptr);
+  auto* department = editor->findChild<QLineEdit*>(QStringLiteral("department"));
+  auto* occupation = editor->findChild<QLineEdit*>(QStringLiteral("occupation"));
+  QVERIFY(photo != nullptr && given != nullptr && family != nullptr && nickname != nullptr && company != nullptr);
+  QVERIFY(jobTitle != nullptr && department != nullptr && occupation != nullptr);
   const auto at = [&](QWidget* widget) { return widget->mapTo(editor, QPoint(0, 0)); };
   // The photo sits beside the names, and first and last name share a row.
   QVERIFY(at(photo).x() < at(given).x());
   QVERIFY(at(photo).y() <= at(given).y());
   QCOMPARE(at(given).y(), at(family).y());
   QVERIFY(at(given).x() < at(family).x());
-  QVERIFY(jobTitle->isVisible());
+  // Nickname and company share the next row. Job title waits behind More fields.
+  QVERIFY(at(given).y() < at(nickname).y());
+  QCOMPARE(at(nickname).y(), at(company).y());
+  QVERIFY(at(nickname).x() < at(company).x());
+  QVERIFY(nickname->isVisible());
+  QVERIFY(company->isVisible());
+  QVERIFY(!jobTitle->isVisible());
   auto* notes = editor->findChild<QPlainTextEdit*>(QStringLiteral("notes"));
   QVERIFY(notes != nullptr && notes->isVisible());
   QVERIFY(at(addPhone).y() < at(addAddress).y());
@@ -1651,6 +1662,11 @@ void LayoutTests::companyWithoutAPersonalName() {
   QApplication::processEvents();
   QCOMPARE(more->text(), QStringLiteral("Fewer fields"));
   QVERIFY(website->isVisible());
+  // Work details run job title, department, occupation.
+  QVERIFY(jobTitle->isVisible());
+  QCOMPARE(at(jobTitle).y(), at(department).y());
+  QVERIFY(at(jobTitle).x() < at(department).x());
+  QVERIFY(at(department).y() < at(occupation).y());
   QVERIFY(button(QStringLiteral("+ Add person")) != nullptr && button(QStringLiteral("+ Add person"))->isVisible());
   for (const QString& heading : {QStringLiteral("Name details"), QStringLiteral("Work details"), QStringLiteral("Dates"),
                                  QStringLiteral("Websites"), QStringLiteral("Related people"), QStringLiteral("Custom fields")}) {
@@ -2544,12 +2560,12 @@ void LayoutTests::dropsAPhotoOntoAContact() {
   QCOMPARE(contacts::decodePhoto(editor->photoBytes()).size(), other.size());
 
   // Words still go into a field.
-  auto* title = editor->findChild<QLineEdit*>(QStringLiteral("title-field"));
-  QVERIFY(title != nullptr && title->text().isEmpty());
-  QVERIFY(enter(title, &words));
+  auto* nickname = editor->findChild<QLineEdit*>(QStringLiteral("nickname"));
+  QVERIFY(nickname != nullptr && nickname->text().isEmpty());
+  QVERIFY(enter(nickname, &words));
   QVERIFY(!toast->isVisible());
-  QVERIFY(drop(title, &words));
-  QCOMPARE(title->text(), QStringLiteral("Engineer"));
+  QVERIFY(drop(nickname, &words));
+  QCOMPARE(nickname->text(), QStringLiteral("Engineer"));
 
   if (oldData.isNull()) qunsetenv("XDG_DATA_HOME");
   else qputenv("XDG_DATA_HOME", oldData);
@@ -2617,6 +2633,25 @@ void LayoutTests::editorTracksChanges() {
   oneLine.givenName = QStringLiteral("Dan");
   oneLine.addresses = {freeform};
   QVERIFY(contacts::personJson(oneLine).contains("\"formattedValue\":\"1 Main St\\nAustin TX\""));
+
+  // A job title opens More fields by itself so it is never hidden, and so does
+  // going to that field from a contact. A nickname is already on show.
+  const auto moreLabel = [](QWidget* root) {
+    for (auto* candidate : root->findChildren<QPushButton*>()) {
+      if (candidate->text() == QLatin1String("More fields") || candidate->text() == QLatin1String("Fewer fields")) return candidate->text();
+    }
+    return QString();
+  };
+  contacts::Contact titled;
+  titled.title = QStringLiteral("Engineer");
+  contacts::ContactEditor withTitle(titled, {}, nullptr);
+  QCOMPARE(moreLabel(&withTitle), QStringLiteral("Fewer fields"));
+  contacts::Contact nicknamed;
+  nicknamed.nickname = QStringLiteral("Ada");
+  contacts::ContactEditor withNickname(nicknamed, {}, nullptr);
+  QCOMPARE(moreLabel(&withNickname), QStringLiteral("More fields"));
+  contacts::ContactEditor toTitle(contacts::Contact{}, contacts::EditorFocus{contacts::EditorField::Title, 0}, nullptr);
+  QCOMPARE(moreLabel(&toTitle), QStringLiteral("Fewer fields"));
 
   contacts::ContactEditor blank(contacts::Contact{}, {}, nullptr);
   QVERIFY(!blank.hasChanges());
