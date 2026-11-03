@@ -1924,6 +1924,100 @@ void LayoutTests::copiesThePhotoAtFullSize() {
   else qputenv("XDG_CONFIG_HOME", oldConfig);
 }
 
+void GoogleTests::formatsPhones() {
+  const QLocale before;
+  QLocale::setDefault(QLocale(QLocale::English, QLocale::UnitedStates));
+  const QList<QPair<QString, QString>> cases = {
+      {QStringLiteral("3125550100"), QStringLiteral("(312) 555-0100")},
+      {QStringLiteral("(312) 5550100"), QStringLiteral("(312) 555-0100")},
+      {QStringLiteral("312.555.0100"), QStringLiteral("(312) 555-0100")},
+      {QStringLiteral(" 312-555-0100 "), QStringLiteral("(312) 555-0100")},
+      {QStringLiteral("13125550100"), QStringLiteral("(312) 555-0100")},
+      {QStringLiteral("1 (312) 555-0100"), QStringLiteral("(312) 555-0100")},
+      {QStringLiteral("1-800-555-0100"), QStringLiteral("(800) 555-0100")},
+      {QStringLiteral("5550100"), QStringLiteral("555-0100")},
+      {QStringLiteral("555.0100"), QStringLiteral("555-0100")},
+      // Extensions.
+      {QStringLiteral("3125550100 x12"), QStringLiteral("(312) 555-0100 x12")},
+      {QStringLiteral("312-555-0100 ext. 12"), QStringLiteral("(312) 555-0100 x12")},
+      {QStringLiteral("312-555-0100 Extension 12"), QStringLiteral("(312) 555-0100 x12")},
+      {QStringLiteral("3125550100X12"), QStringLiteral("(312) 555-0100 x12")},
+      // The country code stays when it was typed.
+      {QStringLiteral("+13125550100"), QStringLiteral("+1 (312) 555-0100")},
+      {QStringLiteral("+1 312-555-0100 x12"), QStringLiteral("+1 (312) 555-0100 x12")},
+      // Marks and dashes that come along when a number is copied.
+      {QStringLiteral(u"‪+1 312 555‑0100‬"), QStringLiteral("+1 (312) 555-0100")},
+      // Already right.
+      {QStringLiteral("(312) 555-0100"), QStringLiteral("(312) 555-0100")},
+      {QStringLiteral("(312) 555-0100 x12"), QStringLiteral("(312) 555-0100 x12")},
+      {QStringLiteral("+1 (312) 555-0100"), QStringLiteral("+1 (312) 555-0100")},
+      {QStringLiteral("555-0100"), QStringLiteral("555-0100")},
+      // Not clearly North American: left as typed.
+      {QStringLiteral("+44 20 7946 0958"), QStringLiteral("+44 20 7946 0958")},
+      {QStringLiteral("+3125550100"), QStringLiteral("+3125550100")},
+      {QStringLiteral("+5550100"), QStringLiteral("+5550100")},
+      {QStringLiteral("0612345678"), QStringLiteral("0612345678")},
+      {QStringLiteral("(02) 5550 0100"), QStringLiteral("(02) 5550 0100")},
+      {QStringLiteral("(312) 155-0100"), QStringLiteral("(312) 155-0100")},
+      {QStringLiteral("(312) 555-010"), QStringLiteral("(312) 555-010")},
+      {QStringLiteral("911"), QStringLiteral("911")},
+      {QStringLiteral("*123#"), QStringLiteral("*123#")},
+      {QStringLiteral("1-800-FLOWERS"), QStringLiteral("1-800-FLOWERS")},
+      {QStringLiteral("3125550100,,12"), QStringLiteral("3125550100,,12")},
+  };
+  for (const auto& [typed, expected] : cases) QCOMPARE(contacts::formatPhone(typed), expected);
+
+  // Elsewhere a bare number could be local, but +1 still says where it is.
+  QLocale::setDefault(QLocale(QLocale::English, QLocale::India));
+  QCOMPARE(contacts::formatPhone(QStringLiteral("9876543210")), QStringLiteral("9876543210"));
+  QCOMPARE(contacts::formatPhone(QStringLiteral("+1 312 555 0100")), QStringLiteral("+1 (312) 555-0100"));
+  QLocale::setDefault(QLocale(QLocale::English, QLocale::Canada));
+  QCOMPARE(contacts::formatPhone(QStringLiteral("4165550142")), QStringLiteral("(416) 555-0142"));
+  QLocale::setDefault(before);
+}
+
+void LayoutTests::editorFormatsOnlyChangedPhones() {
+  const QLocale before;
+  QLocale::setDefault(QLocale(QLocale::English, QLocale::UnitedStates));
+  contacts::Contact contact = sampleContact(QStringLiteral("people/dee"), QStringLiteral("Dee"), QStringLiteral("Three"), {}, {}, {});
+  contact.phones.append({QStringLiteral("3125550100"), QStringLiteral("Home"), QStringLiteral("home")});
+  contact.phones.append({QStringLiteral("(312) 5550111"), QStringLiteral("Work"), QStringLiteral("work")});
+
+  contacts::ContactEditor editor(contact, {}, nullptr);
+  QVERIFY2(!editor.hasChanges(), "An untidy number must not count as a change");
+  const auto untouched = editor.validatedContact();
+  QVERIFY(untouched.has_value());
+  QCOMPARE(untouched->phones.at(0).value, QStringLiteral("3125550100"));
+
+  QLineEdit* work = nullptr;
+  for (auto* field : editor.findChildren<QLineEdit*>()) {
+    if (field->text() == QStringLiteral("(312) 5550111")) work = field;
+  }
+  QVERIFY(work != nullptr);
+  work->setText(QStringLiteral("(312) 5550122"));
+  QVERIFY(editor.hasChanges());
+  const auto edited = editor.validatedContact();
+  QVERIFY(edited.has_value());
+  QCOMPARE(edited->phones.at(0).value, QStringLiteral("3125550100"));
+  QCOMPARE(edited->phones.at(1).value, QStringLiteral("(312) 555-0122"));
+  QCOMPARE(edited->phones.at(1).label, QStringLiteral("Work"));
+
+  // The same number written another way is no change at all.
+  contact.phones[1].value = QStringLiteral("(312) 555-0111");
+  contacts::ContactEditor tidy(contact, {}, nullptr);
+  for (auto* field : tidy.findChildren<QLineEdit*>()) {
+    if (field->text() == QStringLiteral("(312) 555-0111")) field->setText(QStringLiteral("3125550111"));
+  }
+  QVERIFY(!tidy.hasChanges());
+
+  // A brand new contact has nothing to keep.
+  contacts::Draft draft;
+  draft.givenName = QStringLiteral("Eve");
+  draft.phones.append({QStringLiteral("3125550100"), QStringLiteral("Mobile"), QStringLiteral("mobile")});
+  QCOMPARE(draft.toContact({}).phones.at(0).value, QStringLiteral("(312) 555-0100"));
+  QLocale::setDefault(before);
+}
+
 void LayoutTests::blankPhoneTypeStaysBlank() {
   QTemporaryDir dir;
   QVERIFY(dir.isValid());

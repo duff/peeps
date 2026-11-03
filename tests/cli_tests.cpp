@@ -357,6 +357,51 @@ void CliTests::jsonDataRoundTrip() {
   QVERIFY(badField.err.contains(QStringLiteral("Unknown field")));
 }
 
+void CliTests::formatsPhonesItWrites() {
+  const QLocale before;
+  QLocale::setDefault(QLocale(QLocale::English, QLocale::UnitedStates));
+  contacts::CliSession session;
+  session.signedIn = true;
+  auto ada = sample(QStringLiteral("people/c1"), QStringLiteral("Ada"), QStringLiteral("Lovelace"), QStringLiteral("ada@example.com"));
+  ada.phones.append({QStringLiteral("3125550100"), QStringLiteral("Home"), QStringLiteral("home")});
+  session.contacts = {ada};
+  contacts::Contact sent;
+  int writes = 0;
+  const auto write = [&](const contacts::Contact& next) {
+    sent = next;
+    ++writes;
+    contacts::WriteResult result;
+    result.contact = next;
+    return result;
+  };
+  session.update = write;
+  session.create = write;
+
+  // A number that is already there stays as it was. A new one is formatted.
+  const auto added = run({QStringLiteral("update"), QStringLiteral("people/c1"), QStringLiteral("--add-phone"),
+                          QStringLiteral("work=312.555.0111 ext 12")},
+                         session);
+  QCOMPARE(added.code, contacts::kCliOk);
+  QCOMPARE(sent.phones.at(0).value, QStringLiteral("3125550100"));
+  QCOMPARE(sent.phones.at(1).value, QStringLiteral("(312) 555-0111 x12"));
+
+  // Writing a formatted number again in another form changes nothing.
+  session.contacts = {sent};
+  const int writesBefore = writes;
+  const auto same = run({QStringLiteral("update"), QStringLiteral("people/c1"), QStringLiteral("--phone"), QStringLiteral("home=3125550100"),
+                         QStringLiteral("--phone"), QStringLiteral("work=312-555-0111 x12")},
+                        session);
+  QCOMPARE(same.code, contacts::kCliUsage);
+  QCOMPARE(writes, writesBefore);
+
+  const auto created = run({QStringLiteral("add"), QStringLiteral("--given"), QStringLiteral("Grace"), QStringLiteral("--phone"),
+                            QStringLiteral("mobile=13125550122")},
+                           session);
+  QCOMPARE(created.code, contacts::kCliOk);
+  QCOMPARE(sent.phones.at(0).value, QStringLiteral("(312) 555-0122"));
+  QLocale::setDefault(before);
+}
+
 void CliTests::addFlagsAppend() {
   contacts::CliSession session;
   session.signedIn = true;

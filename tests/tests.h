@@ -73,6 +73,7 @@ class GoogleTests : public QObject {
   void browserPrefersOmarchy();
   void sharesThroughOmarchy();
   void writesVCards();
+  void formatsPhones();
   void storeRoundTrip();
 };
 
@@ -84,6 +85,7 @@ class LayoutTests : public QObject {
   void companyWithoutAPersonalName();
   void notesWrapInsteadOfEllipsis();
   void blankPhoneTypeStaysBlank();
+  void editorFormatsOnlyChangedPhones();
   void copyNamesTheField();
   void copiesThePhotoAtFullSize();
   void dropsAPhotoOntoAContact();
@@ -116,6 +118,7 @@ class CliTests : public QObject {
   Q_OBJECT
  private slots:
   void invocationLeavesTheWindowAlone();
+  void formatsPhonesItWrites();
   void helpAndCommands();
   void usageAndVersion();
   void listAndSearchStayOnTheCache();

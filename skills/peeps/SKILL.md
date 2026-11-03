@@ -88,6 +88,10 @@ peeps update people/c123 --title "Design lead" --notes "Met at the Omarchy meetu
 peeps update people/c123 --email work=new@northwind.example   # replaces every email
 ```
 
+Peeps writes a new or changed North American phone number as `(312) 555-0100`,
+with `x12` for an extension and `+1` kept if given. Other numbers, and numbers
+already on the contact, stay as they are.
+
 Labels are words like `home`, `work`, `mobile`, or any custom word. Never
 leave a label blank on your own: when the user did not say one, propose one in
 your statement, or ask. An address

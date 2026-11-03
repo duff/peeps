@@ -174,6 +174,11 @@ struct Draft {
 };
 
 QString digitsOnly(const QString& text);
+// Writes a North American number as (312) 555-0100 x12, or +1 (312) 555-0100
+// when typed with the country code. Without one, only someone in the US or
+// Canada can tell a number is North American, so anywhere else it stays as
+// typed. So does anything else that isn't clearly such a number.
+QString formatPhone(const QString& text);
 QString contactPlainText(const Contact& contact);
 
 }  // namespace contacts

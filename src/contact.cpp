@@ -1,6 +1,10 @@
 #include "contact.h"
 
+#include <QLocale>
+#include <QRegularExpression>
 #include <QStringList>
+
+#include <algorithm>
 
 namespace contacts {
 namespace {
@@ -326,6 +330,36 @@ QString Draft::validate() const {
   return {};
 }
 
+QString formatPhone(const QString& text) {
+  const QString typed = text.trimmed();
+  // Numbers copied from a phone or a web page can carry invisible marks.
+  static const QRegularExpression invisible(QStringLiteral(R"(\p{Cf})"));
+  static const QRegularExpression shape(QStringLiteral(R"(^(\+)?([\d\p{Z}\s\p{Pd}().]+?)\s*(?:(?:x|ext\.?|extension)\s*(\d+))?$)"),
+                                        QRegularExpression::CaseInsensitiveOption);
+  // An area code and an exchange never start with 0 or 1, which keeps out
+  // numbers from most other countries.
+  static const QRegularExpression northAmerican(QStringLiteral(R"(^(?:1?([2-9]\d\d))?([2-9]\d\d)(\d{4})$)"));
+
+  const auto match = shape.match(QString(typed).remove(invisible));
+  if (!match.hasMatch()) return typed;
+  const QString digits = digitsOnly(match.captured(2));
+  const auto parts = northAmerican.match(digits);
+  if (!parts.hasMatch()) return typed;
+
+  const QString area = parts.captured(1);
+  const QString local = parts.captured(2) + QLatin1Char('-') + parts.captured(3);
+  QString number;
+  if (match.hasCaptured(1)) {
+    if (digits.size() != 11) return typed;
+    number = QStringLiteral("+1 (%1) %2").arg(area, local);
+  } else {
+    const QLocale::Territory home = QLocale().territory();
+    if (home != QLocale::UnitedStates && home != QLocale::Canada) return typed;
+    number = area.isEmpty() ? local : QStringLiteral("(%1) %2").arg(area, local);
+  }
+  return match.hasCaptured(3) ? number + QStringLiteral(" x") + match.captured(3) : number;
+}
+
 QString contactPlainText(const Contact& contact) {
   QStringList lines;
   const QString full = contact.displayName();
@@ -386,7 +420,11 @@ Contact Draft::toContact(const Contact& base) const {
   for (const auto& phone : phones) {
     const QString value = trimmed(phone.value);
     if (value.isEmpty()) continue;
-    contact.phones.append(LabeledValue{value, trimmed(phone.label), trimmed(phone.type)});
+    // Only a new or changed number is formatted. Saving a contact for another
+    // reason leaves its other numbers as they were.
+    const bool unchanged = std::any_of(base.phones.cbegin(), base.phones.cend(),
+                                       [&](const LabeledValue& known) { return known.value.trimmed() == value; });
+    contact.phones.append(LabeledValue{unchanged ? value : formatPhone(value), trimmed(phone.label), trimmed(phone.type)});
   }
   contact.addresses.clear();
   for (const auto& address : addresses) {
