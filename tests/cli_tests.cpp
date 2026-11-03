@@ -399,6 +399,22 @@ void CliTests::formatsPhonesItWrites() {
                            session);
   QCOMPARE(created.code, contacts::kCliOk);
   QCOMPARE(sent.phones.at(0).value, QStringLiteral("(312) 555-0122"));
+
+  // JSON on stdin takes the same path: what's there stays, the rest is formatted.
+  session.contacts = {ada};
+  session.stdinBytes = QByteArrayLiteral(
+      R"({"phones":[{"label":"Home","value":"3125550100"},{"label":"Mobile","value":"+1 312.555.0133"},{"label":"Work","value":"+44 20 7946 0958"}]})");
+  const auto updated = run({QStringLiteral("update"), QStringLiteral("people/c1"), QStringLiteral("--data"), QStringLiteral("-")}, session);
+  QCOMPARE(updated.code, contacts::kCliOk);
+  QCOMPARE(sent.phones.at(0).value, QStringLiteral("3125550100"));
+  QCOMPARE(sent.phones.at(1).value, QStringLiteral("(312) 555-0133"));
+  QCOMPARE(sent.phones.at(1).label, QStringLiteral("Mobile"));
+  QCOMPARE(sent.phones.at(2).value, QStringLiteral("+44 20 7946 0958"));
+
+  session.stdinBytes = QByteArrayLiteral(R"({"given_name":"Grace","phones":[{"label":"Mobile","value":"312.555.0144 ext 7"}]})");
+  const auto addedFromJson = run({QStringLiteral("add"), QStringLiteral("--data"), QStringLiteral("-")}, session);
+  QCOMPARE(addedFromJson.code, contacts::kCliOk);
+  QCOMPARE(sent.phones.at(0).value, QStringLiteral("(312) 555-0144 x7"));
   QLocale::setDefault(before);
 }
 
