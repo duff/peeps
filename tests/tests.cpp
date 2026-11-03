@@ -1942,15 +1942,15 @@ void GoogleTests::formatsPhones() {
       {QStringLiteral("312-555-0100 ext. 12"), QStringLiteral("(312) 555-0100 x12")},
       {QStringLiteral("312-555-0100 Extension 12"), QStringLiteral("(312) 555-0100 x12")},
       {QStringLiteral("3125550100X12"), QStringLiteral("(312) 555-0100 x12")},
-      // The country code stays when it was typed.
-      {QStringLiteral("+13125550100"), QStringLiteral("+1 (312) 555-0100")},
-      {QStringLiteral("+1 312-555-0100 x12"), QStringLiteral("+1 (312) 555-0100 x12")},
+      // In the US or Canada, +1 is dropped.
+      {QStringLiteral("+13125550100"), QStringLiteral("(312) 555-0100")},
+      {QStringLiteral("+1 312-555-0100 x12"), QStringLiteral("(312) 555-0100 x12")},
       // Marks and dashes that come along when a number is copied.
-      {QStringLiteral(u"‪+1 312 555‑0100‬"), QStringLiteral("+1 (312) 555-0100")},
+      {QStringLiteral(u"\u202A+1 312\u00A0555\u20110100\u202C"), QStringLiteral("(312) 555-0100")},
       // Already right.
       {QStringLiteral("(312) 555-0100"), QStringLiteral("(312) 555-0100")},
       {QStringLiteral("(312) 555-0100 x12"), QStringLiteral("(312) 555-0100 x12")},
-      {QStringLiteral("+1 (312) 555-0100"), QStringLiteral("+1 (312) 555-0100")},
+      {QStringLiteral("+1 (312) 555-0100"), QStringLiteral("(312) 555-0100")},
       {QStringLiteral("555-0100"), QStringLiteral("555-0100")},
       // Not clearly North American: left as typed.
       {QStringLiteral("+44 20 7946 0958"), QStringLiteral("+44 20 7946 0958")},
@@ -1967,12 +1967,14 @@ void GoogleTests::formatsPhones() {
   };
   for (const auto& [typed, expected] : cases) QCOMPARE(contacts::formatPhone(typed), expected);
 
-  // Elsewhere a bare number could be local, but +1 still says where it is.
+  // Elsewhere a bare number could be local, and +1 is needed to dial one that isn't.
   QLocale::setDefault(QLocale(QLocale::English, QLocale::India));
   QCOMPARE(contacts::formatPhone(QStringLiteral("9876543210")), QStringLiteral("9876543210"));
   QCOMPARE(contacts::formatPhone(QStringLiteral("+1 312 555 0100")), QStringLiteral("+1 (312) 555-0100"));
+  QCOMPARE(contacts::formatPhone(QStringLiteral("+1 (312) 555-0100 x12")), QStringLiteral("+1 (312) 555-0100 x12"));
   QLocale::setDefault(QLocale(QLocale::English, QLocale::Canada));
   QCOMPARE(contacts::formatPhone(QStringLiteral("4165550142")), QStringLiteral("(416) 555-0142"));
+  QCOMPARE(contacts::formatPhone(QStringLiteral("+1 416 555 0142")), QStringLiteral("(416) 555-0142"));
   QLocale::setDefault(before);
 }
 

@@ -348,15 +348,13 @@ QString formatPhone(const QString& text) {
 
   const QString area = parts.captured(1);
   const QString local = parts.captured(2) + QLatin1Char('-') + parts.captured(3);
-  QString number;
-  if (match.hasCaptured(1)) {
-    if (digits.size() != 11) return typed;
-    number = QStringLiteral("+1 (%1) %2").arg(area, local);
-  } else {
-    const QLocale::Territory home = QLocale().territory();
-    if (home != QLocale::UnitedStates && home != QLocale::Canada) return typed;
-    number = area.isEmpty() ? local : QStringLiteral("(%1) %2").arg(area, local);
-  }
+  const bool international = match.hasCaptured(1);
+  if (international && digits.size() != 11) return typed;
+  const QLocale::Territory home = QLocale().territory();
+  const bool northAmericaIsHome = home == QLocale::UnitedStates || home == QLocale::Canada;
+  if (!international && !northAmericaIsHome) return typed;
+  QString number = area.isEmpty() ? local : QStringLiteral("(%1) %2").arg(area, local);
+  if (!northAmericaIsHome) number.prepend(QStringLiteral("+1 "));
   return match.hasCaptured(3) ? number + QStringLiteral(" x") + match.captured(3) : number;
 }
 
